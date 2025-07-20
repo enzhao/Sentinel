@@ -1,2 +1,42 @@
-# Google App Engine generated folder
-appengine-generated/
+# General / OS
+.DS_Store
+Thumbs.db
+*.log
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Node.js / Dependencies
+# Never commit node_modules. This directory contains all third-party libraries
+# and can be massive. It should be installed locally by running `npm install`.
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+# This is the compiled code that gets deployed. We don't need to track it in git.
+dist/
+build/
+.output/
+.nuxt/
+
+# Environment variables (IMPORTANT)
+# This file contains secrets like API keys and database credentials.
+# It should NEVER be committed to version control for security reasons.
+.env
+.env.*
+!.env.example
+
+# TypeScript
+# Ignore compiled TypeScript files if they are not in a build directory
+*.js.map
+*.tsbuildinfo
+
+
