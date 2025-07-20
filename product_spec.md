@@ -270,3 +270,44 @@ This section specifies the external data sources required to power the Sentinel 
     - **Relative Strength Index (RSI):** Specifically, the weekly RSI for the "Technical Indicators" rule.
     - **Volatility Index (VIX):** The latest closing value of the VIX index for the "Volatility Index" rule. Note: The VIX is a US market indicator but is used here as a proxy for global market fear.
 
+### 3.4. Security & Privacy
+
+Security and user privacy are paramount and will be treated as a core feature, not an afterthought. While the MVP does not link to bank or brokerage accounts, it still handles sensitive personal financial information.
+
+- **Data Encryption:**
+    - **In Transit:** All communication between the frontend web app and the backend API server will be encrypted using industry-standard TLS (HTTPS).
+    - **At Rest:** All user data stored in the database (Google Cloud Firestore) will be encrypted at rest, leveraging Google Cloud's native encryption capabilities.
+
+- **Authentication & Authorization:**
+    - User authentication will be handled by Google Cloud Identity Platform (GCIP). This outsources the complexity of password storage and token management to a secure, battle-tested service.
+    - The system will enforce strict authorization rules, ensuring a user can only ever access their own data.
+
+- **Principle of Least Privilege:**
+    - The application will only request and store the absolute minimum amount of data required for its functionality. It will not store personal identifiable information (PII) beyond the login email address required for authentication.
+
+- **Privacy Policy:**
+    - A clear and simple privacy policy will be made available to all users, stating that their personal portfolio data will not be shared, sold, or analyzed for any purpose other than providing the Sentinel service to them.
+
+### 3.5. MVP Scope & Future Considerations
+
+This section explicitly defines the boundaries of the Minimum Viable Product to ensure a focused and achievable initial development cycle.
+
+#### 3.5.1. In Scope for MVP (v0.1)
+
+- **Manual Data Entry:** All portfolio and cash data will be entered and maintained manually by the user.
+- **Web Application:** The primary interface will be a web application accessible via desktop and mobile browsers.
+- **Limited Rule Set:** The rule engine will support the specific buy/sell triggers defined in Chapter 1 (Drawdown, MA200, RSI, VIX, Profit Target, Trailing Drawdown).
+- **Daily Monitoring:** The monitoring engine will run once per day after market close.
+- **Email & Push Notifications:** Notifications will be delivered via email and web push notifications.
+- **Tax-Aware Calculations:** Sell alerts will include estimated after-tax profit calculations based on user-configured tax rates and FIFO cost basis.
+
+#### 3.5.2. Out of Scope for MVP (Future Considerations)
+
+The following features are explicitly **excluded** from the MVP but are potential candidates for future versions:
+
+- **Direct Brokerage Integration:** The app will not connect directly to brokerage accounts to import portfolios or execute trades.
+- **Automated Trading:** Sentinel will only send notifications; it will not perform any automated trading actions.
+- **Real-time Data:** The system will not use real-time, intra-day market data.
+- **Native Mobile Apps:** There will be no dedicated iOS or Android app for the MVP.
+- **Advanced Technical Indicators:** The MVP will be limited to the core indicators listed; more complex indicators (e.g., Bollinger Bands, MACD) are out of scope.
+- **Advanced Tax Harvesting:** The "Tax Allowance Harvesting" feature is postponed for a future release.
