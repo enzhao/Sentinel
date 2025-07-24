@@ -227,8 +227,8 @@ This section outlines the chosen technology stack for the Sentinel MVP. The sele
 - **Frontend Web App:** **Vue.js (v3) with TypeScript**
     - **Justification:** Vue is a modern, progressive framework known for its excellent developer experience and approachability. Its official, first-party libraries for core needs like routing (Vue Router) and state management (Pinia) provide a cohesive and maintainable foundation. The Composition API offers a powerful and flexible way to organize logic, which is ideal for the long-term maintainability of a project like Sentinel.
 
-- **Backend API Server:** **Node.js with TypeScript & Express.js**
-    - **Justification:** This stack is highly efficient for building REST APIs. TypeScript ensures type safety on the backend, and the vast Node.js ecosystem allows for rapid development. It is framework-agnostic and pairs perfectly with a Vue frontend. The entire backend will be designed to run as a stateless container.
+- **Backend API Server:** **Python with FastAPI**
+    - **Justification:** A Python-based monolith is chosen to maintain simplicity for the MVP while providing direct access to a best-in-class AI ecosystem. FastAPI is a modern, high-performance web framework for building APIs with Python. It is incredibly fast, provides automatic interactive documentation, and allows us to natively integrate powerful libraries like **LangChain** for the planned CSV parsing feature. This approach uses the best tool for the most complex future requirement without sacrificing performance on standard API tasks.
 
 - **Database:** **Google Cloud Firestore**
     - **Justification:** Firestore is a serverless, NoSQL document database that is incredibly fast to set up and scale. Its flexible schema is perfect for an MVP where data models may evolve. It integrates seamlessly with other GCP services.
@@ -240,9 +240,9 @@ This section outlines the chosen technology stack for the Sentinel MVP. The sele
     - **Frontend:** **Firebase Hosting**
         - **Justification:** Provides one-command deployments, a global CDN for fast load times, and automatic SSL certificates, all with a generous free tier.
     - **Backend:** **Google Cloud Run**
-        - **Justification:** A serverless platform to run our backend container. It automatically scales up or down (even to zero), so we only pay when the API is actively being used. This is extremely cost-effective for an MVP.
-    - **Monitoring Engine:** **Google Cloud Functions** triggered by **Google Cloud Scheduler**
-        - **Justification:** This is the perfect serverless combination for our background job. Cloud Scheduler acts as a reliable cron service to trigger a Cloud Function on a schedule (e.g., daily). The function will execute our monitoring logic without needing a dedicated server.
+        - **Justification:** A serverless platform to run our backend container. We will package the Python/FastAPI application into a Docker container and deploy it here. It automatically scales up or down (even to zero), so we only pay when the API is actively being used. This is extremely cost-effective.
+    - **Monitoring Engine:** **Google Cloud Functions (Python)** triggered by **Google Cloud Scheduler**
+        - **Justification:** This is the perfect serverless combination for our background job. Cloud Scheduler acts as a reliable cron service to trigger a Python-based Cloud Function on a schedule (e.g., daily). The function will execute our monitoring logic without needing a dedicated server.
 
 - **Notification Service:**
     - **Email:** **SendGrid API**
@@ -251,7 +251,7 @@ This section outlines the chosen technology stack for the Sentinel MVP. The sele
         - **Justification:** The native, free, and most effective solution for sending push notifications to web and mobile applications within the Google ecosystem.
 
 - **Continuous Integration & Deployment (CI/CD):** **GitHub Actions**
-    - **Justification:** Natively integrated with our source code repository. We can create simple workflows to automatically test and deploy the frontend to Firebase Hosting and the backend to Cloud Run upon every push to the main branch.
+    - **Justification:** Natively integrated with our source code repository. We can create simple workflows to automatically test and deploy the frontend to Firebase Hosting and the backend Python container to Cloud Run upon every push to the main branch.
 
 ### 3.3. Data Sources & APIs
 
@@ -311,3 +311,4 @@ The following features are explicitly **excluded** from the MVP but are potentia
 - **Native Mobile Apps:** There will be no dedicated iOS or Android app for the MVP.
 - **Advanced Technical Indicators:** The MVP will be limited to the core indicators listed; more complex indicators (e.g., Bollinger Bands, MACD) are out of scope.
 - **Advanced Tax Harvesting:** The "Tax Allowance Harvesting" feature is postponed for a future release.
+
