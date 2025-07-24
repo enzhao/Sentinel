@@ -12,7 +12,7 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Node.js / Dependencies
+# Node.js / Dependencies (for Frontend)
 # Never commit node_modules. This directory contains all third-party libraries
 # and can be massive. It should be installed locally by running `npm install`.
 node_modules/
@@ -20,10 +20,9 @@ npm-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build output
+# Build output (for Frontend)
 # This is the compiled code that gets deployed. We don't need to track it in git.
 dist/
-build/
 .output/
 .nuxt/
 
@@ -39,4 +38,30 @@ build/
 *.js.map
 *.tsbuildinfo
 
+# Python
+# ---------------------------------
+# Virtual Environments
+# Never commit virtual environments.
+venv/
+.venv/
+env/
+.env/
 
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Test artifacts
+.pytest_cache/
+.tox/
+htmlcov/
+
+# NOTE: The .python-version file created by pyenv should NOT be ignored.
+# It ensures that anyone working on the project uses the correct Python version.
