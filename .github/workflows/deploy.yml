@@ -58,7 +58,7 @@ jobs:
           region: 'europe-west3' # Frankfurt, same as our Firestore
           image: 'europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest'
           # Allow anyone to access the API (we will secure it with auth later)
-          flags: '--allow-unauthenticated'
+          flags: '--allow-unauthenticated --port=8000'
 
   # --- Second Job: Deploy the Frontend ---
   deploy-frontend:
@@ -101,4 +101,3 @@ jobs:
           firebaseServiceAccount: '${{ secrets.GCP_SA_KEY }}'
           channelId: live
           projectId: '${{ secrets.GCP_PROJECT_ID }}'
-          
