@@ -1,0 +1,104 @@
+# This is the name of our workflow. It will be displayed on the Actions tab of your GitHub repository.
+name: Deploy Sentinel to GCP
+
+# This section defines when the workflow will run.
+# We are telling it to run on every push to the 'main' branch.
+on:
+  push:
+    branches: [ "main" ]
+
+# This section defines the jobs that will be run.
+jobs:
+  # --- First Job: Deploy the Backend ---
+  deploy-backend:
+    # We need to give the job permission to write to Google Cloud.
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    # The type of runner that the job will run on.
+    runs-on: ubuntu-latest
+
+    # We define an output for this job, which will be the URL of our deployed backend.
+    outputs:
+      backend_url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      # Step 1: Check out the source code from our repository.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Authenticate to Google Cloud using the service account key we created.
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # Step 3: Set up the Google Cloud CLI.
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      # Step 4: Configure Docker to authenticate with Google Artifact Registry.
+      - name: Configure Docker
+        run: gcloud auth configure-docker europe-west3-docker.pkg.dev
+
+      # Step 5: Build and push the Docker image to Google Artifact Registry.
+      # Replace 'sentinel-invest' with your GCP_PROJECT_ID if it's different.
+      - name: Build and Push Docker Image
+        run: |-
+          docker build -t europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest ./backend
+          docker push europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest
+
+      # Step 6: Deploy the container image to Google Cloud Run.
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: 'google-github-actions/deploy-cloudrun@v2'
+        with:
+          service: 'sentinel-backend'
+          region: 'europe-west3' # Frankfurt, same as our Firestore
+          image: 'europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest'
+          # Allow anyone to access the API (we will secure it with auth later)
+          flags: '--allow-unauthenticated'
+
+  # --- Second Job: Deploy the Frontend ---
+  deploy-frontend:
+    # This job will only start after the 'deploy-backend' job has successfully finished.
+    needs: deploy-backend
+
+    # The type of runner that the job will run on.
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the source code.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js.
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use the LTS version we set up locally
+
+      # Step 3: Create the .env.production file for the frontend.
+      # This is the magic step. It takes the URL from the backend job's output
+      # and writes it into the environment file for our Vue app.
+      - name: Create .env.production file
+        run: |
+          echo "VITE_API_URL=${{ needs.deploy-backend.outputs.backend_url }}" > frontend/.env.production
+
+      # Step 4: Install dependencies and build the frontend.
+      - name: Install and Build Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      # Step 5: Deploy the built frontend to Firebase Hosting.
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.GCP_SA_KEY }}'
+          channelId: live
+          projectId: '${{ secrets.GCP_PROJECT_ID }}'
+          

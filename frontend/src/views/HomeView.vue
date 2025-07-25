@@ -8,7 +8,7 @@ const errorMessage = ref('')
 
 // Define the backend API URL
 // We will make this more dynamic later
-const API_URL = 'http://127.0.0.1:8000/api/message'
+const API_URL = import.meta.env.VITE_API_URL + '/api/message'
 
 // The onMounted hook runs once when the component is first loaded
 onMounted(async () => {
