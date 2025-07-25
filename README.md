@@ -1,4 +1,4 @@
-# Sentinel  Sentinel
+# Sentinel
 
 ![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange)
 
@@ -12,114 +12,85 @@ For a full breakdown of the project's vision, features, and architecture, please
 
 ---
 
-## Technology Stack
+## Project Structure
 
-This project is a monorepo containing a Vue.js frontend and a Python backend.
-
-| Area      | Technology                                    |
-| :-------- | :-------------------------------------------- |
-| Frontend  | Vue.js 3 with TypeScript                      |
-| Backend   | Python 3.13 with FastAPI                      |
-| Database  | Google Cloud Firestore                        |
-| Hosting   | Firebase Hosting (Frontend), Google Cloud Run (Backend) |
-| Auth      | Firebase Authentication                       |
-| CI/CD     | GitHub Actions                                |
+```bash
+.
+├── .github/workflows/      # CI/CD pipelines
+├── backend/                # Python FastAPI backend
+├── docs/                   # Project documentation
+│   └── google_cloud_setup.md
+├── frontend/               # Vue.js frontend
+├── .gitignore
+├── product_spec.md         # The official product specification
+└── README.md               # This file
+``` 
 
 ---
 
-## Prerequisites
+## Getting Started
 
-- **Local Development**:
-  - Python 3.13 (recommended via `pyenv local 3.13.3`)
-  - Node.js 20 (LTS)
-  - Docker
-  - Git
+### 1. Cloud & Project Setup
 
-- **Cloud Setup**:
-  - Google Cloud Platform account with billing enabled
-  - Firebase account
-  - GitHub account with repository access
+Before running the application locally, you must set up the required Google Cloud and Firebase services. Follow the step-by-step guide here:
 
-## Installation
+➡️ **[./docs/google_cloud_setup.md](./docs/google_cloud_setup.md)**
 
-### Local Setup
+### 2. Local Development
 
-#### 1. Clone the Repository
+After completing the cloud setup, follow these steps to run the application on your local machine.
 
-```bash
-git clone <your-repo-url>
-cd Sentinel
-``` 
+#### Backend Setup
+1.  Navigate to the backend directory: `cd backend`
+2.  Set the local Python version: `pyenv local 3.13.3`
+3.  Create and activate a virtual environment:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate
+    ```
+4.  Install dependencies: `pip install -r requirements.txt`
+5.  Set the required environment variable to use your local `serviceAccountKey.json`:
+    ```bash
+    export ENV=local
+    ```
+6.  Run the backend server:
 
-#### 2. Backend Setup
+    ```bash
+    uvicorn src.main:app --reload
+    ```
+    ✅ The backend API should now be running at `http://127.0.0.1:8000`.
 
-- Install Python dependencies:
+#### Frontend Setup
+1.  Open a **new terminal** and navigate to the frontend directory: `cd frontend`
+2.  Install dependencies: `npm install`
+3.  Run the frontend server: `npm run dev`
+    ✅ The frontend application should now be running at `http://localhost:5173`.
 
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-pip install -r requirements.txt
-``` 
+### 3. Local Docker Test (Optional)
 
-- For local Firestore testing, place your `serviceAccountKey.json` in the `backend` directory and set `ENV=local`:
+To test the production container locally, run the following commands from the project root:
 
-```bash
-export ENV=local
-``` 
+1.  **Build the image:**
+    ```bash
+    docker build -t sentinel-backend ./backend
+    ```
+2.  **Run the container:**
 
-- Run the app locally:
+    ```bash
+    docker run --rm -p 8000:8000 -e ENV=local -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json sentinel-backend
+    ```
 
-```bash
-uvicorn main:app --reload
-```
-✅ The backend API should now be running at http://127.0.0.1:8000.
-
-#### 3. Frontend Setup
-
-- Open a **new terminal window** and navigate to the frontend directory from the project root:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-✅ The frontend should now be running at http://localhost:5173.
-
-
-### 4. Docker (Optional)
-
-- Build and run the backend container from the project root:
-
-```bash
-docker build -t sentinel-backend ./backend
-docker run -p 8000:8000 -e ENV=local -v /path/to/serviceAccountKey.json:/app/../serviceAccountKey.json sentinel-backend
-```
+---
 
 ## Deployment
 
-### Google Cloud Setup
+The application is deployed automatically via the GitHub Actions workflow in `.github/workflows/deploy.yml` on every push to the `main` branch.
 
-1. **Configure Google Cloud**
-   - Create a project (e.g., `sentinel-invest`) in Google Cloud Console.
-   - Enable Cloud Run, Firestore, and Artifact Registry APIs.
-   - Set up a service account with `roles/run.admin`, `roles/datastore.user`, and `roles/artifactregistry.writer` roles.
-   - Store the service account key as a GitHub Secret (`GCP_SA_KEY`) and project ID as `GCP_PROJECT_ID`.
+-   The **backend** is containerized and deployed to **Google Cloud Run**.
+-   The **frontend** is built and deployed to **Firebase Hosting**.
 
-2. **Backend Deployment**
-   - The `deploy.yml` workflow automates building and pushing the Docker image to Artifact Registry, then deploying to Cloud Run.
-   - Trigger deployment with a push to the `main` branch.
+### Live URLs
 
-3. **Frontend Deployment**
-   - Configure Firebase Hosting in your Firebase Console.
-   - The `deploy.yml` workflow builds the Vue app and deploys it to Firebase Hosting.
-   - Ensure the `VITE_API_URL` in `.env.production` matches your Cloud Run backend URL.
-
-
-## Usage
-
-- Access the frontend at `https://sentinel-invest.web.app`.
-- Interact with the backend API at `https://sentinel-backend-63684098605-europe-west3.run.app/api/message` (update with actual URL).
-- Monitor deployment status and logs via Google Cloud Console and GitHub Actions.
-
+-   **Frontend:** [https://sentinel-invest.web.app](https://sentinel-invest.web.app)
+-   **Backend API:** The URL is dynamic. Check the output of the `deploy-backend` job in the latest GitHub Actions run.
 
