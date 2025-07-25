@@ -4,32 +4,32 @@ from firebase_admin import credentials, firestore
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- Firebase Initialization ---
-# Initialize with ADC by default (works on Cloud Run)
-try:
-    firebase_admin.initialize_app()
-    db = firestore.client()
-    print("Successfully connected to Firestore using ADC.")
-except Exception as e:
-    print(f"Error connecting to Firestore: {e}")
-    db = None
+app = FastAPI()
+db = None
 
-# For local development, use service account key if ENV is set
+# --- Firebase Initialization ---
+# This new logic is simpler and more explicit.
 if os.getenv("ENV") == "local":
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    SERVICE_ACCOUNT_KEY_PATH = os.path.join(BASE_DIR, '..', 'serviceAccountKey.json')
+    # For local Docker testing, use the service account key.
+    # The key is expected to be mounted at /app/serviceAccountKey.json.
+    SERVICE_ACCOUNT_KEY_PATH = "/app/serviceAccountKey.json"
     try:
         cred = credentials.Certificate(SERVICE_ACCOUNT_KEY_PATH)
-        # Re-initialize with service account key for local
-        firebase_admin.initialize_app(cred, name="local")
+        firebase_admin.initialize_app(cred)
         db = firestore.client()
         print("Successfully connected to Firestore using service account key.")
     except Exception as e:
         print(f"Error connecting to Firestore locally: {e}")
-        db = None
+else:
+    # For production on Cloud Run, use Application Default Credentials.
+    try:
+        firebase_admin.initialize_app()
+        db = firestore.client()
+        print("Successfully connected to Firestore using ADC.")
+    except Exception as e:
+        print(f"Error connecting to Firestore with ADC: {e}")
 # --- End of Firebase Initialization ---
 
-app = FastAPI()
 
 # --- CORS Middleware Configuration ---
 origins = [
@@ -65,4 +65,5 @@ def get_dummy_message():
             raise HTTPException(status_code=404, detail="Dummy message document not found.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
+    
     
