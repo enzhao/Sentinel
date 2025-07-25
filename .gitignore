@@ -65,3 +65,9 @@ htmlcov/
 
 # NOTE: The .python-version file created by pyenv should NOT be ignored.
 # It ensures that anyone working on the project uses the correct Python version.
+
+# Firebase
+# ---------------------------------
+# Ignore Firebase debug logs
+firebase-debug.log*
+
