@@ -71,3 +71,5 @@ htmlcov/
 # Ignore Firebase debug logs
 firebase-debug.log*
 
+# Service account keys
+serviceAccountKey.json
