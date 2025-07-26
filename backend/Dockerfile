@@ -29,9 +29,8 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 
 # Copy the application source code
-COPY ./src .
+COPY ./src ./src
 
 # Expose the port and run the application
 EXPOSE 8000
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
-
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "src.main:app"]

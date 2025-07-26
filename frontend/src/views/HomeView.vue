@@ -1,25 +1,44 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth' // <-- Import auth store
 
-// Create a reactive variable to hold our message
 const message = ref('Loading message from backend...')
 const errorMessage = ref('')
+const userProfile = ref(null) // <-- To store profile data
 
-// Define the backend API URL
-// We will make this more dynamic later
-const API_URL = import.meta.env.VITE_API_URL + '/api/message'
+const authStore = useAuthStore() // <-- Get the store instance
 
-// The onMounted hook runs once when the component is first loaded
+const API_URL = 'http://127.0.0.1:8000'
+
+// Function to call the protected endpoint
+const fetchUserProfile = async () => {
+  if (!authStore.user) {
+    alert('You must be logged in!')
+    return
+  }
+  try {
+    const token = await authStore.user.getIdToken()
+    const response = await axios.get(`${API_URL}/api/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    userProfile.value = response.data
+  } catch (error) {
+    console.error('Error fetching user profile:', error)
+    alert('Failed to fetch user profile.')
+  }
+}
+
 onMounted(async () => {
   try {
-    const response = await axios.get(API_URL)
-    // Update the message with the content from the database
+    const response = await axios.get(`${API_URL}/api/message`)
     message.value = response.data.content
   } catch (error) {
     console.error('Error fetching message:', error)
     errorMessage.value = 'Failed to connect to the backend. Is it running?'
-    message.value = '' // Clear the loading message
+    message.value = ''
   }
 })
 </script>
@@ -30,6 +49,10 @@ onMounted(async () => {
     <div class="message-box">
       <p v-if="message">{{ message }}</p>
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+    </div>
+    <div class="message-box">
+      <button @click="fetchUserProfile">Fetch My Profile (Protected)</button>
+      <pre v-if="userProfile">{{ userProfile }}</pre>
     </div>
   </main>
 </template>

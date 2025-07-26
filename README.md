@@ -1,4 +1,4 @@
-# Sentinel
+# Sentinel Invest 
 
 ![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange)
 
@@ -41,24 +41,49 @@ Before running the application locally, you must set up the required Google Clou
 After completing the cloud setup, follow these steps to run the application on your local machine.
 
 #### Backend Setup
-1.  Navigate to the backend directory: `cd backend`
-2.  Set the local Python version: `pyenv local 3.13.3`
-3.  Create and activate a virtual environment:
+1.  **Navigate to the backend directory:**
+    ```bash
+    cd backend
+    ```
+
+2.  **Set Local Python Version:**
+    ```bash
+    pyenv local 3.13.3
+    ```
+
+3.  **Create and Activate Virtual Environment:**
     ```bash
     python -m venv venv
     source venv/bin/activate
     ```
-4.  Install dependencies: `pip install -r requirements.txt`
-5.  Set the required environment variable to use your local `serviceAccountKey.json`:
+
+4.  **Install Dependencies:**
+    This project uses `pip-tools` for precise dependency management.
+    ```bash
+    pip install pip-tools
+    pip-sync
+    ```
+
+5.  **Set Environment for Local Development:**
+    For the backend to connect to Firestore locally, it needs credentials.
+    - Place your `serviceAccountKey.json` file in the `/backend` directory.
+    - Set the required environment variable:
     ```bash
     export ENV=local
     ```
-6.  Run the backend server:
+
+6.  **Run the Backend Server:**
 
     ```bash
     uvicorn src.main:app --reload
     ```
     ✅ The backend API should now be running at `http://127.0.0.1:8000`.
+
+##### Managing Backend Dependencies
+
+- To add or remove a package, edit the `requirements.in` file.
+- After editing, run `pip-compile requirements.in` to update `requirements.txt`.
+- Then, run `pip-sync` to update your local virtual environment.
 
 #### Frontend Setup
 1.  Open a **new terminal** and navigate to the frontend directory: `cd frontend`
