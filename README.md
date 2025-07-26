@@ -119,4 +119,3 @@ The application is deployed automatically via the GitHub Actions workflow in `.g
 -   **Frontend:** [https://sentinel-invest.web.app](https://sentinel-invest.web.app)
 -   **Backend API:** The URL is dynamic. Check the output of the `deploy-backend` job in the latest GitHub Actions run.
 
-
