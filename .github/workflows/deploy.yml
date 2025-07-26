@@ -43,7 +43,6 @@ jobs:
         run: gcloud auth configure-docker europe-west3-docker.pkg.dev
 
       # Step 5: Build and push the Docker image to Google Artifact Registry.
-      # Replace 'sentinel-invest' with your GCP_PROJECT_ID if it's different.
       - name: Build and Push Docker Image
         run: |-
           docker build -t europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest ./backend
@@ -57,8 +56,10 @@ jobs:
           service: 'sentinel-backend'
           region: 'europe-west3' # Frankfurt, same as our Firestore
           image: 'europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest'
-          # Allow anyone to access the API (we will secure it with auth later)
           flags: '--allow-unauthenticated --port=8000'
+          # Pass the project ID as an environment variable to the container
+          env_vars:
+            GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
 
   # --- Second Job: Deploy the Frontend ---
   deploy-frontend:
@@ -101,3 +102,4 @@ jobs:
           firebaseServiceAccount: '${{ secrets.GCP_SA_KEY }}'
           channelId: live
           projectId: '${{ secrets.GCP_PROJECT_ID }}'
+

@@ -9,10 +9,8 @@ app = FastAPI()
 db = None
 
 # --- Firebase Initialization ---
-# This logic is now corrected to only initialize the app once.
 if os.getenv("ENV") == "local":
     # For local development, use the service account key.
-    # The key is expected to be in the /backend directory.
     print("Running in local mode. Initializing with service account key...")
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     SERVICE_ACCOUNT_KEY_PATH = os.path.join(BASE_DIR, '..', 'serviceAccountKey.json')
@@ -24,12 +22,19 @@ if os.getenv("ENV") == "local":
     except Exception as e:
         print(f"Error connecting to Firestore locally: {e}")
 else:
-    # For production on Cloud Run, use Application Default Credentials.
+    # For production on Cloud Run, use Application Default Credentials but be explicit.
     print("Running in production mode. Initializing with ADC...")
     try:
-        firebase_admin.initialize_app()
+        project_id = os.getenv("GCP_PROJECT_ID")
+        if not project_id:
+            raise ValueError("GCP_PROJECT_ID environment variable not set.")
+        
+        cred = credentials.ApplicationDefault()
+        firebase_admin.initialize_app(cred, {
+            'projectId': project_id,
+        })
         db = firestore.client()
-        print("Successfully connected to Firestore using ADC.")
+        print(f"Successfully connected to Firestore for project {project_id} using ADC.")
     except Exception as e:
         print(f"Error connecting to Firestore with ADC: {e}")
 # --- End of Firebase Initialization ---
@@ -70,12 +75,6 @@ def get_dummy_message():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
 
-# --- NEW PROTECTED ENDPOINT ---
 @app.get("/api/me")
 def get_user_profile(user: dict = Depends(get_current_user)):
-    """
-    This endpoint is protected. The `get_current_user` dependency will run first.
-    If the token is valid, the user's decoded data will be injected into the `user` variable.
-    If the token is invalid, the dependency will raise an error and this function will never run.
-    """
     return {"uid": user.get("uid"), "email": user.get("email")}
