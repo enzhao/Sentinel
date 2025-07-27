@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { useAuthStore } from '@/stores/auth' // <-- Import auth store
+import { useAuthStore } from '@/stores/auth'
 
 const message = ref('Loading message from backend...')
 const errorMessage = ref('')
-const userProfile = ref(null) // <-- To store profile data
+const userProfile = ref(null)
 
-const authStore = useAuthStore() // <-- Get the store instance
+const authStore = useAuthStore()
 
-const API_URL = 'http://127.0.0.1:8000'
+// This is now the single source of truth for the API URL.
+// Vite will automatically use the URL from .env.development when running locally,
+// and the one from .env.production when building for deployment.
+const API_BASE_URL = import.meta.env.VITE_API_URL
 
-// Function to call the protected endpoint
 const fetchUserProfile = async () => {
   if (!authStore.user) {
     alert('You must be logged in!')
@@ -19,7 +21,7 @@ const fetchUserProfile = async () => {
   }
   try {
     const token = await authStore.user.getIdToken()
-    const response = await axios.get(`${API_URL}/api/me`, {
+    const response = await axios.get(`${API_BASE_URL}/api/me`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
@@ -32,8 +34,12 @@ const fetchUserProfile = async () => {
 }
 
 onMounted(async () => {
+  if (!API_BASE_URL) {
+    errorMessage.value = "Error: The backend API URL is not configured."
+    return
+  }
   try {
-    const response = await axios.get(`${API_URL}/api/message`)
+    const response = await axios.get(`${API_BASE_URL}/api/message`)
     message.value = response.data.content
   } catch (error) {
     console.error('Error fetching message:', error)
