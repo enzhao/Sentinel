@@ -103,3 +103,38 @@ jobs:
           firebaseServiceAccount: '${{ secrets.GCP_SA_KEY }}'
           channelId: live
           projectId: '${{ secrets.GCP_PROJECT_ID }}'
+
+  # --- Third Job: Create GitHub Release (Manual Trigger) ---
+  create-release:
+    # This job runs only when manually triggered via workflow_dispatch
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create a release
+    steps:
+      # Step 1: Check out the repository with full history for tags
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history including tags
+
+      # Step 2: Get the latest tag
+      - name: Get latest tag
+        id: tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      # Step 3: Create GitHub Release
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.latest_tag }}
+          release_name: Release ${{ steps.tag.outputs.latest_tag }}
+          body: |
+            See [CHANGELOG.md](https://github.com/enzhao/Sentinel/blob/${{ steps.tag.outputs.latest_tag }}/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+          
