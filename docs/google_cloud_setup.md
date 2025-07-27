@@ -37,9 +37,11 @@ For our backend and CI/CD pipeline to function, we must manually enable a few co
 
 1.  Navigate to the [Google Cloud API Library](https://console.cloud.google.com/apis/library).
 2.  Ensure your `sentinel-invest` project is selected at the top.
-3.  Search for and **ENABLE** the following APIs one by one:
+3.  Search for and **ENABLE** the following APIs one by one (if not already enabled):
     -   **Artifact Registry API** (for storing Docker images)
     -   **Cloud Run Admin API** (for deploying the backend)
+    -   **IAM Service Account Credentials API** (allows services to generate tokens for themselves)
+    -   **Identity Toolkit API** (the backend for Firebase Authentication)
 
 ## 4. Create Service Accounts & Keys
 
@@ -57,17 +59,26 @@ Service accounts are used to give our code and our CI/CD pipeline secure, progra
 9.  **CRITICAL:** Ensure `serviceAccountKey.json` is listed in your root `.gitignore` file.
 
 #### 4.2. CI/CD Deployer Service Account
-1.  Follow the same steps to create another service account.
-2.  **Name:** `github-actions-deployer`
-3.  **Roles:** Grant it the following specific roles:
-    -   `Cloud Run Admin`
-    -   `Firebase Hosting Admin`
-    -   `Artifact Registry Writer`
-    -   `Service Account User`
-4.  Create and download a **JSON** key for this account as well. You will not save this key in the repository.
-5.  Go to your Sentinel GitHub repository -> **Settings** -> **Secrets and variables** -> **Actions**.
-6.  Create a new repository secret named `GCP_SA_KEY` and paste the entire content of the JSON key file into it.
-7.  Create another secret named `GCP_PROJECT_ID` and add your project ID (e.g., `sentinel-invest`).
+
+1. Follow the same steps to create another service account.
+
+2. **Name:** `github-actions-deployer`
+
+3. **Roles:** Grant it the following specific roles:
+
+    - `Cloud Run Admin` (to deploy the service)
+    - `Firebase Hosting Admin` (to deploy the frontend)
+    - `Artifact Registry Writer` (to push Docker images)
+    -`Service Account User` (to allow the service account to act on its own behalf)
+    - **`Cloud Datastore User`** (CRITICAL: to allow the backend to read/write to Firestore)
+
+4. Create and download a **JSON** key for this account.
+
+5. Go to your Sentinel GitHub repository -> **Settings** -> **Secrets and variables** -> **Actions**.
+
+6. Create a new repository secret named `GCP_SA_KEY` and paste the entire content of the JSON key file into it.
+
+7. Create another secret named `GCP_PROJECT_ID` and add your project ID (e.g., `sentinel-invest`).
 
 ## 5. Create Artifact Registry Repository
 
