@@ -122,6 +122,15 @@ After completing the cloud setup, follow these steps to run the application on y
     ```
     This will run all tests and generate a code coverage report.
 
+##### Testing External Services
+The project includes a utility script to perform a live test against the Alpha Vantage API. This is useful for verifying that your API key is working and that the service is accessible.
+
+1.  Ensure you have configured your `backend/.env` file with your API key.
+2.  Run the script from the **project root**:
+    ```bash
+    backend/venv/bin/python util/live_api_test.py
+    ```
+
 ##### Managing Backend Dependencies
 
 - To add or remove a package, edit the `requirements.in` file.
