@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from datetime import datetime
 from src.models import PortfolioDB, HoldingDB, LotDB, TaxSettings
 from src.enrichment_service import enrichment_service
@@ -30,15 +30,15 @@ def sample_portfolio_db():
 
 def test_enrich_portfolio_calculations(sample_portfolio_db):
     """
-    Tests the calculation logic of the enrichment service.
+    Tests the calculation logic of the enrichment service by mocking the DB call.
     """
-    # Mock the market data service to return predictable prices
-    mock_market_data = {
-        "AAPL": {"price": 200.0},
-        "GOOGL": {"price": 140.0},
+    # Mock the database call within the enrichment service
+    mock_prices = {
+        "AAPL": 200.0,
+        "GOOGL": 140.0,
     }
 
-    with patch('src.market_data_service.MarketDataService.get_market_data_for_tickers', return_value=mock_market_data):
+    with patch('src.enrichment_service.EnrichmentService.get_latest_prices_from_db', return_value=mock_prices):
         enriched_portfolio = enrichment_service.enrich_portfolio(sample_portfolio_db)
 
         # --- Assertions for AAPL Holding ---

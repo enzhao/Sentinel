@@ -37,6 +37,18 @@ class PortfolioDB(BaseModel):
     createdAt: datetime = Field(default_factory=datetime.now)
     modifiedAt: datetime = Field(default_factory=datetime.now)
 
+class MarketDataDB(BaseModel):
+    """
+    Represents the daily market data for a single ticker stored in Firestore.
+    """
+    date: datetime = Field(default_factory=datetime.now)
+    ticker: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
 
 # #############################################################################
 # COMPUTED INFO MODELS (for API responses)

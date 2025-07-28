@@ -4,8 +4,8 @@ gunicorn
 pydantic
 pyyaml
 
-
 # Testing
 pytest
 pytest-cov
 httpx
+pytest-env

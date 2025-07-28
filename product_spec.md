@@ -83,8 +83,20 @@ This section details the management of user portfolios. A user can create and ma
   - `quantity`: Number (of shares, positive).
   - `purchasePrice`: Number (EUR per share, positive).
 
+- **`MarketData` (Firestore Document):**
+  - A separate top-level collection (`marketData`) used as an internal cache for historical price data. This data is shared by all users.
+  - The structure is `/marketData/{ticker}/dailyPrices/{YYYY-MM-DD}`.
+  - Each document contains:
+    - `date`: ISODateTime.
+    - `ticker`: String.
+    - `open`: Number (EUR).
+    - `high`: Number (EUR).
+    - `low`: Number (EUR).
+    - `close`: Number (EUR).
+    - `volume`: Integer.
+
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
-  - This information is calculated and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
+  - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
   - **At the `Lot` level:**
     - `currentPrice`: Number (EUR).
     - `currentValue`: Number (EUR).
@@ -112,12 +124,12 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 -   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio").
 -   **Additional Portfolios:** The user can create additional portfolios, each with a unique name.
--   **Adding Holdings:** Users can populate any of their portfolios by adding new holdings, either via manual entry or by importing from a file.
+-   **Adding Holdings:** Users can populate any of their portfolios by adding new holdings. When a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
 
 ##### 1.1.2.2. Retrieval
 
 -   An authenticated user can retrieve a list of all portfolios they own.
--   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend will enrich the response with calculated performance metrics.
+-   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend reads from its internal market data cache to enrich the response with calculated performance metrics.
 
 ##### 1.1.2.3. Update
 
@@ -184,14 +196,13 @@ sequenceDiagram
 
 ##### 1.2.2.1. P_2000: Single Portfolio Retrieval
 
-- **Sequece Diagram for Single Portfolio Retrieval**
+- **Sequence Diagram for Single Portfolio Retrieval**
 
 ```mermaid
 sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
-    participant DB as Database
-    participant MarketAPI as Market Data API
+    participant DB as Database (Firestore)
 
     User->>Sentinel: 1. Request Portfolio Details<br> (portfolioId, ID Token)
     activate Sentinel
@@ -201,22 +212,22 @@ sequenceDiagram
     DB-->>Sentinel: 4. Return Raw Portfolio Data
     deactivate DB
 
-    Note over Sentinel, MarketAPI: Backend now enriches the data
-    Sentinel->>MarketAPI: 5. Fetch Latest Prices for Tickers
-    activate MarketAPI
-    MarketAPI-->>Sentinel: 6. Return Current Market Prices
-    deactivate MarketAPI
+    Note over Sentinel, DB: Backend now enriches the data from its internal cache
+    Sentinel->>DB: 5. Fetch Latest Prices for Tickers<br> from /marketData collection
+    activate DB
+    DB-->>Sentinel: 6. Return Cached Market Prices
+    deactivate DB
 
     Sentinel->>Sentinel: 7. Calculate Performance & Tax Info
     Sentinel-->>User: 8. Return Enriched Portfolio Data
     deactivate Sentinel
 ```
-- **Description**: Retrieves the full, detailed content of a single portfolio for the authenticated user. The backend enriches the response with real-time market data to calculate performance metrics (e.g., percentage gain) and tax information for the portfolio, its holdings, and each individual lot.
+- **Description**: Retrieves the full, detailed content of a single portfolio for the authenticated user. The backend enriches the response by reading from its internal `marketData` cache to calculate performance metrics (e.g., percentage gain) and tax information.
 - **Examples**:
     - **Example**:
         - A user, who owns a portfolio containing two holdings (10 shares of "VOO" and 5 shares of "AAPL"), requests the details of that specific portfolio.
         - The backend returns the complete portfolio object. This response is enriched at multiple levels:
-            - **Each `Lot`** has its `ComputedInfo` with tax calculations based on the latest market price.
+            - **Each `Lot`** has its `ComputedInfo` with tax calculations based on the latest market price from the internal cache.
             - The **`Holding` for "VOO"** is enriched with its aggregated `ComputedInfo`: `{ totalCost: 4000, currentValue: 4500, preTaxGainLoss: 500, gainLossPercentage: 12.5 }`.
             - The **`Holding` for "AAPL"** is enriched with its aggregated `ComputedInfo`: `{ totalCost: 750, currentValue: 900, preTaxGainLoss: 150, gainLossPercentage: 20.0 }`.
             - The top-level **`Portfolio`** object is enriched with the overall aggregated `ComputedInfo`: `{ totalCost: 4750, currentValue: 5400, preTaxGainLoss: 650, gainLossPercentage: 13.68 }`.
@@ -299,12 +310,12 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Updates a specific portfolio's holdings, cash reserves, name, or tax settings via various API endpoints based on direct user input. The target portfolio is identified by its `portfolioId`.
+- **Description**: Updates a specific portfolio's holdings, cash reserves, name, or tax settings via various API endpoints based on direct user input. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
 - **Examples**:
     - **Example**:
         - A user wants to add 10 shares of "VOO" to their "Real Money" portfolio (ID: `xyz-123`).
         - They make a request to add a holding to portfolio `xyz-123`.
-        - The portfolio is updated in the database with the new holding.
+        - The portfolio is updated in the database with the new holding, and the API responds immediately. In the background, the system checks if it has historical data for "VOO" and fetches it if needed.
 - **Success Response**: The specified `Portfolio` document is updated in Firestore with the new data and a new `modifiedAt` timestamp.
 - **Sub-Rules**:
 
@@ -312,6 +323,7 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | P_I_3001 | Update succeeds | All provided data is valid, user is authenticated and owns the specified portfolio. | Response Sentinel to User | The specified portfolio is updated. | P_I_3001 |
 | P_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
+| **P_I_3003** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | P_E_3101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Update rejected with HTTP 403 Forbidden. | P_E_3101 |
 | P_E_3102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Update rejected with HTTP 404 Not Found. | P_E_3102 |
 | P_E_3103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
@@ -860,52 +872,71 @@ sequenceDiagram
 #### 5.1.2. Components
 - **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
 - **Backend API**: Python FastAPI, deployed on Google Cloud Run.
-- **Database**: Google Cloud Firestore (NoSQL).
-- **Monitoring Engine**: Google Cloud Function (Python), triggered by Cloud Scheduler.
+- **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
 - **Notification Service**: SendGrid (email), Firebase Cloud Messaging (push).
-- **Market Data**: Alpha Vantage API (daily updates).
+- **Market Data**: Alpha Vantage API.
+- **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
 
 #### 5.1.3. Architectural Diagram
 
 ```mermaid
-graph TB
-    subgraph Sentinel Cloud Infrastructure
-        direction LR
-        D["Monitoring Engine (Cloud Function)"] 
-        E["Notification Service"]
-        B{{"Backend API Server (Stateless)"}}
-        C[("Database (Firestore)")]
+graph
+    subgraph "Google Cloud Platform"
+        %% direction LR
+        
+        subgraph "User-Facing Services"
+            B{{"Backend API Server (Cloud Run)"}}
+        end
+
+        subgraph "Data Stores"
+            C[("Database (Firestore)<br>- Portfolios<br>- Market Data Cache")]
+        end
+
+        subgraph "Automated Jobs"
+            Scheduler["Cloud Scheduler"]
+        end
+        
+        subgraph "External Communication"
+             E["Notification Service"]
+        end
     end
 
-    subgraph User Interaction
-        direction LR
-        A["Frontend Web App"]
+    subgraph "User Interaction"
+        %% direction LR
+        A["Frontend Web App (Firebase Hosting)"]
         G["Firebase Authentication"]
     end
 
-    subgraph External Data
-        F>"Market Data APIs<br>(Alpha Vantage)"]
+    subgraph "External Data"
+        F>"Market Data API<br>(Alpha Vantage)"]
     end
 
-    %% Define the flows with corrected numbers
+    %% Define the flows
     A -- "① Login/Signup" --> G
     G -- "② Issues ID Token" --> A
 
-    A -- "③ API Call with JWT" --> B
-    B -- "④ Verifies JWT with" --> G
-    B -- "⑤ Accesses Data" --> C
+    A -- "③ API Call with JWT (e.g., Get Portfolio)" --> B
+    B -- "④ Verifies JWT" --> G
+    B -- "⑤ Reads Portfolio Data" --> C
+    B -- "⑥ Reads Market Data Cache" --> C
+    
+    A -- "⑦ API Call with JWT (e.g., Add Holding)" --> B
+    B -- "⑧ Writes Portfolio Data" --> C
+    B -- "⑨ Triggers Backfill (async)" --> F
+    F -- "⑩ Returns Historical Data" --> B
+    B -- "⑪ Writes to Market Data Cache" --> C
 
-    D -- "⑥ Reads Rules" --> C
-    D -- "⑦ Fetches Data" --> F
-    D -- "⑧ Rule Triggered" --> E
-    E -- "⑨ Sends Email/Push" --> A
+    Scheduler -- "⑫ Triggers Daily Sync" --> B
+    B -- "⑬ Fetches Latest Data" --> F
+    F -- "⑭ Returns Latest Data" --> B
+    B -- "⑮ Writes to Market Data Cache" --> C
 ```
 
 ### 5.2. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
-- **Authorization**: User-specific data access enforced.
+- **Authorization**: User-specific data access enforced. No direct, unauthenticated access to the shared `marketData` collection is possible via the API.
 - **Privacy**: Minimal PII (email only), clear privacy policy.
 - **Idempotency Handling**:
     - **Mechanism**: To prevent duplicate operations (e.g., from network retries), all state-changing requests (`POST`, `PUT`, `DELETE`) require a client-generated `Idempotency-Key` header containing a valid **UUID version 4**.
@@ -930,7 +961,9 @@ graph TB
 ### 5.3. Data Sources
 
 - **Provider**: Alpha Vantage.
-- **Frequency**: Daily, post-market close.
+- **Frequency**: Data is fetched from the provider under two conditions:
+    1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
+    2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
 - **Data Points**: OHLC prices, MA200, weekly RSI, VIX close.
 
 ### 5.4. Non-Functional Requirements

@@ -95,12 +95,17 @@ After completing the cloud setup, follow these steps to run the application on y
     ```
 
 5.  **Set Environment for Local Development:**
-    For the backend to connect to Firestore locally, it needs credentials.
+    For the backend to connect to Firestore and external services, it needs credentials.
     - Place your `serviceAccountKey.json` file in the `/backend` directory.
-    - Set the required environment variable:
-    ```bash
-    export ENV=local
-    ```
+    - Create a new file named `.env` inside the `/backend` directory by copying the example:
+      ```bash
+      cp backend/.env.example backend/.env
+      ```
+    - Open the new `backend/.env` file and replace `YOUR_API_KEY_HERE` with your actual Alpha Vantage API key.
+    - Set the required environment variable to tell the app you are running locally:
+      ```bash
+      export ENV=local
+      ```
 
 6.  **Run the Backend Server:**
 

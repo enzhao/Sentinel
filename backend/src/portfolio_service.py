@@ -66,7 +66,7 @@ class PortfolioService:
         if not portfolio:
             return None
 
-        update_dict = update_data.dict(exclude_unset=True)
+        update_dict = update_data.model_dump(exclude_unset=True)
         portfolios_collection.document(portfolio_id).update(update_dict)
         
         # Return the updated portfolio
@@ -100,11 +100,11 @@ class PortfolioService:
         if not portfolio:
             return None
 
-        new_holding = HoldingDB(**holding_data.dict())
+        new_holding = HoldingDB(**holding_data.model_dump())
         
         # Use FieldValue to atomically add the new holding to the array
         portfolios_collection.document(portfolio_id).update({
-            'holdings': firestore.ArrayUnion([new_holding.dict()])
+            'holdings': firestore.ArrayUnion([new_holding.model_dump()])
         })
 
         updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
@@ -126,7 +126,7 @@ class PortfolioService:
             # No holding was found/deleted
             return None
 
-        portfolios_collection.document(portfolio_id).update({"holdings": [h.dict() for h in portfolio.holdings]})
+        portfolios_collection.document(portfolio_id).update({"holdings": [h.model_dump() for h in portfolio.holdings]})
         updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
         return PortfolioDB(**updated_portfolio_doc.to_dict())
 
@@ -153,7 +153,7 @@ class PortfolioService:
         if not holding_found or not lot_deleted:
             return None
 
-        portfolios_collection.document(portfolio_id).update({"holdings": [h.dict() for h in portfolio.holdings]})
+        portfolios_collection.document(portfolio_id).update({"holdings": [h.model_dump() for h in portfolio.holdings]})
         updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
         return PortfolioDB(**updated_portfolio_doc.to_dict())
 

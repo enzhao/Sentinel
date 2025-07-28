@@ -31,7 +31,12 @@ dist/
 # It should NEVER be committed to version control for security reasons.
 .env
 .env.*
+
+# --- EXCEPTIONS ---
+# Allow example and test .env files as they contain no secrets.
 !.env.example
+!backend/.env.example
+!backend/.env.test
 
 # TypeScript
 # Ignore compiled TypeScript files if they are not in a build directory
