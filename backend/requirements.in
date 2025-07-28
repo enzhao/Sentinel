@@ -1,3 +1,11 @@
 fastapi[all]
 firebase-admin==7.0.0
 gunicorn
+pydantic
+pyyaml
+
+
+# Testing
+pytest
+pytest-cov
+httpx

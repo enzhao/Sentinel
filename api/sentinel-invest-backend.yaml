@@ -1,0 +1,621 @@
+openapi: 3.1.0
+info:
+  title: FastAPI
+  version: 0.1.0
+paths:
+  /api/portfolios:
+    post:
+      tags:
+      - Portfolios
+      summary: Create Portfolio
+      description: Create a new portfolio for the authenticated user.
+      operationId: create_portfolio_api_portfolios_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePortfolioRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Portfolios
+      summary: Get All Portfolios
+      description: Retrieve a summary list of all of the user's portfolios.
+      operationId: get_all_portfolios_api_portfolios_get
+      security:
+      - OAuth2PasswordBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Portfolio'
+                title: Response Get All Portfolios Api Portfolios Get
+  /api/portfolios/{portfolio_id}:
+    get:
+      tags:
+      - Portfolios
+      summary: Get Portfolio
+      description: Retrieve the full, enriched details of a single portfolio.
+      operationId: get_portfolio_api_portfolios__portfolio_id__get
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Portfolios
+      summary: Update Portfolio
+      description: Update a portfolio's name, cash reserves, or tax settings.
+      operationId: update_portfolio_api_portfolios__portfolio_id__put
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePortfolioRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Portfolios
+      summary: Delete Portfolio
+      description: Delete an entire portfolio.
+      operationId: delete_portfolio_api_portfolios__portfolio_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/portfolios/{portfolio_id}/holdings:
+    post:
+      tags:
+      - Portfolios
+      summary: Add Holding To Portfolio
+      description: Add a new holding with lots to a portfolio.
+      operationId: add_holding_to_portfolio_api_portfolios__portfolio_id__holdings_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddHoldingRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/portfolios/{portfolio_id}/holdings/{holding_id}:
+    delete:
+      tags:
+      - Portfolios
+      summary: Delete Holding From Portfolio
+      description: Delete a holding from a portfolio.
+      operationId: delete_holding_from_portfolio_api_portfolios__portfolio_id__holdings__holding_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      - name: holding_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Holding Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/portfolios/{portfolio_id}/holdings/{holding_id}/lots/{lot_id}:
+    delete:
+      tags:
+      - Portfolios
+      summary: Delete Lot From Holding
+      description: Delete a lot from a holding within a portfolio.
+      operationId: delete_lot_from_holding_api_portfolios__portfolio_id__holdings__holding_id__lots__lot_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: portfolio_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Portfolio Id
+      - name: holding_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Holding Id
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/users/initialize:
+    post:
+      tags:
+      - Users
+      summary: Initialize User Portfolio
+      description: 'Initializes the user''s account by creating a default portfolio
+        if one doesn''t exist.
+
+        This endpoint is idempotent.'
+      operationId: initialize_user_portfolio_api_users_initialize_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          title: Idempotency-Key
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Read Root
+      operationId: read_root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/message:
+    get:
+      summary: Get Dummy Message
+      operationId: get_dummy_message_api_message_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/me:
+    get:
+      summary: Get User Profile
+      operationId: get_user_profile_api_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - OAuth2PasswordBearer: []
+components:
+  schemas:
+    AddHoldingRequest:
+      properties:
+        ticker:
+          type: string
+          title: Ticker
+        lots:
+          items:
+            $ref: '#/components/schemas/LotDB'
+          type: array
+          title: Lots
+      type: object
+      required:
+      - ticker
+      - lots
+      title: AddHoldingRequest
+    CashReserve:
+      properties:
+        totalAmount:
+          type: number
+          minimum: 0.0
+          title: Totalamount
+          default: 0.0
+        warChestAmount:
+          type: number
+          minimum: 0.0
+          title: Warchestamount
+          default: 0.0
+      type: object
+      title: CashReserve
+    CreatePortfolioRequest:
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 1
+          title: Name
+      type: object
+      required:
+      - name
+      title: CreatePortfolioRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Holding:
+      properties:
+        totalCost:
+          type: number
+          title: Totalcost
+          default: 0.0
+        currentValue:
+          type: number
+          title: Currentvalue
+          default: 0.0
+        preTaxGainLoss:
+          type: number
+          title: Pretaxgainloss
+          default: 0.0
+        afterTaxGainLoss:
+          type: number
+          title: Aftertaxgainloss
+          default: 0.0
+        gainLossPercentage:
+          type: number
+          title: Gainlosspercentage
+          default: 0.0
+        holdingId:
+          type: string
+          title: Holdingid
+        ticker:
+          type: string
+          title: Ticker
+        lots:
+          items:
+            $ref: '#/components/schemas/Lot'
+          type: array
+          title: Lots
+          default: []
+      type: object
+      required:
+      - ticker
+      title: Holding
+    Lot:
+      properties:
+        currentPrice:
+          type: number
+          title: Currentprice
+          default: 0.0
+        currentValue:
+          type: number
+          title: Currentvalue
+          default: 0.0
+        preTaxProfit:
+          type: number
+          title: Pretaxprofit
+          default: 0.0
+        capitalGainTax:
+          type: number
+          title: Capitalgaintax
+          default: 0.0
+        afterTaxProfit:
+          type: number
+          title: Aftertaxprofit
+          default: 0.0
+        lotId:
+          type: string
+          title: Lotid
+        purchaseDate:
+          type: string
+          format: date-time
+          title: Purchasedate
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        purchasePrice:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Purchaseprice
+      type: object
+      required:
+      - purchaseDate
+      - quantity
+      - purchasePrice
+      title: Lot
+    LotDB:
+      properties:
+        lotId:
+          type: string
+          title: Lotid
+        purchaseDate:
+          type: string
+          format: date-time
+          title: Purchasedate
+        quantity:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Quantity
+        purchasePrice:
+          type: number
+          exclusiveMinimum: 0.0
+          title: Purchaseprice
+      type: object
+      required:
+      - purchaseDate
+      - quantity
+      - purchasePrice
+      title: LotDB
+    Portfolio:
+      properties:
+        totalCost:
+          type: number
+          title: Totalcost
+          default: 0.0
+        currentValue:
+          type: number
+          title: Currentvalue
+          default: 0.0
+        preTaxGainLoss:
+          type: number
+          title: Pretaxgainloss
+          default: 0.0
+        afterTaxGainLoss:
+          type: number
+          title: Aftertaxgainloss
+          default: 0.0
+        gainLossPercentage:
+          type: number
+          title: Gainlosspercentage
+          default: 0.0
+        portfolioId:
+          type: string
+          title: Portfolioid
+        userId:
+          type: string
+          title: Userid
+        name:
+          type: string
+          title: Name
+        holdings:
+          items:
+            $ref: '#/components/schemas/Holding'
+          type: array
+          title: Holdings
+          default: []
+        cashReserve:
+          $ref: '#/components/schemas/CashReserve'
+        taxSettings:
+          $ref: '#/components/schemas/TaxSettings'
+        createdAt:
+          type: string
+          format: date-time
+          title: Createdat
+        modifiedAt:
+          type: string
+          format: date-time
+          title: Modifiedat
+      type: object
+      required:
+      - userId
+      - name
+      title: Portfolio
+    TaxSettings:
+      properties:
+        capitalGainTaxRate:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Capitalgaintaxrate
+          default: 26.4
+        taxFreeAllowance:
+          type: number
+          minimum: 0.0
+          title: Taxfreeallowance
+          default: 1000.0
+      type: object
+      title: TaxSettings
+    UpdatePortfolioRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 50
+            minLength: 1
+          - type: 'null'
+          title: Name
+        cashReserve:
+          anyOf:
+          - $ref: '#/components/schemas/CashReserve'
+          - type: 'null'
+        taxSettings:
+          anyOf:
+          - $ref: '#/components/schemas/TaxSettings'
+          - type: 'null'
+      type: object
+      title: UpdatePortfolioRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    OAuth2PasswordBearer:
+      type: oauth2
+      flows:
+        password:
+          scopes: {}
+          tokenUrl: token

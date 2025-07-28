@@ -28,9 +28,38 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
+  const initializeBackendUser = async () => {
+    if (!auth.currentUser) {
+      console.error("User not authenticated. Cannot initialize backend user.");
+      return;
+    }
+    try {
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/users/initialize', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Backend initialization failed.");
+      }
+
+      console.log("Backend user initialized successfully.");
+      const data = await response.json();
+      // Optionally, you can use the returned portfolio data to update another store
+    } catch (error) {
+      console.error("Error initializing backend user:", error);
+      // Decide how to handle this error. Maybe show a notification to the user.
+    }
+  }
+
   const signup = async (email: string, password: string) => {
     try {
       await createUserWithEmailAndPassword(auth, email, password)
+      await initializeBackendUser();
       router.push('/') // Redirect to home after signup
     } catch (error: any) {
       alert(`Error signing up: ${error.message}`)
@@ -56,5 +85,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
 }
 
-  return { user, loading, init, signup, login, logout }
+  return { user, loading, init, signup, login, logout, initializeBackendUser }
 })

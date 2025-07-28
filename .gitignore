@@ -46,6 +46,7 @@ venv/
 .venv/
 env/
 .env/
+backend/venv/
 
 # Compiled Python files
 __pycache__/
@@ -62,6 +63,7 @@ dist/
 .pytest_cache/
 .tox/
 htmlcov/
+.coverage
 
 # NOTE: The .python-version file created by pyenv should NOT be ignored.
 # It ensures that anyone working on the project uses the correct Python version.
@@ -72,4 +74,4 @@ htmlcov/
 firebase-debug.log*
 
 # Service account keys
-serviceAccountKey.json
+**/serviceAccountKey.json
