@@ -84,7 +84,7 @@ This section details the management of user portfolios. A user can create and ma
   - `purchasePrice`: Number (EUR per share, positive).
 
 - **`MarketData` (Firestore Document):**
-  - A separate top-level collection (`marketData`) used as an internal cache for historical price data. This data is shared by all users.
+  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
   - The structure is `/marketData/{ticker}/dailyPrices/{YYYY-MM-DD}`.
   - Each document contains:
     - `date`: ISODateTime.
@@ -94,6 +94,10 @@ This section details the management of user portfolios. A user can create and ma
     - `low`: Number (EUR).
     - `close`: Number (EUR).
     - `volume`: Integer.
+    - `ma200`: Optional<Number> (200-day simple moving average).
+    - `rsi_weekly`: Optional<Number> (14-day weekly Relative Strength Index).
+    - `atr`: Optional<Number> (14-day Average True Range).
+  - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
   - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
@@ -964,7 +968,7 @@ graph
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
-- **Data Points**: OHLC prices, MA200, weekly RSI, VIX close.
+- **Data Points**: OHLC prices, MA200, weekly RSI, VIX close, ATR.
 
 ### 5.4. Non-Functional Requirements
 

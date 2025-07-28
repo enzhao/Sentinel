@@ -1,6 +1,7 @@
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+from pathlib import Path
 
 def initialize_firebase_app():
     """
@@ -10,15 +11,12 @@ def initialize_firebase_app():
     if not firebase_admin._apps:
         print("Initializing Firebase App...")
         if os.getenv('ENV') == 'local':
-            # Use service account key file for local development
-            key_path = 'serviceAccountKey.json'
-            if not os.path.exists(key_path):
-                 # Look in the parent directory if running from src
-                key_path = os.path.join('..', key_path)
-
-            if not os.path.exists(key_path):
+            # Build an absolute path to the key file relative to this script's location
+            key_path = Path(__file__).parent.parent / "serviceAccountKey.json"
+            
+            if not key_path.exists():
                  raise FileNotFoundError(
-                    "Running locally, but 'serviceAccountKey.json' not found in 'backend/' or 'backend/src/'. "
+                    f"Running locally, but 'serviceAccountKey.json' not found at the expected path: {key_path}. "
                     "Please follow the setup instructions in the README."
                 )
             print(f"Found service account key at: {key_path}")

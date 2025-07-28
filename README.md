@@ -1,6 +1,6 @@
 # Sentinel Invest 
 
-![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange) ![Coverage](https://img.shields.io/badge/coverage-71%25-green)
+![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange) ![Coverage](https://img.shields.io/badge/coverage-78%25-green)
 
 An automated, strategy-driven tool to help long-term investors make disciplined, data-driven decisions without the need for constant market-watching.
 
@@ -123,13 +123,21 @@ After completing the cloud setup, follow these steps to run the application on y
     This will run all tests and generate a code coverage report.
 
 ##### Testing External Services
-The project includes a utility script to perform a live test against the Alpha Vantage API. This is useful for verifying that your API key is working and that the service is accessible.
+The project includes utility scripts to perform live tests against external services. These are not part of the main test suite and should be run manually for validation.
 
-1.  Ensure you have configured your `backend/.env` file with your API key.
-2.  Run the script from the **project root**:
-    ```bash
-    backend/venv/bin/python util/live_api_test.py
-    ```
+- **Live API Test (`live_api_test.py`):**
+  This script quickly fetches all required data points from Alpha Vantage to verify that your API key is working and that the service is accessible.
+  ```bash
+  # Run from the project root
+  backend/venv/bin/python util/live_api_test.py
+  ```
+
+- **End-to-End Pipeline Test (`e2e_data_pipeline_test.py`):**
+  This script performs a full data pipeline test: it fetches real data from Alpha Vantage, writes it to your **live** Firestore database, reads it back, verifies it, and then deletes the test data. It is the ultimate confirmation that the entire data flow is working.
+  ```bash
+  # Run from the project root
+  backend/venv/bin/python util/e2e_data_pipeline_test.py
+  ```
 
 ##### Managing Backend Dependencies
 

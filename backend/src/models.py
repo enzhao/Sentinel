@@ -48,6 +48,9 @@ class MarketDataDB(BaseModel):
     low: float
     close: float
     volume: int
+    ma200: Optional[float] = None
+    rsi_weekly: Optional[float] = None
+    atr: Optional[float] = None
 
 
 # #############################################################################
