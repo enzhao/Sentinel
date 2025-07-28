@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from src.models import PortfolioDB
+import uuid
 
 # A sample decoded token to be returned by the mock auth verifier
 SAMPLE_USER = {"uid": "test-user-init-123", "email": "test-init@example.com"}
@@ -30,7 +31,7 @@ def test_initialize_user_creates_portfolio(test_client: TestClient):
 
             response = test_client.post(
                 "/api/users/initialize",
-                headers={"Authorization": "Bearer test-token", "Idempotency-Key": "init-key-1"}
+                headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
             )
 
             assert response.status_code == 200
@@ -54,7 +55,7 @@ def test_initialize_user_is_idempotent(test_client: TestClient):
             
             response = test_client.post(
                 "/api/users/initialize",
-                headers={"Authorization": "Bearer test-token", "Idempotency-Key": "init-key-2"}
+                headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
             )
 
             assert response.status_code == 200
@@ -73,3 +74,13 @@ def test_initialize_user_missing_idempotency_key(test_client: TestClient):
     assert response.status_code == 400 # As enforced by the middleware
     data = response.json()
     assert "Idempotency-Key header is required" in data["detail"]
+
+def test_initialize_user_invalid_idempotency_key(test_client: TestClient):
+    """
+    Error Path: Tests that the request fails with an invalid Idempotency-Key header.
+    """
+    response = test_client.post(
+        "/api/users/initialize",
+        headers={"Authorization": "Bearer test-token", "Idempotency-Key": "not-a-uuid"}
+    )
+    assert response.status_code == 422 # FastAPI validation error for incorrect format

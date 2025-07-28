@@ -908,7 +908,7 @@ graph TB
 - **Authorization**: User-specific data access enforced.
 - **Privacy**: Minimal PII (email only), clear privacy policy.
 - **Idempotency Handling**:
-    - **Mechanism**: To prevent duplicate operations (e.g., from network retries), all state-changing requests (`POST`, `PUT`, `DELETE`) require a client-generated `Idempotency-Key` header containing a UUID v4.
+    - **Mechanism**: To prevent duplicate operations (e.g., from network retries), all state-changing requests (`POST`, `PUT`, `DELETE`) require a client-generated `Idempotency-Key` header containing a valid **UUID version 4**.
     - **Technical Implementation**: The backend will use a dedicated Firestore collection named `idempotencyKeys`.
         - The `Idempotency-Key` from the request will be used as the document ID in this collection.
         - Upon receiving a request, the backend will first check if a document with this ID exists.

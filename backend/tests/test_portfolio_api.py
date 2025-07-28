@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
+import uuid
 
 # A sample decoded token to be returned by the mock auth verifier
 SAMPLE_USER = {"uid": "test-user-123", "email": "test@example.com"}
@@ -21,7 +22,7 @@ def test_create_and_get_portfolio(test_client: TestClient):
     response = test_client.post(
         "/api/portfolios",
         json={"name": "My Test Portfolio"},
-        headers={"Authorization": "Bearer test-token", "Idempotency-Key": "key-1"}
+        headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
     )
     assert response.status_code == 201
     created_data = response.json()
@@ -43,11 +44,12 @@ def test_idempotency_for_create(test_client: TestClient):
     """
     Tests that creating a portfolio is idempotent.
     """
+    key = str(uuid.uuid4())
     # 1. First request to create
     response1 = test_client.post(
         "/api/portfolios",
         json={"name": "Idempotent Test"},
-        headers={"Authorization": "Bearer test-token", "Idempotency-Key": "key-2"}
+        headers={"Authorization": "Bearer test-token", "Idempotency-Key": key}
     )
     assert response1.status_code == 201
     data1 = response1.json()
@@ -56,7 +58,7 @@ def test_idempotency_for_create(test_client: TestClient):
     response2 = test_client.post(
         "/api/portfolios",
         json={"name": "Idempotent Test"},
-        headers={"Authorization": "Bearer test-token", "Idempotency-Key": "key-2"}
+        headers={"Authorization": "Bearer test-token", "Idempotency-Key": key}
     )
     # It should return the same response without creating a new portfolio
     assert response2.status_code == 201
