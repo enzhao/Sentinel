@@ -1,6 +1,6 @@
 from typing import Dict
-from .models import Portfolio, Holding, Lot
-from .firebase_setup import db
+from src.models import Portfolio, Holding, Lot
+from src.firebase_setup import db
 from datetime import datetime
 
 class EnrichmentService:

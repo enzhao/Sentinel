@@ -21,26 +21,28 @@ For a full breakdown of the project's vision, features, and architecture, please
 ├── api/                  # OpenAPI specifications
 ├── backend/
 │   ├── src/              # Python FastAPI backend source
-│   │   ├── routers/      # API endpoint definitions (the "V" in MVC)
-│   │   ├── services/     # Business logic services (the "C" in MVC)
-│   │   ├── models.py     # Pydantic data models (the "M" in MVC)
-│   │   ├── middleware.py # Custom middleware (e.g., idempotency)
-│   │   ├── dependencies.py # Shared dependencies (e.g., header requirements)
+│   │   ├── routers/      # API endpoint definitions
+│   │   ├── services/     # Business logic services
+│   │   ├── models.py     # Pydantic data models
+│   │   ├── middleware.py # Custom middleware
+│   │   ├── dependencies.py # Shared dependencies
 │   │   └── main.py       # FastAPI app entrypoint
-│   ├── tests/              # Unit and integration tests for the backend
-│   │   ├── conftest.py   # Pytest fixtures and test setup
-│   │   └── ...           # Test files
-│   ├── .python-version   # Ensures correct Python version with pyenv
-│   ├── Dockerfile        # For containerizing the backend
+│   ├── tests/              # Unit and integration tests
+│   ├── .python-version   # pyenv version file
+│   ├── Dockerfile        # Production container definition
 │   ├── pytest.ini        # Pytest configuration
-│   └── requirements.in   # Backend dependencies (managed by pip-tools)
+│   ├── requirements.in   # Production dependencies
+│   └── requirements-dev.in # Development/test dependencies
 ├── docs/                 # Project documentation
 ├── frontend/             # Vue.js frontend source
+├── util/                 # Standalone utility scripts (e.g., live API tests)
+├── .dockerignore         # Files to exclude from Docker builds
 ├── .gitignore
 ├── CHANGELOG.md
 ├── commitlint.config.js
-├── package.json          # For root-level dev dependencies and release scripts
-├── product_spec.md       # The official product specification
+├── package.json          # Root-level dev dependencies and scripts
+├── product_spec.md       # The single source of truth for project requirements
+├── run_local_backend.sh  # Local development setup script
 └── README.md
 ``` 
 
@@ -59,68 +61,37 @@ Before running the application locally, you must set up the required Google Clou
 After completing the cloud setup, follow these steps to run the application on your local machine.
 
 #### Backend Setup
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd backend
-    ```
+The backend setup is managed by a single script that automates the creation of a virtual environment, installation of dependencies, and setting of environment variables.
 
-2.  **Set Local Python Version:**
-    ```bash
-    pyenv local 3.13.3
-    ```
-
-3.  **Create and Activate Virtual Environment:**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    ```
-
-4.  **Install Dependencies:**
-    This project uses `pip-tools` for precise dependency management.
-    - Install `pip-tools`:
-    ```bash
-    pip install pip-tools
-    ```
-    - Compile the requirements:
-    ```bash
-    pip-compile requirements.in
-    ```
-    - Install the compiled requirements:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    - Sync the virtual environment with the requirements (It ensures that only the packages listed in the requirements.txt (or other compiled .txt files) are installed):
-    ```bash
-    pip-sync
-    ```
-
-5.  **Set Environment for Local Development:**
-    For the backend to connect to Firestore and external services, it needs credentials.
+1.  **Prerequisites:**
+    - Ensure you have `pyenv` installed to manage Python versions.
+    - **Install pip-tools:** This is a one-time setup for your system.
+      ```bash
+      pip install pip-tools
+      ```
     - Place your `serviceAccountKey.json` file in the `/backend` directory.
-    - Create a new file named `.env` inside the `/backend` directory by copying the example:
+    - Create and configure your `backend/.env` file by copying the example:
       ```bash
       cp backend/.env.example backend/.env
       ```
-    - Open the new `backend/.env` file and replace `YOUR_API_KEY_HERE` with your actual Alpha Vantage API key.
-    - Set the required environment variable to tell the app you are running locally:
-      ```bash
-      export ENV=local
-      ```
+      Then, add your Alpha Vantage API key to the new `.env` file.
 
-6.  **Run the Backend Server:**
-
+2.  **Run the Setup Script:**
+    From the project root, make the script executable and run it:
     ```bash
+    chmod +x run_local_backend.sh
+    ./run_local_backend.sh
+    ```
+    The script will guide you through the rest of the setup.
+
+3.  **Run the Backend Server:**
+    After the setup is complete, you can run the server at any time:
+    ```bash
+    # Make sure your virtual environment is activated
+    source backend/venv/bin/activate
     uvicorn src.main:app --reload
     ```
     ✅ The backend API should now be running at `http://127.0.0.1:8000`.
-
-7.  **Run Tests:**
-    To run the unit and integration tests for the backend, use `pytest`:
-    ```bash
-    # From the /backend directory
-    ./venv/bin/pytest --cov=src
-    ```
-    This will run all tests and generate a code coverage report.
 
 ##### Testing External Services
 The project includes utility scripts to perform live tests against external services. These are not part of the main test suite and should be run manually for validation.
@@ -210,10 +181,17 @@ Creating a new version, generating a changelog, and tagging the release is an au
     ```bash
     npm run release
     ```
-3.  This command will analyze your commits since the last tag, determine the correct new version number (e.g., v0.1.0 -> v0.2.0 if there are new `feat` commits), update the `CHANGELOG.md` file, and create a new Git tag.
-4.  Push the new commit and the tag to GitHub:
+    This command will analyze your commits since the last tag, determine the correct new version number (e.g., v0.1.0 -> v0.2.0 if there are new `feat` commits), update the `CHANGELOG.md` file, and create a new Git tag.
+
+    **Specifying a Release Type:**
+    To override the automatic versioning, you can specify the release type. For example, to force a minor release (e.g., `v0.0.1` -> `v0.1.0`), run:
+    ```bash
+    npm run release -- --release-as minor
+    ```
+    Other options include `major`, `minor`, or `patch`.
+
+3.  Push the new commit and the tag to GitHub:
 
     ```bash
     git push --follow-tags origin main
     ```
-

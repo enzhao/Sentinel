@@ -63,6 +63,8 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+backend/requirements.txt
+backend/requirements-dev.txt
 
 # Test artifacts
 .pytest_cache/

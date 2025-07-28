@@ -20,8 +20,8 @@ def test_initialize_user_creates_portfolio(test_client: TestClient):
     Happy Path: Tests that the first call to /initialize creates a new portfolio.
     """
     # Mock the portfolio service to simulate that no portfolios exist yet
-    with patch('src.portfolio_service.portfolio_service.get_portfolios_by_user', return_value=[]):
-        with patch('src.portfolio_service.portfolio_service.create_portfolio') as mock_create:
+    with patch('src.services.portfolio_service.portfolio_service.get_portfolios_by_user', return_value=[]):
+        with patch('src.services.portfolio_service.portfolio_service.create_portfolio') as mock_create:
             # Define a realistic portfolio object that should be "created"
             created_portfolio = PortfolioDB(
                 name="My First Portfolio",
@@ -50,8 +50,8 @@ def test_initialize_user_is_idempotent(test_client: TestClient):
         userId=SAMPLE_USER["uid"]
     )
     
-    with patch('src.portfolio_service.portfolio_service.get_portfolios_by_user', return_value=[existing_portfolio]):
-        with patch('src.portfolio_service.portfolio_service.create_portfolio') as mock_create:
+    with patch('src.services.portfolio_service.portfolio_service.get_portfolios_by_user', return_value=[existing_portfolio]):
+        with patch('src.services.portfolio_service.portfolio_service.create_portfolio') as mock_create:
             
             response = test_client.post(
                 "/api/users/initialize",

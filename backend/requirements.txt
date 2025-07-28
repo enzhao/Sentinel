@@ -30,8 +30,6 @@ click==8.2.1
     #   rich-toolkit
     #   typer
     #   uvicorn
-coverage[toml]==7.10.1
-    # via pytest-cov
 cryptography==45.0.5
     # via pyjwt
 dnspython==2.7.0
@@ -112,8 +110,6 @@ idna==3.10
     #   email-validator
     #   httpx
     #   requests
-iniconfig==2.1.0
-    # via pytest
 itsdangerous==2.2.0
     # via fastapi
 jinja2==3.1.6
@@ -129,13 +125,7 @@ msgpack==1.1.1
 orjson==3.11.0
     # via fastapi
 packaging==25.0
-    # via
-    #   gunicorn
-    #   pytest
-pluggy==1.6.0
-    # via
-    #   pytest
-    #   pytest-cov
+    # via gunicorn
 proto-plus==1.26.1
     # via
     #   google-api-core
@@ -169,20 +159,9 @@ pydantic-extra-types==2.10.5
 pydantic-settings==2.10.1
     # via fastapi
 pygments==2.19.2
-    # via
-    #   pytest
-    #   rich
+    # via rich
 pyjwt[crypto]==2.10.1
     # via firebase-admin
-pytest==8.4.1
-    # via
-    #   -r backend/requirements.in
-    #   pytest-cov
-    #   pytest-env
-pytest-cov==6.2.1
-    # via -r backend/requirements.in
-pytest-env==1.1.5
-    # via -r backend/requirements.in
 python-dotenv==1.1.1
     # via
     #   pydantic-settings

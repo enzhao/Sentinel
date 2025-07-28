@@ -1,124 +1,89 @@
-# This is the name of our workflow. It will be displayed on the Actions tab of your GitHub repository.
 name: Deploy Sentinel to GCP
 
-# This section defines when the workflow will run.
-# We are telling it to run on every push to the 'main' branch.
 on:
   push:
     branches: [ "main" ]
 
-# This section defines the jobs that will be run.
 jobs:
-  # --- First Job: Deploy the Backend ---
   deploy-backend:
-    # We need to give the job permission to write to Google Cloud.
+    name: 🚀 Deploy Backend to Cloud Run
     permissions:
       contents: 'read'
       id-token: 'write'
-
-    # The type of runner that the job will run on.
     runs-on: ubuntu-latest
-
-    # We define an output for this job, which will be the URL of our deployed backend.
     outputs:
       backend_url: ${{ steps.deploy.outputs.url }}
-
     steps:
-      # Step 1: Check out the source code from our repository.
-      - name: Checkout repository
+      - name: 🔄 Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Python
-      - name: Set up Python
+      - name: 🐍 Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
-      # Step 3: Install dependencies
-      - name: Install dependencies
+      - name: 🧪 Install & test backend
+        working-directory: backend
         run: |
           python -m venv venv
           source venv/bin/activate
-          pip install -r backend/requirements.txt
-
-      # Step 4: Run tests and check coverage
-      - name: Run tests
-        run: |
-          source venv/bin/activate
-          cd backend
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
           pytest --cov=src --cov-fail-under=70
 
-      # Step 5: Authenticate to Google Cloud using the service account key we created.
-      - name: Authenticate to Google Cloud
-        uses: 'google-github-actions/auth@v2'
+      - name: 🔐 Authenticate to GCP
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      # Step 6: Set up the Google Cloud CLI.
-      - name: Set up Cloud SDK
-        uses: 'google-github-actions/setup-gcloud@v2'
+      - name: ☁️ Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
 
-      # Step 7: Configure Docker to authenticate with Google Artifact Registry.
-      - name: Configure Docker
+      - name: 🐳 Configure Docker for GAR
         run: gcloud auth configure-docker europe-west3-docker.pkg.dev
 
-      # Step 8: Build and push the Docker image to Google Artifact Registry.
-      - name: Build and Push Docker Image
-        run: |-
+      - name: 🏗️ Build & Push Docker image
+        run: |
           docker build -t europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest ./backend
           docker push europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest
 
-      # Step 9: Deploy the container image to Google Cloud Run.
-      - name: Deploy to Cloud Run
+      - name: 🚢 Deploy to Cloud Run
         id: deploy
-        uses: 'google-github-actions/deploy-cloudrun@v2'
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: 'sentinel-backend'
-          region: 'europe-west3' # Frankfurt, same as our Firestore
+          region: 'europe-west3'
           image: 'europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest'
           flags: '--allow-unauthenticated --port=8000'
-          # Pass the project ID as an environment variable to the container
-          # CORRECTED FORMAT: This is now a multi-line string.
           env_vars: |
             APP_ENV=production
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             ALPHA_VANTAGE_API_KEY=${{ secrets.ALPHA_VANTAGE_API_KEY }}
 
-  # --- Second Job: Deploy the Frontend ---
   deploy-frontend:
-    # This job will only start after the 'deploy-backend' job has successfully finished.
+    name: 🌐 Deploy Frontend to Firebase
     needs: deploy-backend
-
-    # The type of runner that the job will run on.
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Check out the source code.
-      - name: Checkout repository
+      - name: 🔄 Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js.
-      - name: Use Node.js
+      - name: 🟢 Set up Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Use the LTS version we set up locally
+          node-version: '20'
 
-      # Step 3: Create the .env.production file for the frontend.
-      # This is the magic step. It takes the URL from the backend job's output
-      # and writes it into the environment file for our Vue app.
-      - name: Create .env.production file
+      - name: 🧾 Create .env.production
         run: |
           echo "VITE_API_URL=${{ needs.deploy-backend.outputs.backend_url }}" > frontend/.env.production
 
-      # Step 4: Install dependencies and build the frontend.
-      - name: Install and Build Frontend
+      - name: 🛠 Build Frontend
+        working-directory: frontend
         run: |
-          cd frontend
-          npm install
+          npm ci
           npm run build
 
-      # Step 5: Deploy the built frontend to Firebase Hosting.
-      - name: Deploy to Firebase Hosting
+      - name: 📦 Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
@@ -126,29 +91,24 @@ jobs:
           channelId: live
           projectId: '${{ secrets.GCP_PROJECT_ID }}'
 
-  # --- Third Job: Create GitHub Release (Manual Trigger) ---
   create-release:
-    # This job runs only when manually triggered via workflow_dispatch
+    name: 🏷️ Create GitHub Release
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required to create a release
+      contents: write
     steps:
-      # Step 1: Check out the repository with full history for tags
-      - name: Checkout repository
+      - name: 🔄 Checkout with full history
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history including tags
+          fetch-depth: 0
 
-      # Step 2: Get the latest tag
-      - name: Get latest tag
+      - name: 🏷️ Get latest tag
         id: tag
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0)
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "latest_tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
 
-      # Step 3: Create GitHub Release
-      - name: Create GitHub Release
+      - name: 📦 Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

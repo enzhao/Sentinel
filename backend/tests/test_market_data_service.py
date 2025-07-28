@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, Mock
-from src.market_data_service import AlphaVantageService
+from src.services.market_data_service import AlphaVantageService
 from src.models import MarketDataDB
 from datetime import datetime
 

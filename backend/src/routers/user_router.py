@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from src.auth import get_current_user
-from src.portfolio_service import portfolio_service
+from src.services.portfolio_service import portfolio_service
 from src.models import CreatePortfolioRequest, Portfolio
 from src.dependencies import require_idempotency_key
 

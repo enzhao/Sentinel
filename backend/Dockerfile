@@ -1,36 +1,21 @@
-# Stage 1: Builder
-# This stage installs dependencies into a virtual environment.
-FROM python:3.13-slim AS builder
+# --- Final Production Image Only ---
+FROM python:3.13-slim
 
-# Set environment variables, including the venv path
+# Recommended environment settings
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH"
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Create venv and install dependencies
-RUN python -m venv /opt/venv
+# Install only production dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---
-
-# Stage 2: Final
-# This stage creates the lean production image.
-FROM python:3.13-slim
-
-# Set the PATH to use the virtual environment's binaries
-ENV PATH="/opt/venv/bin:$PATH"
-
-WORKDIR /app
-
-# Copy the virtual environment from the builder stage
-COPY --from=builder /opt/venv /opt/venv
-
-# Copy the application source code
+# Copy application code
 COPY ./src ./src
 
-# Expose the port and run the application
+# Expose API port
 EXPOSE 8000
+
+# Run the FastAPI app with Gunicorn + Uvicorn worker
 CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "src.main:app"]

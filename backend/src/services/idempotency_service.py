@@ -1,6 +1,6 @@
 import datetime
 from typing import Optional, Dict, Any
-from .firebase_setup import db
+from ..firebase_setup import db
 
 class IdempotencyService:
     """

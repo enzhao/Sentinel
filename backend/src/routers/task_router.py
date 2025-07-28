@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from src.auth import get_current_user
-from src.sync_service import sync_service
+from src.services.sync_service import sync_service
 
 router = APIRouter(
     prefix="/tasks",

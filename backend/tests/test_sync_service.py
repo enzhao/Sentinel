@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from src.sync_service import SyncService
+from src.services.sync_service import SyncService
 from src.models import PortfolioDB, HoldingDB, MarketDataDB
 from datetime import datetime
 
@@ -46,11 +46,11 @@ async def test_sync_market_data_with_all_indicators():
     mock_aapl_rsi = 65.0
     mock_aapl_atr = 10.5
     
-    with patch('src.sync_service.SyncService.get_all_unique_tickers', new_callable=AsyncMock, return_value=mock_tickers):
-        with patch('src.market_data_service.alpha_vantage_service.get_daily_data', new_callable=AsyncMock, return_value=mock_aapl_data) as mock_fetch_daily, \
-             patch('src.market_data_service.alpha_vantage_service.get_ma200', new_callable=AsyncMock, return_value=mock_aapl_ma200) as mock_fetch_ma200, \
-             patch('src.market_data_service.alpha_vantage_service.get_weekly_rsi', new_callable=AsyncMock, return_value=mock_aapl_rsi) as mock_fetch_rsi, \
-             patch('src.market_data_service.alpha_vantage_service.get_atr', new_callable=AsyncMock, return_value=mock_aapl_atr) as mock_fetch_atr:
+    with patch('src.services.sync_service.SyncService.get_all_unique_tickers', new_callable=AsyncMock, return_value=mock_tickers):
+        with patch('src.services.market_data_service.alpha_vantage_service.get_daily_data', new_callable=AsyncMock, return_value=mock_aapl_data) as mock_fetch_daily, \
+             patch('src.services.market_data_service.alpha_vantage_service.get_ma200', new_callable=AsyncMock, return_value=mock_aapl_ma200) as mock_fetch_ma200, \
+             patch('src.services.market_data_service.alpha_vantage_service.get_weekly_rsi', new_callable=AsyncMock, return_value=mock_aapl_rsi) as mock_fetch_rsi, \
+             patch('src.services.market_data_service.alpha_vantage_service.get_atr', new_callable=AsyncMock, return_value=mock_aapl_atr) as mock_fetch_atr:
             
             with patch('src.firebase_setup.db.batch') as mock_batch:
                 mock_set = MagicMock()

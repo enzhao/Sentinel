@@ -1,7 +1,8 @@
 from firebase_admin import firestore
 from typing import List, Optional
-from .models import PortfolioDB, CreatePortfolioRequest, UpdatePortfolioRequest, AddHoldingRequest, HoldingDB
-from .firebase_setup import db
+from src.models import PortfolioDB, CreatePortfolioRequest, UpdatePortfolioRequest, AddHoldingRequest, HoldingDB
+from src.firebase_setup import db
+from src.services.backfill_service import backfill_service
 
 portfolios_collection = db.collection('portfolios')
 

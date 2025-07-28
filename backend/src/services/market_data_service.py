@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 import httpx
-from .settings import settings
-from .models import MarketDataDB
+from src.settings import settings
+from src.models import MarketDataDB
 from datetime import datetime
 
 class AlphaVantageService:

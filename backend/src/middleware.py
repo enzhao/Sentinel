@@ -3,7 +3,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from firebase_admin import auth
 
-from .idempotency_service import idempotency_service
+from .services.idempotency_service import idempotency_service
 
 async def idempotency_middleware(request: Request, call_next):
     # Only apply to state-changing methods

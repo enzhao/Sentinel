@@ -6,9 +6,9 @@ from src.models import (
     UpdatePortfolioRequest,
     AddHoldingRequest
 )
-from src.portfolio_service import portfolio_service
+from src.services.portfolio_service import portfolio_service
 from src.auth import get_current_user
-from src.enrichment_service import enrichment_service
+from src.services.enrichment_service import enrichment_service
 from src.dependencies import require_idempotency_key
 
 router = APIRouter(

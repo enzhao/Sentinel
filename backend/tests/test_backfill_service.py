@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from src.backfill_service import BackfillService
+from src.services.backfill_service import BackfillService
 from src.models import MarketDataDB
 from datetime import datetime
 
@@ -35,8 +35,8 @@ async def test_backfill_does_not_run_if_data_present():
     """
     Tests that the backfill process does NOT call the external API if data is already present.
     """
-    with patch('src.backfill_service.BackfillService.is_data_present', new_callable=AsyncMock, return_value=True):
-        with patch('src.market_data_service.alpha_vantage_service.get_historical_daily_data', new_callable=AsyncMock) as mock_fetch:
+    with patch('src.services.backfill_service.BackfillService.is_data_present', new_callable=AsyncMock, return_value=True):
+        with patch('src.services.market_data_service.alpha_vantage_service.get_historical_daily_data', new_callable=AsyncMock) as mock_fetch:
             
             await BackfillService.backfill_historical_data("AAPL")
             
@@ -54,8 +54,8 @@ async def test_backfill_fetches_and_saves_data():
     ]
 
     # 2. Set up the patches
-    with patch('src.backfill_service.BackfillService.is_data_present', new_callable=AsyncMock, return_value=False):
-        with patch('src.market_data_service.alpha_vantage_service.get_historical_daily_data', new_callable=AsyncMock, return_value=mock_historical_data) as mock_fetch:
+    with patch('src.services.backfill_service.BackfillService.is_data_present', new_callable=AsyncMock, return_value=False):
+        with patch('src.services.market_data_service.alpha_vantage_service.get_historical_daily_data', new_callable=AsyncMock, return_value=mock_historical_data) as mock_fetch:
             with patch('src.firebase_setup.db.batch') as mock_batch:
                 mock_set = MagicMock()
                 mock_batch.return_value.set = mock_set

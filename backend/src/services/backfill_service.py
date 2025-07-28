@@ -1,5 +1,5 @@
-from .firebase_setup import db
-from .market_data_service import alpha_vantage_service
+from src.firebase_setup import db
+from src.services.market_data_service import alpha_vantage_service
 
 class BackfillService:
     """
