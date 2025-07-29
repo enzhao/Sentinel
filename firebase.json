@@ -14,6 +14,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "run": {
+          "serviceId": "sentinel-backend",
+          "region": "europe-west3"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
