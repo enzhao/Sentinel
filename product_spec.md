@@ -844,7 +844,7 @@ This section details the processes for user registration, login, logout, and the
   - `email`: The user's email address.
   - `metadata`: Includes `creationTime` and `lastSignInTime`.
 - **`Client-Side Auth State` (Managed by Frontend in Pinia store):**
-  - `user`: Object containing user info like `uid` and `email`.
+  - `user`: Object containing user info like `uid`, `username` and `email`.
   - `token`: String, the Firebase ID Token (JWT) used for API calls.
   - `status`: Enum (`AUTHENTICATED`, `ANONYMOUS`).
 - **`ID Token` (JWT - JSON Web Token):**
@@ -892,24 +892,86 @@ sequenceDiagram
 
 #### 5.2.1. U_1000: User Signup
 
-- **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data (e.g., portfolio). This process is initiated from the frontend.
+- **Sequence Diagram for User Signup**
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Firebase as Firebase Auth
+    participant Sentinel as Sentinel Backend
+    participant DB as Database (Firestore)
+
+    User->>Firebase: 1. Signup with email/password
+    activate Firebase
+    Firebase-->>User: 2. Return Success + ID Token
+    deactivate Firebase
+
+    Note over User, Sentinel: Frontend now calls the backend to initialize user data
+
+    User->>Sentinel: 3. POST /api/users (with ID Token and username)
+    activate Sentinel
+    Sentinel->>Firebase: 4. Verify ID Token (gets UID)
+    activate Firebase
+    Firebase-->>Sentinel: 5. Confirm Token is Valid
+    deactivate Firebase
+
+    Sentinel->>DB: 6. Create User document<br> (with username and email)
+    activate DB
+    DB-->>Sentinel: 7. Confirm User created
+    deactivate DB
+
+    Sentinel->>DB: 8. Create default Portfolio document for UID
+    activate DB
+    DB-->>Sentinel: 9. Confirm Portfolio created
+    deactivate DB
+
+    Sentinel->>Sentinel: 10. Link Portfolio to User (set defaultPortfolioId)
+
+    Sentinel->>DB: 11. Update User document with defaultPortfolioId
+    activate DB
+    DB-->>Sentinel: 12. Confirm User updated
+    deactivate DB
+
+    Sentinel-->>User: 13. HTTP 201 Created
+    deactivate Sentinel
+```
+
+- **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data. After the frontend completes the Firebase signup, it immediately calls the Sentinel backend's `POST /api/users` endpoint. This backend endpoint is responsible for creating the `User` document in Firestore (including the user-provided `username`), creating a default `Portfolio`, and linking the two.
 - **Success Response**: User account is created in Firebase. The backend creates a corresponding `User` document in Firestore, creates a default `Portfolio`, and links the two.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| U_I_1001 | Signup succeeds | Email is valid, password meets complexity requirements, email is not already in use. | Response Firebase to User, then User to Sentinel | Firebase user created. Sentinel backend creates a `User` document, a default `Portfolio` document, and sets the `defaultPortfolioId` on the user document. The UI redirects to the portfolio view. | U_I_1001 |
+| U_I_1001 | Signup succeeds | Email is valid, password meets complexity requirements, email is not already in use, and username is valid. | Response Firebase to User, then User to Sentinel | Firebase user created. Sentinel backend creates a `User` document with the provided `username`, a default `Portfolio` document, and sets the `defaultPortfolioId` on the user document. The UI redirects to the login view. | U_I_1001 |
+| U_I_1002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new user is created. | N/A |
 | U_E_1101 | Email already in use | User attempts to sign up with an email that already exists. | Response Firebase to User | Signup rejected by Firebase. | U_E_1101 |
 | U_E_1102 | Invalid email format | Email address provided is not in a valid format. | Response Firebase to User | Signup rejected by Firebase. | U_E_1102 |
 | U_E_1103 | Weak password | Password does not meet Firebase's minimum security requirements (e.g., less than 6 characters). | Response Firebase to User | Signup rejected by Firebase. | U_E_1103 |
+| U_E_1104 | Username missing | The `username` field is missing from the initialization request. | Request User to Sentinel | Backend user creation rejected. | U_E_1104 |
+| U_E_1105 | Username invalid | The `username` is less than 3 characters long. | Request User to Sentinel | Backend user creation rejected. | U_E_1105 |
+| U_E_1106 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Backend user creation rejected. | U_E_1106 |
 
 **Messages**:
-- **U_I_1001**: "Welcome {email}, a default portfolio has been created for you. You can start managing holdings now."
+- **U_I_1001**: "Welcome {username}, your account and a default portfolio have been created for you. Please log in to continue."
 - **U_E_1101**: "This email address is already in use by another account."
 - **U_E_1102**: "The email address is improperly formatted."
 - **U_E_1103**: "The password must be at least 6 characters long."
+- **U_E_1104**: "Username is required."
+- **U_E_1105**: "Username must be at least 3 characters long."
+- **U_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
 #### 5.2.2. U_2000: User Login
+
+- **Sequence Diagram for User Login**
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Firebase as Firebase Auth
+
+    User->>Firebase: 1. Login with email/password
+    activate Firebase
+    Firebase-->>User: 2. Return Success + ID Token
+    deactivate Firebase
+```
 
 - **Description**: Authenticates a user via the frontend and provides an ID Token for API sessions.
 - **Success Response**: User is successfully authenticated, and the frontend receives a valid ID Token.
@@ -921,10 +983,28 @@ sequenceDiagram
 | U_E_2101 | Invalid credentials | Incorrect password or email address does not exist. | Response Firebase to User | Login rejected by Firebase. | U_E_2101 |
 
 **Messages**:
-- **U_I_2001**: "User {email} logged in successfully."
+- **U_I_2001**: "User {username} logged in successfully."
 - **U_E_2101**: "Invalid login credentials. Please check your email and password."
 
 #### 5.2.3. U_3000: API Request Authorization
+
+- **Sequence Diagram for API Request Authorization**
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant Firebase as Firebase Auth
+
+    User->>Sentinel: 1. API Request with<br>Authorization: Bearer <ID_TOKEN>
+    activate Sentinel
+    Sentinel->>Firebase: 2. Verify ID Token
+    activate Firebase
+    Firebase-->>Sentinel: 3. Confirm Token is Valid (returns UID)
+    deactivate Firebase
+    Sentinel->>Sentinel: 4. Process Request
+    Sentinel-->>User: 5. Return API Response
+    deactivate Sentinel
+```
 
 - **Description**: Verifies the ID Token for every incoming request to a protected backend endpoint. This is a server-side process.
 - **Success Response**: The token is validated, and the request is allowed to proceed to the business logic.

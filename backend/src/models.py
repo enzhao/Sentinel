@@ -130,3 +130,6 @@ class UpdatePortfolioRequest(BaseModel):
 class AddHoldingRequest(BaseModel):
     ticker: str
     lots: List[LotDB]
+
+class InitializeUserRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=30)

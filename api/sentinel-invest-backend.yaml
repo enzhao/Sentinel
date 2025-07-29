@@ -3,18 +3,21 @@ info:
   title: FastAPI
   version: 0.1.0
 paths:
-  /api/users/initialize:
+  /api/users:
     post:
       tags:
       - Users & Portfolios
-      summary: Initialize User
-      description: 'Initializes a new user by creating their user document and a default
-        portfolio.
-
-        If the user document already exists, it returns the existing user data.
-
-        This endpoint is idempotent.'
-      operationId: initialize_user_api_users_initialize_post
+      summary: Create User and Default Portfolio
+      description: "Handles the one-time initialization of a new user after they have\
+        \ signed up\nvia Firebase Authentication.\n\nThis endpoint:\n1.  Verifies\
+        \ the user's ID token.\n2.  Checks if a user document already exists in Firestore.\
+        \ If so, it returns\n    the existing user, enforcing idempotency.\n3.  If\
+        \ the user is new, it creates a `User` document in Firestore with their\n\
+        \    UID, email, and chosen username.\n4.  Creates a default portfolio for\
+        \ the new user (e.g., \"My First Portfolio\").\n5.  Links the default portfolio\
+        \ to the user by setting `defaultPortfolioId`.\n6.  Returns the newly created\
+        \ and fully initialized `User` object."
+      operationId: create_user_and_portfolio_api_users_post
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -25,6 +28,12 @@ paths:
           type: string
           format: uuid
           title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeUserRequest'
       responses:
         '201':
           description: Successful Response
@@ -498,6 +507,17 @@ components:
       required:
       - ticker
       title: Holding
+    InitializeUserRequest:
+      properties:
+        username:
+          type: string
+          maxLength: 30
+          minLength: 3
+          title: Username
+      type: object
+      required:
+      - username
+      title: InitializeUserRequest
     Lot:
       properties:
         currentPrice:

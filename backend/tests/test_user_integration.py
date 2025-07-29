@@ -8,6 +8,7 @@ from src.firebase_setup import db
 # Using a UUID ensures the user is unique for each test run.
 TEST_USER_UID = f"integration-test-user-{uuid.uuid4()}"
 TEST_USER_EMAIL = f"{TEST_USER_UID}@test.com"
+TEST_USERNAME = "integration_user"
 SAMPLE_USER_AUTH = {"uid": TEST_USER_UID, "email": TEST_USER_EMAIL}
 
 @pytest.fixture
@@ -51,12 +52,12 @@ def cleanup_firestore():
     print("--- Firestore cleanup complete ---")
 
 
-def test_user_initialization_and_cleanup(test_client: TestClient, cleanup_firestore):
+def test_user_creation_and_cleanup(test_client: TestClient, cleanup_firestore):
     """
-    Tests the end-to-end user initialization process against a real Firestore database.
+    Tests the end-to-end user creation process against a real Firestore database.
     
     Steps:
-    1.  Calls the /api/users/initialize endpoint to create a user and default portfolio.
+    1.  Calls the POST /api/users endpoint to create a user and default portfolio.
     2.  Directly queries the real Firestore DB to verify the data was created correctly.
     3.  The `cleanup_firestore` fixture ensures all created documents are deleted after the test.
     """
@@ -66,7 +67,8 @@ def test_user_initialization_and_cleanup(test_client: TestClient, cleanup_firest
         
         # --- 1. Call the API to initialize the user ---
         response = test_client.post(
-            "/api/users/initialize",
+            "/api/users",
+            json={"username": TEST_USERNAME},
             headers={"Authorization": "Bearer dummy-token", "Idempotency-Key": str(uuid.uuid4())}
         )
         
@@ -75,6 +77,7 @@ def test_user_initialization_and_cleanup(test_client: TestClient, cleanup_firest
         response_data = response.json()
         assert response_data["uid"] == TEST_USER_UID
         assert response_data["email"] == TEST_USER_EMAIL
+        assert response_data["username"] == TEST_USERNAME
         assert response_data["defaultPortfolioId"] is not None
         
         default_portfolio_id = response_data["defaultPortfolioId"]
@@ -87,7 +90,7 @@ def test_user_initialization_and_cleanup(test_client: TestClient, cleanup_firest
         assert user_doc.exists, "User document was not created in Firestore."
         user_data = user_doc.to_dict()
         assert user_data["email"] == TEST_USER_EMAIL
-        assert user_data["username"] == TEST_USER_UID # Default username is the UID part of the email
+        assert user_data["username"] == TEST_USERNAME
         assert user_data["defaultPortfolioId"] == default_portfolio_id
         print("User document verified successfully.")
 
