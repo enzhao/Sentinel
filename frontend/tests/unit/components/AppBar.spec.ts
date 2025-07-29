@@ -17,7 +17,7 @@ describe('AppBar.vue', () => {
   it('displays login and signup buttons when user is not authenticated', () => {
     const pinia = createTestingPinia({ createSpy: vi.fn })
     const authStore = useAuthStore(pinia)
-    authStore.isAuthenticated = false
+    authStore.user = null
 
     const wrapper = mount({
       template: '<v-app><AppBar /></v-app>',
@@ -43,7 +43,6 @@ describe('AppBar.vue', () => {
   it('displays user email and logout button when user is authenticated', () => {
     const pinia = createTestingPinia({ createSpy: vi.fn })
     const authStore = useAuthStore(pinia)
-    authStore.isAuthenticated = true
     authStore.user = { email: 'test@example.com' } as any
 
     const wrapper = mount({
@@ -68,7 +67,6 @@ describe('AppBar.vue', () => {
   it('calls the logout action when the logout button is clicked', async () => {
     const pinia = createTestingPinia({ createSpy: vi.fn })
     const authStore = useAuthStore(pinia)
-    authStore.isAuthenticated = true
     authStore.user = { email: 'test@example.com' } as any
     // Mock the logout action
     authStore.logout = vi.fn()
