@@ -1,45 +1,45 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { createRouter as createVueRouter, createWebHistory, type Router } from 'vue-router'
+import routes from './routes'
 import { useAuthStore } from '@/stores/auth'
 
-const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: () => import('../views/LoginView.vue')
-    },
-    {
-      path: '/signup',
-      name: 'signup',
-      component: () => import('../views/SignUpView.vue')
+// Exporting a function to create a new router instance.
+// This is useful for testing to ensure tests are isolated.
+export const createSentinelRouter = (): Router => {
+  const router = createVueRouter({
+    history: createWebHistory(import.meta.env.BASE_URL),
+    routes
+  })
+
+  router.beforeEach(async (to, from, next) => {
+    const authStore = useAuthStore()
+    // Ensure the auth state is initialized before any navigation logic.
+    if (authStore.loading) {
+      await authStore.init()
     }
-  ]
-})
 
-// Navigation Guard
-router.beforeEach(async (to, from, next) => {
-  const authStore = useAuthStore()
-  
-  // Initialize the auth store and wait for the auth state to be resolved
-  await authStore.init()
+    const isAuthenticated = authStore.isAuthenticated
 
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+    // 1. If the route requires authentication and the user is not logged in,
+    //    redirect them to the login page.
+    if (to.meta.requiresAuth && !isAuthenticated) {
+      return next({ name: 'login' })
+    }
 
-  if (requiresAuth && !authStore.user) {
-    // If route requires auth and user is not logged in, redirect to login
-    next('/login')
-  } else {
-    // Otherwise, proceed
+    // 2. If the user is logged in, prevent them from accessing the home, login,
+    //    or signup pages, and redirect them to their portfolio.
+    if (isAuthenticated && ['home', 'login', 'signup'].includes(to.name as string)) {
+      return next({ name: 'portfolio' })
+    }
+
+    // 3. Otherwise, allow the navigation to proceed.
     next()
-  }
-})
+  })
+
+  return router
+}
+
+// Create a singleton instance for the app
+const router = createSentinelRouter()
 
 export default router
+

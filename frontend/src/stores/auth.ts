@@ -1,24 +1,60 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { auth } from '@/firebase'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  type User
+  type User as FirebaseUser
 } from 'firebase/auth'
 import router from '@/router'
 
-let unsubscribe: () => void;
+// This function will be responsible for calling the backend to initialize the user.
+const initializeBackendUser = async (username: string) => {
+  if (!auth.currentUser) {
+    throw new Error("User not authenticated in Firebase. Cannot initialize backend user.");
+  }
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Idempotency-Key': crypto.randomUUID()
+      },
+      body: JSON.stringify({ username })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Backend user initialization failed.");
+    }
+
+    console.log("Backend user initialized successfully.");
+    return await response.json();
+  } catch (error) {
+    console.error("Error initializing backend user:", error);
+    throw error; // Re-throw the error to be caught by the signup function
+  }
+};
+
+
+let unsubscribe: (() => void) | null = null;
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null)
+  const user = ref<FirebaseUser | null>(null)
   const loading = ref(true)
+  const isAuthenticated = computed(() => !!user.value)
 
   const init = () => {
     return new Promise<void>((resolve) => {
-      if (unsubscribe) unsubscribe();
+      if (unsubscribe) {
+        loading.value = false;
+        resolve();
+        return;
+      }
       
       unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         user.value = currentUser
@@ -28,62 +64,47 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
-  const initializeBackendUser = async () => {
-    if (!auth.currentUser) {
-      console.error("User not authenticated. Cannot initialize backend user.");
-      return;
-    }
+  const signup = async (username: string, email: string, password: string) => {
     try {
-      const token = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/users/initialize', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Backend initialization failed.");
-      }
-
-      console.log("Backend user initialized successfully.");
-      const data = await response.json();
-      // Optionally, you can use the returned portfolio data to update another store
-    } catch (error) {
-      console.error("Error initializing backend user:", error);
-      // Decide how to handle this error. Maybe show a notification to the user.
-    }
-  }
-
-  const signup = async (email: string, password: string) => {
-    try {
+      // 1. Create the user in Firebase Auth
       await createUserWithEmailAndPassword(auth, email, password)
-      await initializeBackendUser();
-      router.push('/') // Redirect to home after signup
+      
+      // 2. Initialize the user in our backend
+      await initializeBackendUser(username);
+
+      // 3. Sign out the user locally after signup, so they are forced to login
+      await signOut(auth);
+      
+      // 4. Redirect to the login page with a success message
+      router.push('/login');
+
     } catch (error: any) {
-      alert(`Error signing up: ${error.message}`)
+      // TODO: Better error handling for the UI
+      console.error(`Error signing up: ${error.message}`);
+      throw new Error(`Error signing up: ${error.message}`);
     }
   }
 
   const login = async (email: string, password: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      router.push('/') // Redirect to home after login
-    } catch (error: any) {
-      alert(`Error logging in: ${error.message}`)
+      router.push('/portfolio')
+    } catch (error: any)      {
+      console.error(`Login failed: ${error.message}`);
+      throw new Error(`Login failed: ${error.message}`);
     }
   }
 
   const logout = async () => {
     try {
         await signOut(auth)
-        // We MUST manually redirect to the login page after a successful logout.
-        router.push('/login') 
+        user.value = null
+        router.push('/') 
     } catch (error: any) {
+        console.error(`Error logging out: ${error.message}`);
         alert(`Error logging out: ${error.message}`)
     }
 }
 
-  return { user, loading, init, signup, login, logout, initializeBackendUser }
+  return { user, loading, isAuthenticated, init, signup, login, logout }
 })

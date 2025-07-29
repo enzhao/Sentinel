@@ -1,43 +1,48 @@
-<script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import { useAuthStore } from './stores/auth'
+<template>
+  <div id="app">
+    <header>
+      <nav>
+        <router-link to="/">Home</router-link>
+        <template v-if="authStore.user">
+          | <router-link to="/portfolio">Portfolio</router-link>
+          | <a href="#" @click.prevent="authStore.logout()">Logout</a>
+        </template>
+        <template v-else>
+          | <router-link to="/login">Login</router-link>
+          | <router-link to="/signup">Sign Up</router-link>
+        </template>
+      </nav>
+    </header>
+    <main>
+      <router-view />
+    </main>
+  </div>
+</template>
 
+<script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 </script>
 
-<template>
-  <header>
-    <div class="wrapper">
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <span v-if="authStore.user">
-          <button @click="authStore.logout">Logout</button>
-        </span>
-        <span v-else>
-          <RouterLink to="/login">Login</RouterLink>
-          <RouterLink to="/signup">Sign Up</RouterLink>
-        </span>
-      </nav>
-    </div>
-  </header>
-
-  <RouterView />
-</template>
-
-<style scoped>
-nav {
-  width: 100%;
-  font-size: 12px;
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-align: center;
-  margin-top: 2rem;
+  color: #2c3e50;
+}
+
+nav {
+  padding: 30px;
 }
 
 nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
+  font-weight: bold;
+  color: #2c3e50;
 }
-nav a:first-of-type {
-  border: 0;
+
+nav a.router-link-exact-active {
+  color: #42b983;
 }
 </style>
