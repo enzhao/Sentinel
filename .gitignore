@@ -26,6 +26,10 @@ dist/
 .output/
 .nuxt/
 
+# Frontend Test Artifacts
+frontend/test-results/
+frontend/playwright-report/
+
 # Environment variables (IMPORTANT)
 # This file contains secrets like API keys and database credentials.
 # It should NEVER be committed to version control for security reasons.
