@@ -76,15 +76,15 @@ The backend setup is managed by a single script that automates the creation of a
       ```
       Then, add your Alpha Vantage API key to the new `.env` file.
 
-2.  **Run the Setup Script:**
+2.  **Run the Backend Build Script:**
     From the project root, make the script executable and run it:
     ```bash
     chmod +x run_local_backend.sh
     ./run_local_backend.sh
     ```
-    The script will guide you through the rest of the setup.
+    The script is the Makefile for the backend. It will run tests for backend, build a docker image and run a container.  
 
-3.  **Run the Backend Server:**
+3.  **Run the Backend Server without Docker:**
     After the setup is complete, you can run the server at any time:
     ```bash
     # Make sure your virtual environment is activated
