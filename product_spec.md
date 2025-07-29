@@ -1116,13 +1116,14 @@ flowchart LR
         {
           "userId": "string",
           "createdAt": "timestamp",
+          "expireAt": "timestamp",
           "response": {
             "statusCode": "number",
             "body": "string"
           }
         }
         ```
-    - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, matching the key expiry rule.
+    - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
 ### 6.3. Data Sources
 

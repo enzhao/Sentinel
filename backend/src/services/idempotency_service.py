@@ -38,6 +38,7 @@ class IdempotencyService:
         doc_data = {
             "userId": user_id,
             "createdAt": datetime.datetime.now(datetime.timezone.utc),
+            "expireAt": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24),
             "response": response_data
         }
         doc_ref.set(doc_data)
