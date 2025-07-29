@@ -27,10 +27,12 @@ Sentinel addresses three challenges faced by retail investors:
 ### 0.3. Structure and User Guide
 
 The specification is organized as follows:
-- **Section 1: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves, including data models and processes for creation, updates, and retrieval.
-- **Section 2: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules, including rule evaluation logic.
-- **Section 3: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
-- **Section 4: Technical Specifications**: Specifies the architecture, security, data sources.
+- **Section 1: Common Notes**: Defines global rules and conventions that apply across the entire system.
+- **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves, including data models and processes for creation, updates, and retrieval.
+- **Section 3: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules, including rule evaluation logic.
+- **Section 4: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
+- **Section 5: User Authentication and Authorization**: Covers user identity and access control.
+- **Section 6: Technical Specifications**: Specifies the architecture, security, data sources.
 
 Each section includes:
 1. **Data Model and Business Process**:
@@ -42,26 +44,39 @@ Each section includes:
    - Tables listing conditions, checkpoints, outcomes, and message keys.
    - Messages with placeholders (e.g., `{amount}`) for clarity.
 
-### 0.4. Common Notes
+---
 
-- **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
+## 1. Common Notes
+
+### 1.1. General Data and Business Process Notes
+
 - **Tax Calculations**: All tax-related calculations are informational, based on user-provided rates (e.g., capital gains tax, tax-free allowances).
 - **Market Data**: Sourced daily from Alpha Vantage, using closing prices for calculations unless specified.
 
+### 1.2. General User Interface/User Experience (UI/UX) Notes    
+
+- **Mobile-First Responsive Design**: The application's interface will be designed primarily for mobile phones. This means the layout will be clean, easy to navigate with a thumb, and optimized for smaller screens. When viewed on a larger screen, like a tablet or desktop computer, the application will automatically adapt its layout to make good use of the extra space, ensuring a comfortable and effective user experience on any device.
+
+
+### 1.3. General API and Technical Notes
+
+- **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
+
 ---
 
-## 1. Portfolio and Cash Management
+## 2. Portfolio and Cash Management
 
 This section details the management of user portfolios. A user can create and manage multiple distinct portfolios (e.g., a "real money" portfolio and a "paper trading" portfolio). Each portfolio contains its own set of holdings, cash reserves, and tax settings, forming the foundation for rule evaluation.
 
-### 1.1. Portfolio and Cash Data Model and Business Process
+### 2.1. Portfolio and Cash Data Model and Business Process
 
-#### 1.1.1. Associated Data Models
+#### 2.1.1. Associated Data Models
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
   - `userId`: String (Firebase Auth UID, links the portfolio to its owner).
   - `name`: String (User-defined, e.g., "My Real Portfolio", "Tech Speculation").
+  - `isDefault`: Boolean (Indicates if this is the user's default portfolio for display after login. Only one portfolio per user can be the default).
   - `holdings`: Array of `Holding` objects.
   - `cashReserve`: Object containing:
     - `totalAmount`: Number (EUR).
@@ -120,32 +135,33 @@ This section details the management of user portfolios. A user can create and ma
     - `afterTaxGainLoss`: Number (EUR).
     - `gainLossPercentage`: Number (%).
 
-#### 1.1.2. Business Process
+#### 2.1.2. Business Process
 
 The management of portfolios follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated and authorized.
 
-##### 1.1.2.1. Creation
+##### 2.1.2.1. Creation
 
--   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio").
--   **Additional Portfolios:** The user can create additional portfolios, each with a unique name.
+-   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). This portfolio is marked as the default (`isDefault: true`).
+-   **Additional Portfolios:** The user can create additional portfolios, each with a unique name. These are created with `isDefault: false`.
+-   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio. This portfolio will be the one displayed by default after login. When a portfolio is set as the default, any other portfolio previously marked as default for that user will be unset.
 -   **Adding Holdings:** Users can populate any of their portfolios by adding new holdings. When a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
 
-##### 1.1.2.2. Retrieval
+##### 2.1.2.2. Retrieval
 
 -   An authenticated user can retrieve a list of all portfolios they own.
 -   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend reads from its internal market data cache to enrich the response with calculated performance metrics.
 
-##### 1.1.2.3. Update
+##### 2.1.2.3. Update
 
 -   An authenticated user can modify any aspect of a specific portfolio they own, including renaming it, updating cash reserves, changing tax settings, or modifying its holdings.
 
-##### 1.1.2.4. Deletion
+##### 2.1.2.4. Deletion
 
 -   An authenticated user can delete an entire portfolio, or individual holdings/lots within a portfolio.
 
-### 1.2. Portfolio and Cash Rules
+### 2.2. Portfolio and Cash Rules
 
-#### 1.2.1. P_1000: Portfolio Creation
+#### 2.2.1. P_1000: Portfolio Creation
 
 - **Sequence Diagram for Portfolio Creation**
 
@@ -196,9 +212,9 @@ sequenceDiagram
 - **P_E_1103**: "A portfolio with the name '{name}' already exists."
 - **P_E_1104**: "A valid Idempotency-Key header is required for this operation."
 
-#### 1.2.2. Portfolio Retrieval
+#### 2.2.2. Portfolio Retrieval
 
-##### 1.2.2.1. P_2000: Single Portfolio Retrieval
+##### 2.2.2.1. P_2000: Single Portfolio Retrieval
 
 - **Sequence Diagram for Single Portfolio Retrieval**
 
@@ -249,7 +265,7 @@ sequenceDiagram
 - **P_E_2101**: "User is not authorized to access portfolio {portfolioId}."
 - **P_E_2102**: "Portfolio with ID {portfolioId} not found."
 
-##### 1.2.2.2. P_2200: Portfolio List Retrieval
+##### 2.2.2.2. P_2200: Portfolio List Retrieval
 
 - **Sequence Diagram for Portfolio List Retrieval**
 
@@ -285,9 +301,9 @@ sequenceDiagram
 - **P_I_2201**: "Portfolio list retrieved successfully for user {userId}."
 - **P_E_2301**: "User is not authenticated."
 
-#### 1.2.3. Portfolio Update
+#### 2.2.3. Portfolio Update
 
-##### 1.2.3.1. P_3000: Portfolio Update (Manual)
+##### 2.2.3.1. P_3000: Portfolio Update (Manual)
 
 - **Sequence Diagram for Portfolio Update (Manual)**
 
@@ -346,9 +362,59 @@ sequenceDiagram
 - **P_E_3106**: "Portfolio name or tax settings are invalid."
 - **P_E_3107**: "A valid Idempotency-Key header is required for this operation."
 
-##### 1.2.3.2. P_3500: Portfolio Update (Import from File)
+##### 2.2.3.2. P_3400: Set Default Portfolio
 
-**Sequence Diagram for Portfolio Update (Add Holding)**
+- **Sequence Diagram for Setting Default Portfolio**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/portfolios/{portfolioId}/set-default (ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    
+    alt Authorization OK
+        Sentinel->>DB: 3. Start Transaction
+        activate DB
+        Sentinel->>DB: 4. Find current default portfolio for user and set isDefault=false
+        Sentinel->>DB: 5. Set isDefault=true for new portfolioId
+        Sentinel->>DB: 6. Commit Transaction
+        DB-->>Sentinel: 7. Confirm Update Success
+        deactivate DB
+        Sentinel-->>User: 8. Return HTTP 200 OK (Success)
+    else Authorization Fails
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 403, 404)
+    end
+    deactivate Sentinel
+```
+
+- **Description**: Designates a specific portfolio as the user's default. This operation ensures that only one portfolio per user can be the default at any given time. When a new portfolio is set as default, the backend transactionally unsets the `isDefault` flag on the previous default portfolio.
+- **Examples**:
+    - **Example**:
+        - A user has two portfolios: "Real Money" (current default) and "Paper Trading".
+        - They decide to make "Paper Trading" their new default.
+        - The user sends a request to set the "Paper Trading" portfolio as default.
+        - The backend updates the "Paper Trading" portfolio to `isDefault: true` and simultaneously updates the "Real Money" portfolio to `isDefault: false`.
+- **Success Response**: The specified portfolio is marked as the default, and the previous default is unmarked.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| P_I_3401 | Set default succeeds | User is authenticated, owns the portfolio, and the portfolio exists. | Response Sentinel to User | The specified portfolio is set as the new default. | P_I_3401 |
+| P_E_3501 | User unauthorized | User is not authenticated or does not own the specified portfolio. | Request User to Sentinel | Request rejected with HTTP 403 Forbidden. | P_E_3501 |
+| P_E_3502 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Request rejected with HTTP 404 Not Found. | P_E_3502 |
+
+**Messages**:
+- **P_I_3401**: "Portfolio {portfolioId} is now the default."
+- **P_E_3501**: "User is not authorized to modify portfolio {portfolioId}."
+- **P_E_3502**: "Portfolio with ID {portfolioId} not found."
+
+##### 2.2.3.3. P_3600: Portfolio Update (Import from File)
+
+- **Sequence Diagram for Portfolio Update (Add Holding)**
 
 ```mermaid
 sequenceDiagram
@@ -392,29 +458,29 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| P_I_3501 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | P_I_3501 |
-| P_I_3502 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | P_I_3502 |
-| P_I_3503 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully merged into the specified portfolio. | Request User to Sentinel | Portfolio is updated in the database. | P_I_3503 |
-| P_I_3504 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
-| P_E_3601 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | P_E_3601 |
-| P_E_3602 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | P_E_3602 |
-| P_E_3603 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | P_E_3603 |
-| P_E_3604 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | P_E_3604 |
-| P_E_3605 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | P_E_3605 |
+| P_I_3601 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | P_I_3601 |
+| P_I_3602 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | P_I_3602 |
+| P_I_3603 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully merged into the specified portfolio. | Request User to Sentinel | Portfolio is updated in the database. | P_I_3603 |
+| P_I_3604 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
+| P_E_3701 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | P_E_3701 |
+| P_E_3702 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | P_E_3702 |
+| P_E_3703 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | P_E_3703 |
+| P_E_3704 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | P_E_3704 |
+| P_E_3705 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | P_E_3705 |
 
 **Messages**:
-- **P_I_3501**: "File uploaded successfully for portfolio {portfolioId}. Parsing in progress..."
-- **P_I_3502**: "File parsed successfully. Please review the extracted transactions."
-- **P_I_3503**: "Portfolio {portfolioId} successfully updated with imported transactions."
-- **P_E_3601**: "User is not authorized to import data to portfolio {portfolioId}."
-- **P_E_3602**: "Invalid file. Please upload a valid CSV or text file under 5MB."
-- **P_E_3603**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
-- **P_E_3604**: "The corrected data contains errors. Please check all fields and resubmit."
-- **P_E_3605**: "A valid Idempotency-Key header is required for this operation."
+- **P_I_3601**: "File uploaded successfully for portfolio {portfolioId}. Parsing in progress..."
+- **P_I_3602**: "File parsed successfully. Please review the extracted transactions."
+- **P_I_3603**: "Portfolio {portfolioId} successfully updated with imported transactions."
+- **P_E_3701**: "User is not authorized to import data to portfolio {portfolioId}."
+- **P_E_3702**: "Invalid file. Please upload a valid CSV or text file under 5MB."
+- **P_E_3703**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
+- **P_E_3704**: "The corrected data contains errors. Please check all fields and resubmit."
+- **P_E_3705**: "A valid Idempotency-Key header is required for this operation."
 
-#### 1.2.4. Portfolio Deletion
+#### 2.2.4. Portfolio Deletion
 
-##### 1.2.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
+##### 2.2.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
 
 - **Sequence Diagram for Portfolio Deletion (Entire Portfolio)**
 
@@ -440,7 +506,7 @@ sequenceDiagram
     deactivate Sentinel
 ``` 
 
-- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action.
+- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action. If the deleted portfolio was the user's default, no other portfolio is automatically selected as the new default. The user must manually designate a new default portfolio.
 - **Examples**:
     - **Example**:
         - A user decides they no longer need their "Paper Trading" portfolio (ID: `abc-456`).
@@ -463,7 +529,7 @@ sequenceDiagram
 - **P_E_4102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-##### 1.2.4.2. P_4200: Portfolio Deletion (Holdings/Lots)
+##### 2.2.4.2. P_4200: Portfolio Deletion (Holdings/Lots)
 
 - **Sequence Diagram for Portfolio Deletion (Holdings/Lots)**
 
@@ -522,11 +588,11 @@ sequenceDiagram
 
 --- 
 
-## 2. Strategy Rule Management
+## 3. Strategy Rule Management
 
 This section details the management of buy and sell rules that encode the user’s investment strategy.
 
-### 2.1. Rule Data Model and Business Process
+### 3.1. Rule Data Model and Business Process
 
 **Associated Data Models**:
 - `Rule`:
@@ -591,9 +657,9 @@ sequenceDiagram
 - Rule created with `ruleId: "rule-001"`, `status: "ENABLED"`.
 - If NASDAQ-100 drops 15% from peak and RSI < 30, an alert is triggered (Section 3).
 
-### 2.2. Rule Management Rules
+### 3.2. Rule Management Rules
 
-#### R_1000: Rule Creation
+#### 3.2.1. R_1000: Rule Creation
 
 - **Description**: Creates a new buy or sell rule.
 - **Success Response**: Rule created with `ENABLED` status.
@@ -615,7 +681,7 @@ sequenceDiagram
 - **R_E_1103**: "Conditions invalid: Unknown type or invalid parameters."
 - **R_E_1104**: "Portfolio {portfolioId} not found."
 
-#### R_2000: Rule Update
+#### 3.2.2. R_2000: Rule Update
 
 - **Description**: Modifies an existing rule’s conditions or status.
 - **Success Response**: Rule updated.
@@ -632,7 +698,7 @@ sequenceDiagram
 - **R_E_2101**: "User is not authorized to update rule {ruleId}."
 - **R_E_2102**: "Rule {ruleId} not found."
 
-#### R_3000: Rule Retrieval
+#### 3.2.3. R_3000: Rule Retrieval
 
 - **Description**: Retrieves rule(s) for a portfolio.
 - **Success Response**: Rule(s) returned.
@@ -647,11 +713,11 @@ sequenceDiagram
 - **R_I_3001**: "Rules retrieved successfully for portfolio {portfolioId}."
 - **R_E_3101**: "User is not authorized to retrieve rules for portfolio {portfolioId}."
 
-## 3. Market Monitoring and Notification
+## 4. Market Monitoring and Notification
 
 This section details the automated monitoring of market data and generation of notifications when rules are triggered.
 
-### 3.1. Monitoring and Notification Data Model and Business Process
+### 4.1. Monitoring and Notification Data Model and Business Process
 
 **Associated Data Models**:
 - `MarketData` (fetched daily):
@@ -719,9 +785,9 @@ sequenceDiagram
 - Alert created: `marketData: {closePrice: 10200, rsiWeekly: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
-### 3.2. Monitoring and Notification Rules
+### 4.2. Monitoring and Notification Rules
 
-#### M_1000: Rule Evaluation and Alert Generation
+#### 4.2.1. M_1000: Rule Evaluation and Alert Generation
 
 - **Description**: Evaluates rules and generates alerts.
 - **Success Response**: Alerts created for triggered rules.
@@ -737,7 +803,7 @@ sequenceDiagram
 - **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
 - **M_E_1101**: "Market data unavailable for ticker {ticker}, evaluation skipped."
 
-#### M_2000: Notification Delivery
+#### 4.2.2. M_2000: Notification Delivery
 
 - **Description**: Sends alerts to users.
 - **Success Response**: Notifications delivered.
@@ -752,13 +818,13 @@ sequenceDiagram
 - **N_I_2001**: "Notification for alert {alertId} sent successfully."
 - **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
 
-## 4. User Authentication and Authorization
+## 5. User Authentication and Authorization
 
 This section details the processes for user registration, login, logout, and the authorization mechanism for securing backend API endpoints. The system uses a decoupled authentication model where the frontend communicates directly with Firebase Authentication for identity management, and the Sentinel backend is only responsible for validating the resulting tokens.
 
-### 4.1. User Authentication Data Model and Business Process
+### 5.1. User Authentication Data Model and Business Process
 
-#### 4.1.1. Associated Data Models
+#### 5.1.1. Associated Data Models
 
 - **`Firebase User` (Managed by Firebase Authentication Service):**
   - `uid`: Unique user identifier provided by Firebase. This is the primary key linking the user to their data in Firestore.
@@ -772,7 +838,7 @@ This section details the processes for user registration, login, logout, and the
   - A short-lived, signed token generated by the Firebase client-side SDK upon successful login or signup.
   - The frontend sends this token in the `Authorization` header of every API request to prove the user's identity.
 
-#### 4.1.2. Business Process
+#### 5.1.2. Business Process
 
 1. **Signup/Login (Frontend ↔ Firebase)**: The user interacts with the frontend UI. The Vue.js application communicates **directly and exclusively with the Firebase Authentication service** to handle user creation and password verification. The Sentinel backend is **not involved** in this process.
 2. **Token Issuance (Firebase → Frontend)**: Upon successful authentication, Firebase issues a secure ID Token (JWT) to the frontend. The frontend stores this token and the user's state.
@@ -784,7 +850,7 @@ This section details the processes for user registration, login, logout, and the
 
 **Note on User Deletion:** The functionality for a user to delete their own account is a planned feature for a future release and is out of scope for the MVP.
 
-#### 4.1.3. Sequence Diagram for an Authenticated API Call
+#### 5.1.3. Sequence Diagram for an Authenticated API Call
 
 ```mermaid
 sequenceDiagram
@@ -809,9 +875,9 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-### 4.2. User Authentication and Authorization Rules
+### 5.2. User Authentication and Authorization Rules
 
-#### U_1000: User Signup
+#### 5.2.1. U_1000: User Signup
 
 - **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data (e.g., portfolio). This process is initiated from the frontend.
 - **Success Response**: User account is created in Firebase, and a new, empty portfolio is created in Firestore linked to the user's UID.
@@ -830,7 +896,7 @@ sequenceDiagram
 - **U_E_1102**: "The email address is improperly formatted."
 - **U_E_1103**: "The password must be at least 6 characters long."
 
-#### U_2000: User Login
+#### 5.2.2. U_2000: User Login
 
 - **Description**: Authenticates a user via the frontend and provides an ID Token for API sessions.
 - **Success Response**: User is successfully authenticated, and the frontend receives a valid ID Token.
@@ -845,7 +911,7 @@ sequenceDiagram
 - **U_I_2001**: "User {email} logged in successfully."
 - **U_E_2101**: "Invalid login credentials. Please check your email and password."
 
-#### U_3000: API Request Authorization
+#### 5.2.3. U_3000: API Request Authorization
 
 - **Description**: Verifies the ID Token for every incoming request to a protected backend endpoint. This is a server-side process.
 - **Success Response**: The token is validated, and the request is allowed to proceed to the business logic.
@@ -864,16 +930,16 @@ sequenceDiagram
 - **U_E_3103**: "The provided ID token has expired. Please log in again."
 
 
-## 5. Technical Specifications
+## 6. Technical Specifications
 
-### 5.1. Architecture
+### 6.1. Architecture
 
-#### 5.1.1. Architectural Principles
+#### 6.1.1. Architectural Principles
 
 - **Stateless Backend**: The backend API is designed to be completely stateless. User authentication is handled via short-lived, self-contained JWTs (Firebase ID Tokens) sent with each request. This eliminates the need for server-side sessions, enhances security, and allows for seamless horizontal scalability on platforms like Google Cloud Run.
 - **Monolith for MVP**: The backend is a "Self-Contained System" (a well-structured monolith) for the MVP to prioritize development speed and simplicity. It can be refactored into microservices in the future if required by scale.
 
-#### 5.1.2. Components
+#### 6.1.2. Components
 - **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
 - **Backend API**: Python FastAPI, deployed on Google Cloud Run.
 - **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
@@ -881,62 +947,65 @@ sequenceDiagram
 - **Market Data**: Alpha Vantage API.
 - **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
 
-#### 5.1.3. Architectural Diagram
+#### 6.1.3. Architectural Diagram
 
 ```mermaid
-graph
-    subgraph "Google Cloud Platform"
-        %% direction LR
-        
-        subgraph "User-Facing Services"
-            B{{"Backend API Server (Cloud Run)"}}
-        end
-
-        subgraph "Data Stores"
-            C[("Database (Firestore)<br>- Portfolios<br>- Market Data Cache")]
-        end
-
-        subgraph "Automated Jobs"
-            Scheduler["Cloud Scheduler"]
-        end
-        
-        subgraph "External Communication"
-             E["Notification Service"]
-        end
+flowchart LR
+    %% USER LAYER
+    subgraph User["User Interaction"]
+        A["Frontend Web App<br/>(Firebase Hosting)"]
     end
 
-    subgraph "User Interaction"
-        %% direction LR
-        A["Frontend Web App (Firebase Hosting)"]
+    %% PLATFORM CORE (Now includes Auth)
+    subgraph Platform["Google Cloud Platform"]
+        direction TB
         G["Firebase Authentication"]
+        B{{"Backend API Server<br/>(Cloud Run)"}}
+        C[("Database<br/>(Firestore)<br/>- Portfolios<br/>- Market Data Cache")]
+        Scheduler["Cloud Scheduler"]
+        E["Notification Service"]
     end
 
-    subgraph "External Data"
-        F>"Market Data API<br>(Alpha Vantage)"]
+    %% EXTERNAL ZONE
+    subgraph Ext["External Data/APIs"]
+        F>"Market Data API<br/>(Alpha Vantage)"]
     end
 
-    %% Define the flows
+    %% Flows
+
+    %% ①② Authentication
     A -- "① Login/Signup" --> G
     G -- "② Issues ID Token" --> A
 
-    A -- "③ API Call with JWT (e.g., Get Portfolio)" --> B
+    %% ③④⑤⑥ Portfolio Read
+    A -- "③ API Call with JWT<br/>(Get Portfolio)" --> B
     B -- "④ Verifies JWT" --> G
     B -- "⑤ Reads Portfolio Data" --> C
     B -- "⑥ Reads Market Data Cache" --> C
-    
-    A -- "⑦ API Call with JWT (e.g., Add Holding)" --> B
+
+    %% Portfolio Write
+    A -- "⑦ API Call with JWT<br/>(Add Holding)" --> B
     B -- "⑧ Writes Portfolio Data" --> C
     B -- "⑨ Triggers Backfill (async)" --> F
     F -- "⑩ Returns Historical Data" --> B
     B -- "⑪ Writes to Market Data Cache" --> C
 
+    %% Scheduled Job (Daily Sync)
     Scheduler -- "⑫ Triggers Daily Sync" --> B
-    B -- "⑬ Fetches Latest Data" --> F
-    F -- "⑭ Returns Latest Data" --> B
-    B -- "⑮ Writes to Market Data Cache" --> C
+    B <-- "⑬ Fetches Latest Data" --> F
+    %% F -- "⑭ Returns Latest Data" --> B
+    B -- "⑭ Writes to Market Data Cache" --> C
+
+    %% OPTIONAL: Notification Flow Example
+    B -- "Rule Triggered" --> E
+    E -- "Email/Push Notification" --> A
+
+    %% Visual grouping
+    classDef zone fill:#F7F9FF,stroke:#555,stroke-width:2px;
+    class User,Platform,Ext zone;
 ```
 
-### 5.2. Security
+### 6.2. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
@@ -962,7 +1031,7 @@ graph
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, matching the key expiry rule.
 
-### 5.3. Data Sources
+### 6.3. Data Sources
 
 - **Provider**: Alpha Vantage.
 - **Frequency**: Data is fetched from the provider under two conditions:
@@ -970,9 +1039,8 @@ graph
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
 - **Data Points**: OHLC prices, MA200, weekly RSI, VIX close, ATR.
 
-### 5.4. Non-Functional Requirements
+### 6.4. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
 - **Availability**: 99.9% uptime via GCP.
-
