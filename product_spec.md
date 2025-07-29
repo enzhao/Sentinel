@@ -61,6 +61,7 @@ Each section includes:
 ### 1.3. General API and Technical Notes
 
 - **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
+- **API Design**: All API endpoints that operate on a user's specific data are nested under the `/api/users/me/` path. This ensures that all operations are clearly scoped to the authenticated user, enhancing security and clarity. For example, to get a portfolio, the endpoint is `/api/users/me/portfolios/{portfolioId}`.
 
 ---
 
@@ -76,7 +77,6 @@ This section details the management of user portfolios. A user can create and ma
   - `portfolioId`: String (Unique UUID, the document ID).
   - `userId`: String (Firebase Auth UID, links the portfolio to its owner).
   - `name`: String (User-defined, e.g., "My Real Portfolio", "Tech Speculation").
-  - `isDefault`: Boolean (Indicates if this is the user's default portfolio for display after login. Only one portfolio per user can be the default).
   - `holdings`: Array of `Holding` objects.
   - `cashReserve`: Object containing:
     - `totalAmount`: Number (EUR).
@@ -179,7 +179,7 @@ sequenceDiagram
 
     Note over User, Sentinel: Frontend now calls the backend to create the portfolio
     
-    User->>Sentinel: 3. POST /api/portfolios (with ID Token)
+    User->>Sentinel: 3. POST /api/users/me/portfolios (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 4. Verify ID Token (gets UID)
     Sentinel->>DB: 5. Create Portfolio document for UID
@@ -224,7 +224,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database (Firestore)
 
-    User->>Sentinel: 1. Request Portfolio Details<br> (portfolioId, ID Token)
+    User->>Sentinel: 1. GET /api/users/me/portfolios/{portfolioId}<br> (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User
     Sentinel->>DB: 3. Fetch Raw Portfolio Data<br> (holdings, lots)
@@ -275,7 +275,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. Request Portfolio List<br> (ID Token)
+    User->>Sentinel: 1. GET /api/users/me/portfolios<br> (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Get UID
     Sentinel->>DB: 3. Fetch All Portfolios where<br> userId == UID
@@ -313,7 +313,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. Request Portfolio Update<br> (portfolioId, updateData, ID Token)
+    User->>Sentinel: 1. PUT /api/users/me/portfolios/{portfolioId}<br> (updateData, ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
     Sentinel->>Sentinel: 3. Validate incoming updateData
@@ -372,45 +372,46 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. POST /api/portfolios/{portfolioId}/set-default (ID Token)
+    User->>Sentinel: 1. PUT /api/users/me/settings <br> { "defaultPortfolioId": "new-pf-id" } <br> (ID Token)
     activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    Sentinel->>Sentinel: 2. Verify ID Token & Get UID
+    Sentinel->>DB: 3. Verify that portfolio "new-pf-id" <br> belongs to this UID
+    activate DB
+    DB-->>Sentinel: 4. Confirm Ownership
+    deactivate DB
     
     alt Authorization OK
-        Sentinel->>DB: 3. Start Transaction
+        Sentinel->>DB: 5. Update User document in DB <br> set defaultPortfolioId = "new-pf-id"
         activate DB
-        Sentinel->>DB: 4. Find current default portfolio for user and set isDefault=false
-        Sentinel->>DB: 5. Set isDefault=true for new portfolioId
-        Sentinel->>DB: 6. Commit Transaction
-        DB-->>Sentinel: 7. Confirm Update Success
+        DB-->>Sentinel: 6. Confirm Update Success
         deactivate DB
-        Sentinel-->>User: 8. Return HTTP 200 OK (Success)
+        Sentinel-->>User: 7. Return HTTP 200 OK (Success)
     else Authorization Fails
         Sentinel-->>User: Return HTTP 4xx Error (e.g., 403, 404)
     end
     deactivate Sentinel
 ```
 
-- **Description**: Designates a specific portfolio as the user's default. This operation ensures that only one portfolio per user can be the default at any given time. When a new portfolio is set as default, the backend transactionally unsets the `isDefault` flag on the previous default portfolio.
+- **Description**: Designates a specific portfolio as the user's default by updating the `defaultPortfolioId` field on the user's document in the `users` collection.
 - **Examples**:
     - **Example**:
-        - A user has two portfolios: "Real Money" (current default) and "Paper Trading".
+        - A user has two portfolios: "Real Money" and "Paper Trading".
         - They decide to make "Paper Trading" their new default.
-        - The user sends a request to set the "Paper Trading" portfolio as default.
-        - The backend updates the "Paper Trading" portfolio to `isDefault: true` and simultaneously updates the "Real Money" portfolio to `isDefault: false`.
-- **Success Response**: The specified portfolio is marked as the default, and the previous default is unmarked.
+        - The user sends a request to update their user settings, providing the `portfolioId` of the "Paper Trading" portfolio.
+        - The backend verifies the user owns that portfolio and then updates the `defaultPortfolioId` field on their user document.
+- **Success Response**: The user's `defaultPortfolioId` is updated.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| P_I_3401 | Set default succeeds | User is authenticated, owns the portfolio, and the portfolio exists. | Response Sentinel to User | The specified portfolio is set as the new default. | P_I_3401 |
+| P_I_3401 | Set default succeeds | User is authenticated, owns the portfolio, and the portfolio exists. | Response Sentinel to User | The user's `defaultPortfolioId` is updated. | P_I_3401 |
 | P_E_3501 | User unauthorized | User is not authenticated or does not own the specified portfolio. | Request User to Sentinel | Request rejected with HTTP 403 Forbidden. | P_E_3501 |
 | P_E_3502 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Request rejected with HTTP 404 Not Found. | P_E_3502 |
 
 **Messages**:
-- **P_I_3401**: "Portfolio {portfolioId} is now the default."
-- **P_E_3501**: "User is not authorized to modify portfolio {portfolioId}."
-- **P_E_3502**: "Portfolio with ID {portfolioId} not found."
+- **P_I_3401**: "Default portfolio updated successfully."
+- **P_E_3501**: "User is not authorized to set this portfolio as default."
+- **P_E_3502**: "Portfolio with the specified ID not found."
 
 ##### 2.2.3.3. P_3600: Portfolio Update (Import from File)
 
@@ -423,7 +424,7 @@ sequenceDiagram
     participant AI as AI Service (LLM)
     participant DB as Database
 
-    User->>Sentinel: 1. POST /api/portfolios/<br>{portfolioId}/import (file, ID Token)
+    User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/import<br>(file, ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
     Sentinel->>AI: 3. Parse file content for transactions
@@ -435,7 +436,7 @@ sequenceDiagram
 
     Note over User: User reviews and corrects the data<br> on the frontend
     
-    User->>Sentinel: 6. POST /api/portfolios/<br>{portfolioId}/import/confirm<br> (corrected data, ID Token)
+    User->>Sentinel: 6. POST /api/users/me/portfolios/{portfolioId}/import/confirm<br> (corrected data, ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 7. Validate corrected data
     Sentinel->>DB: 8. Merge confirmed lots into the specified Portfolio
@@ -490,7 +491,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. Request to Delete Portfolio<br> (portfolioId, ID Token)
+    User->>Sentinel: 1. DELETE /api/users/me/portfolios/{portfolioId}<br> (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
     
@@ -539,7 +540,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. Request to Delete Item<br> (portfolioId, itemId, ID Token)
+    User->>Sentinel: 1. DELETE /api/users/me/portfolios/{portfolioId}/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
     
@@ -641,7 +642,7 @@ sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
     participant DB as Database
-    User->>Sentinel: POST /rules <br> {portfolioId, ruleType, ticker, conditions}
+    User->>Sentinel: POST /api/users/me/portfolios/{portfolioId}/rules <br> {ruleType, ticker, conditions}
     activate Sentinel
     Sentinel->>Sentinel: Validate Request (Auth, Ticker, Conditions)
     Sentinel->>DB: Create Rule
@@ -661,13 +662,13 @@ sequenceDiagram
 
 #### 3.2.1. R_1000: Rule Creation
 
-- **Description**: Creates a new buy or sell rule.
+- **Description**: Creates a new buy or sell rule for a specific portfolio.
 - **Success Response**: Rule created with `ENABLED` status.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| R_I_1001 | Rule creation succeeds | Valid data, user authorized. | Response Sentinel to User | Rule created. | R_I_1001 |
+| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the portfolio. | Response Sentinel to User | Rule created. | R_I_1001 |
 | R_I_1002 | Idempotency key valid | `Idempotency-Key` provided, valid UUID. | Request User to Sentinel | Request proceeds. | N/A |
 | R_E_1101 | User unauthorized | User not authenticated or not portfolio owner. | Request User to Sentinel | Creation rejected. | R_E_1101 |
 | R_E_1102 | Invalid ticker | Ticker not supported by Alpha Vantage. | Request User to Sentinel | Creation rejected. | R_E_1102 |
@@ -683,7 +684,7 @@ sequenceDiagram
 
 #### 3.2.2. R_2000: Rule Update
 
-- **Description**: Modifies an existing rule’s conditions or status.
+- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
 - **Sub-Rules**:
 
@@ -700,7 +701,7 @@ sequenceDiagram
 
 #### 3.2.3. R_3000: Rule Retrieval
 
-- **Description**: Retrieves rule(s) for a portfolio.
+- **Description**: Retrieves rule(s) for a portfolio. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules`.
 - **Success Response**: Rule(s) returned.
 - **Sub-Rules**:
 
@@ -826,6 +827,18 @@ This section details the processes for user registration, login, logout, and the
 
 #### 5.1.1. Associated Data Models
 
+- **`User` (Firestore Document):**
+  - A new top-level collection (`users`) will be created to store application-specific user data.
+  - The document ID for each user will be their Firebase `uid`.
+  - `uid`: String (Firebase Auth UID).
+  - `username`: String (User-defined, for display purposes).
+  - `email`: String (Copied from Firebase Auth for convenience).
+  - `defaultPortfolioId`: String (The `portfolioId` of the user's default portfolio).
+  - `subscriptionStatus`: String (e.g., "FREE", "PREMIUM", default: "FREE").
+  - `notificationPreferences`: Object (e.g., `{ "email": true, "push": false }`).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+
 - **`Firebase User` (Managed by Firebase Authentication Service):**
   - `uid`: Unique user identifier provided by Firebase. This is the primary key linking the user to their data in Firestore.
   - `email`: The user's email address.
@@ -865,7 +878,7 @@ sequenceDiagram
     deactivate Firebase
 
     Note over User, Sentinel: Step 2: API call uses the token
-    User->>Sentinel: GET /api/me <br> Authorization: Bearer <ID_TOKEN>
+    User->>Sentinel: GET /api/users/me <br> Authorization: Bearer <ID_TOKEN>
     activate Sentinel
     Sentinel->>Firebase: Verify ID Token
     activate Firebase
@@ -880,18 +893,18 @@ sequenceDiagram
 #### 5.2.1. U_1000: User Signup
 
 - **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data (e.g., portfolio). This process is initiated from the frontend.
-- **Success Response**: User account is created in Firebase, and a new, empty portfolio is created in Firestore linked to the user's UID.
+- **Success Response**: User account is created in Firebase. The backend creates a corresponding `User` document in Firestore, creates a default `Portfolio`, and links the two.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| U_I_1001 | Signup succeeds | Email is valid, password meets complexity requirements, email is not already in use. | Response Firebase to User, then User to Sentinel | Firebase user created. Sentinel backend creates associated portfolio (triggers P_1000). | U_I_1001 |
+| U_I_1001 | Signup succeeds | Email is valid, password meets complexity requirements, email is not already in use. | Response Firebase to User, then User to Sentinel | Firebase user created. Sentinel backend creates a `User` document, a default `Portfolio` document, and sets the `defaultPortfolioId` on the user document. The UI redirects to the portfolio view. | U_I_1001 |
 | U_E_1101 | Email already in use | User attempts to sign up with an email that already exists. | Response Firebase to User | Signup rejected by Firebase. | U_E_1101 |
 | U_E_1102 | Invalid email format | Email address provided is not in a valid format. | Response Firebase to User | Signup rejected by Firebase. | U_E_1102 |
 | U_E_1103 | Weak password | Password does not meet Firebase's minimum security requirements (e.g., less than 6 characters). | Response Firebase to User | Signup rejected by Firebase. | U_E_1103 |
 
 **Messages**:
-- **U_I_1001**: "User account created successfully for {email}."
+- **U_I_1001**: "Welcome {email}, a default portfolio has been created for you. You can start managing holdings now."
 - **U_E_1101**: "This email address is already in use by another account."
 - **U_E_1102**: "The email address is improperly formatted."
 - **U_E_1103**: "The password must be at least 6 characters long."
@@ -978,13 +991,13 @@ flowchart LR
     G -- "② Issues ID Token" --> A
 
     %% ③④⑤⑥ Portfolio Read
-    A -- "③ API Call with JWT<br/>(Get Portfolio)" --> B
+    A -- "③ API Call with JWT<br/>(e.g., GET /api/users/me/portfolios)" --> B
     B -- "④ Verifies JWT" --> G
     B -- "⑤ Reads Portfolio Data" --> C
     B -- "⑥ Reads Market Data Cache" --> C
 
     %% Portfolio Write
-    A -- "⑦ API Call with JWT<br/>(Add Holding)" --> B
+    A -- "⑦ API Call with JWT<br/>(e.g., POST /api/users/me/portfolios)" --> B
     B -- "⑧ Writes Portfolio Data" --> C
     B -- "⑨ Triggers Backfill (async)" --> F
     F -- "⑩ Returns Historical Data" --> B
