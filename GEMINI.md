@@ -10,3 +10,9 @@ When asked to perform a task, please follow these steps:
 4.  **Clarification:** If the user's request is ambiguous or contradicts the spec, please ask for clarification.
 
 
+## How to run backend tests:
+
+```bash
+backend/venv/bin/pytest --cov=src backend/tests/
+```
+
