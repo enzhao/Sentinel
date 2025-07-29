@@ -1,21 +1,11 @@
 <template>
-  <div class="portfolio">
-    <h1>Your Portfolio</h1>
-    <p v-if="isPortfolioEmpty">Your portfolio is empty, you can start to add holdings.</p>
-    <p v-else>Your portfolio is great.</p>
-  </div>
+  <v-container>
+    <h1 class="text-h4">My Portfolio</h1>
+    <p>This is where the user's portfolio details will be displayed.</p>
+    <!-- Portfolio components will go here -->
+  </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-// This is a placeholder. In the future, this will come from a portfolio store.
-const isPortfolioEmpty = ref(true)
+// Logic for fetching and displaying portfolio data will go here
 </script>
-
-<style scoped>
-.portfolio {
-  text-align: center;
-  margin-top: 50px;
-}
-</style>

@@ -5,7 +5,11 @@ import { useAuthStore } from '@/stores/auth'
 import type { Router } from 'vue-router'
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: vi.fn(),
+  useAuthStore: vi.fn(() => ({
+    isAuthenticated: false,
+    loading: false,
+    init: vi.fn().mockResolvedValue(undefined),
+  })),
 }))
 
 describe('Router', () => {
@@ -13,13 +17,15 @@ describe('Router', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
+    // Reset mocks before each test
+    vi.clearAllMocks()
   })
 
   it('redirects to portfolio if logged in and trying to access home', async () => {
     vi.mocked(useAuthStore).mockReturnValue({
       isAuthenticated: true,
       loading: false,
-      init: vi.fn().mockResolvedValue(null),
+      init: vi.fn().mockResolvedValue(undefined),
     } as any)
     router = createSentinelRouter()
     
@@ -33,7 +39,7 @@ describe('Router', () => {
     vi.mocked(useAuthStore).mockReturnValue({
       isAuthenticated: false,
       loading: false,
-      init: vi.fn().mockResolvedValue(null),
+      init: vi.fn().mockResolvedValue(undefined),
     } as any)
     router = createSentinelRouter()
 
@@ -47,7 +53,7 @@ describe('Router', () => {
     vi.mocked(useAuthStore).mockReturnValue({
       isAuthenticated: true,
       loading: false,
-      init: vi.fn().mockResolvedValue(null),
+      init: vi.fn().mockResolvedValue(undefined),
     } as any)
     router = createSentinelRouter()
 
