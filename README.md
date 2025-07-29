@@ -110,6 +110,17 @@ The project includes utility scripts to perform live tests against external serv
   backend/venv/bin/python util/e2e_data_pipeline_test.py
   ```
 
+##### API Specification
+The backend API is documented using the OpenAPI standard. The specification file, `api/sentinel-invest-backend.yaml`, is generated automatically from the FastAPI application's code and its Pydantic models.
+
+- **Generating the Specification:**
+  If you make changes to the API (e.g., add new endpoints or modify data models), you must regenerate the specification file. Run the following command from the `backend` directory:
+  ```bash
+  # Make sure your virtual environment is activated
+  python generate_openapi.py
+  ```
+  This ensures that the documentation is always in sync with the implementation.
+
 ##### Managing Backend Dependencies
 
 - To add or remove a package, edit the `requirements.in` file.

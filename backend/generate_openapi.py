@@ -1,3 +1,7 @@
+import os
+# Set the environment to 'local' before any other imports
+os.environ['ENV'] = 'local'
+
 # This must be the first import to ensure Firebase is initialized.
 # It needs to be imported before the FastAPI app.
 import src.firebase_setup
