@@ -39,7 +39,7 @@ def test_create_and_get_enriched_portfolio(test_client: TestClient):
     # 2. Create an empty portfolio
     portfolio_name = "My Enriched Portfolio"
     create_response = test_client.post(
-        "/api/portfolios",
+        "/api/users/me/portfolios",
         json={"name": portfolio_name},
         headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
     )
@@ -48,7 +48,7 @@ def test_create_and_get_enriched_portfolio(test_client: TestClient):
 
     # 3. Add a holding to that portfolio
     add_holding_response = test_client.post(
-        f"/api/portfolios/{portfolio_id}/holdings",
+        f"/api/users/me/portfolios/{portfolio_id}/holdings",
         json={
             "ticker": "AAPL",
             "lots": [{"purchaseDate": "2025-01-01T12:00:00Z", "quantity": 10, "purchasePrice": 150.0}]
@@ -59,7 +59,7 @@ def test_create_and_get_enriched_portfolio(test_client: TestClient):
 
     # 4. Retrieve the final, updated portfolio
     get_response = test_client.get(
-        f"/api/portfolios/{portfolio_id}",
+        f"/api/users/me/portfolios/{portfolio_id}",
         headers={"Authorization": "Bearer test-token"}
     )
     assert get_response.status_code == 200
@@ -80,7 +80,7 @@ def test_idempotency_for_create(test_client: TestClient):
     key = str(uuid.uuid4())
     # 1. First request to create
     response1 = test_client.post(
-        "/api/portfolios",
+        "/api/users/me/portfolios",
         json={"name": "Idempotent Test"},
         headers={"Authorization": "Bearer test-token", "Idempotency-Key": key}
     )
@@ -89,7 +89,7 @@ def test_idempotency_for_create(test_client: TestClient):
 
     # 2. Second request with the same key
     response2 = test_client.post(
-        "/api/portfolios",
+        "/api/users/me/portfolios",
         json={"name": "Idempotent Test"},
         headers={"Authorization": "Bearer test-token", "Idempotency-Key": key}
     )
@@ -102,6 +102,6 @@ def test_unauthorized_access(test_client: TestClient):
     """
     Tests that unauthorized access is blocked.
     """
-    response = test_client.get("/api/portfolios")
+    response = test_client.get("/api/users/me/portfolios")
     # The middleware should block this, but if not, the dependency will
     assert response.status_code in [401, 403]

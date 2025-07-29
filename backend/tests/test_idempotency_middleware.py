@@ -16,7 +16,7 @@ def test_idempotency_replay(test_client: TestClient):
     with patch('firebase_admin.auth.verify_id_token', return_value=SAMPLE_USER_1):
         # First request
         response1 = test_client.post(
-            "/api/portfolios",
+            "/api/users/me/portfolios",
             json={"name": "Idempotency Replay Test"},
             headers={"Authorization": "Bearer test-token-1", "Idempotency-Key": key}
         )
@@ -25,7 +25,7 @@ def test_idempotency_replay(test_client: TestClient):
 
         # Second request with the same key
         response2 = test_client.post(
-            "/api/portfolios",
+            "/api/users/me/portfolios",
             json={"name": "Idempotency Replay Test"},
             headers={"Authorization": "Bearer test-token-1", "Idempotency-Key": key}
         )
@@ -43,7 +43,7 @@ def test_idempotency_key_is_scoped_to_user(test_client: TestClient):
     # First request by User 1
     with patch('firebase_admin.auth.verify_id_token', return_value=SAMPLE_USER_1):
         response1 = test_client.post(
-            "/api/portfolios",
+            "/api/users/me/portfolios",
             json={"name": "User Scope Test"},
             headers={"Authorization": "Bearer test-token-1", "Idempotency-Key": key}
         )
@@ -53,7 +53,7 @@ def test_idempotency_key_is_scoped_to_user(test_client: TestClient):
     # Second request by User 2 with the same key
     with patch('firebase_admin.auth.verify_id_token', return_value=SAMPLE_USER_2):
         response2 = test_client.post(
-            "/api/portfolios",
+            "/api/users/me/portfolios",
             json={"name": "User Scope Test"},
             headers={"Authorization": "Bearer test-token-2", "Idempotency-Key": key}
         )
@@ -70,7 +70,7 @@ def test_get_requests_are_ignored_by_middleware(test_client: TestClient):
     with patch('firebase_admin.auth.verify_id_token', return_value=SAMPLE_USER_1):
         # This GET request does not require an Idempotency-Key
         response = test_client.get(
-            "/api/portfolios",
+            "/api/users/me/portfolios",
             headers={"Authorization": "Bearer test-token-1"}
         )
         assert response.status_code == 200

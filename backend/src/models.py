@@ -37,6 +37,21 @@ class PortfolioDB(BaseModel):
     createdAt: datetime = Field(default_factory=datetime.now)
     modifiedAt: datetime = Field(default_factory=datetime.now)
 
+class NotificationPreferences(BaseModel):
+    email: bool = Field(default=True)
+    push: bool = Field(default=False)
+
+class UserDB(BaseModel):
+    uid: str
+    username: str
+    email: str
+    defaultPortfolioId: Optional[str] = None
+    subscriptionStatus: str = Field(default="FREE")
+    notificationPreferences: NotificationPreferences = Field(default_factory=NotificationPreferences)
+    createdAt: datetime = Field(default_factory=datetime.now)
+    modifiedAt: datetime = Field(default_factory=datetime.now)
+
+
 class MarketDataDB(BaseModel):
     """
     Represents the daily market data for a single ticker stored in Firestore.
@@ -92,6 +107,8 @@ class Holding(HoldingDB, HoldingComputedInfo):
 class Portfolio(PortfolioDB, PortfolioComputedInfo):
     holdings: List[Holding] = []
 
+class User(UserDB):
+    pass
 
 # #############################################################################
 # API REQUEST MODELS (for POST/PUT requests)
@@ -99,6 +116,11 @@ class Portfolio(PortfolioDB, PortfolioComputedInfo):
 
 class CreatePortfolioRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
+
+class UpdateUserSettingsRequest(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=30)
+    defaultPortfolioId: Optional[str] = None
+    notificationPreferences: Optional[NotificationPreferences] = None
 
 class UpdatePortfolioRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=50)

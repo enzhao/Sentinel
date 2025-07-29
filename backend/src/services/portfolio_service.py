@@ -4,6 +4,7 @@ from src.models import PortfolioDB, CreatePortfolioRequest, UpdatePortfolioReque
 from src.firebase_setup import db
 from src.services.backfill_service import backfill_service
 
+
 portfolios_collection = db.collection('portfolios')
 
 

@@ -3,13 +3,100 @@ info:
   title: FastAPI
   version: 0.1.0
 paths:
-  /api/portfolios:
+  /api/users/initialize:
     post:
       tags:
-      - Portfolios
+      - Users & Portfolios
+      summary: Initialize User
+      description: 'Initializes a new user by creating their user document and a default
+        portfolio.
+
+        If the user document already exists, it returns the existing user data.
+
+        This endpoint is idempotent.'
+      operationId: initialize_user_api_users_initialize_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Idempotency-Key
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/users/me:
+    get:
+      tags:
+      - Users & Portfolios
+      summary: Get User Me
+      description: Get the current authenticated user's details.
+      operationId: get_user_me_api_users_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/users/me/settings:
+    put:
+      tags:
+      - Users & Portfolios
+      summary: Update User Settings
+      description: Update the current user's settings, including their default portfolio.
+      operationId: update_user_settings_api_users_me_settings_put
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserSettingsRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/users/me/portfolios:
+    post:
+      tags:
+      - Users & Portfolios
       summary: Create Portfolio
       description: Create a new portfolio for the authenticated user.
-      operationId: create_portfolio_api_portfolios_post
+      operationId: create_portfolio_api_users_me_portfolios_post
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -41,10 +128,10 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     get:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Get All Portfolios
       description: Retrieve a summary list of all of the user's portfolios.
-      operationId: get_all_portfolios_api_portfolios_get
+      operationId: get_all_portfolios_api_users_me_portfolios_get
       security:
       - OAuth2PasswordBearer: []
       responses:
@@ -56,14 +143,14 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Portfolio'
-                title: Response Get All Portfolios Api Portfolios Get
-  /api/portfolios/{portfolio_id}:
+                title: Response Get All Portfolios Api Users Me Portfolios Get
+  /api/users/me/portfolios/{portfolio_id}:
     get:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Get Portfolio
       description: Retrieve the full, enriched details of a single portfolio.
-      operationId: get_portfolio_api_portfolios__portfolio_id__get
+      operationId: get_portfolio_api_users_me_portfolios__portfolio_id__get
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -88,10 +175,10 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     put:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Update Portfolio
       description: Update a portfolio's name, cash reserves, or tax settings.
-      operationId: update_portfolio_api_portfolios__portfolio_id__put
+      operationId: update_portfolio_api_users_me_portfolios__portfolio_id__put
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -129,10 +216,10 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
     delete:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Delete Portfolio
       description: Delete an entire portfolio.
-      operationId: delete_portfolio_api_portfolios__portfolio_id__delete
+      operationId: delete_portfolio_api_users_me_portfolios__portfolio_id__delete
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -158,13 +245,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/portfolios/{portfolio_id}/holdings:
+  /api/users/me/portfolios/{portfolio_id}/holdings:
     post:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Add Holding To Portfolio
       description: Add a new holding with lots to a portfolio.
-      operationId: add_holding_to_portfolio_api_portfolios__portfolio_id__holdings_post
+      operationId: add_holding_to_portfolio_api_users_me_portfolios__portfolio_id__holdings_post
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -200,13 +287,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/portfolios/{portfolio_id}/holdings/{holding_id}:
+  /api/users/me/portfolios/{portfolio_id}/holdings/{holding_id}:
     delete:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Delete Holding From Portfolio
       description: Delete a holding from a portfolio.
-      operationId: delete_holding_from_portfolio_api_portfolios__portfolio_id__holdings__holding_id__delete
+      operationId: delete_holding_from_portfolio_api_users_me_portfolios__portfolio_id__holdings__holding_id__delete
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -242,13 +329,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/portfolios/{portfolio_id}/holdings/{holding_id}/lots/{lot_id}:
+  /api/users/me/portfolios/{portfolio_id}/holdings/{holding_id}/lots/{lot_id}:
     delete:
       tags:
-      - Portfolios
+      - Users & Portfolios
       summary: Delete Lot From Holding
       description: Delete a lot from a holding within a portfolio.
-      operationId: delete_lot_from_holding_api_portfolios__portfolio_id__holdings__holding_id__lots__lot_id__delete
+      operationId: delete_lot_from_holding_api_users_me_portfolios__portfolio_id__holdings__holding_id__lots__lot_id__delete
       security:
       - OAuth2PasswordBearer: []
       parameters:
@@ -270,39 +357,6 @@ paths:
         schema:
           type: string
           title: Lot Id
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Idempotency-Key
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Portfolio'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/users/initialize:
-    post:
-      tags:
-      - Users
-      summary: Initialize User Portfolio
-      description: 'Initializes the user''s account by creating a default portfolio
-        if one doesn''t exist.
-
-        This endpoint is idempotent.'
-      operationId: initialize_user_portfolio_api_users_initialize_post
-      security:
-      - OAuth2PasswordBearer: []
-      parameters:
       - name: Idempotency-Key
         in: header
         required: true
@@ -510,6 +564,18 @@ components:
       - quantity
       - purchasePrice
       title: LotDB
+    NotificationPreferences:
+      properties:
+        email:
+          type: boolean
+          title: Email
+          default: true
+        push:
+          type: boolean
+          title: Push
+          default: false
+      type: object
+      title: NotificationPreferences
     Portfolio:
       properties:
         totalCost:
@@ -598,6 +664,62 @@ components:
           - type: 'null'
       type: object
       title: UpdatePortfolioRequest
+    UpdateUserSettingsRequest:
+      properties:
+        username:
+          anyOf:
+          - type: string
+            maxLength: 30
+            minLength: 3
+          - type: 'null'
+          title: Username
+        defaultPortfolioId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Defaultportfolioid
+        notificationPreferences:
+          anyOf:
+          - $ref: '#/components/schemas/NotificationPreferences'
+          - type: 'null'
+      type: object
+      title: UpdateUserSettingsRequest
+    User:
+      properties:
+        uid:
+          type: string
+          title: Uid
+        username:
+          type: string
+          title: Username
+        email:
+          type: string
+          title: Email
+        defaultPortfolioId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Defaultportfolioid
+        subscriptionStatus:
+          type: string
+          title: Subscriptionstatus
+          default: FREE
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+        createdAt:
+          type: string
+          format: date-time
+          title: Createdat
+        modifiedAt:
+          type: string
+          format: date-time
+          title: Modifiedat
+      type: object
+      required:
+      - uid
+      - username
+      - email
+      title: User
     ValidationError:
       properties:
         loc:

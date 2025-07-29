@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .auth import get_current_user
-from .routers import portfolio_router, user_router
+from .routers import user_router
 from .firebase_setup import db
 from .middleware import idempotency_middleware
 
@@ -10,7 +10,6 @@ app = FastAPI()
 # The idempotency middleware should be one of the first to run.
 app.middleware("http")(idempotency_middleware)
 
-app.include_router(portfolio_router.router, prefix="/api")
 app.include_router(user_router.router, prefix="/api")
 
 # --- CORS Middleware Configuration ---
