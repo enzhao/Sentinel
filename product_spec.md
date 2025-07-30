@@ -123,7 +123,9 @@ This section details the management of user portfolios. A user can create and ma
     - `vwma7`: Optional<Number> (7-day volume weighted moving average).
     - `rsi14`: Optional<Number> (14-day Relative Strength Index).
     - `atr14`: Optional<Number> (14-day Average True Range).
+    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
   - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
+  - **Note on VWMA**: All Volume Weighted Moving Average (VWMA) indicators are calculated internally by the Sentinel backend using the daily price and volume data. They are not fetched directly from the external data provider.
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
   - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
@@ -617,7 +619,7 @@ This section details the management of buy and sell rules that encode the userâ€
   - `createdAt`, `modifiedAt`: ISODateTime.
 - `Condition`:
   - `conditionId`: Unique UUID.
-  - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`).
+  - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`, `MACD`).
   - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN, `{period: 200, operator: 'cross_below'}` for SMA).
 - `Alert` (generated, see Section 3):
   - `alertId`: Unique UUID.
@@ -633,6 +635,7 @@ This section details the management of buy and sell rules that encode the userâ€
   - `VWMA`: Price crosses below a volume weighted moving average (e.g., VWMA200).
   - `RSI`: 14-day RSI < 30.
   - `VIX`: VIX closes > Y.
+  - `MACD`: MACD line crosses above the signal line.
 - **SELL**:
   - `PROFIT_TARGET`: Holding gain â‰¥ X%.
   - `TRAILING_DRAWDOWN`: Holding falls Y% from peak since purchase.
@@ -640,6 +643,7 @@ This section details the management of buy and sell rules that encode the userâ€
   - `SMA`: Price > Z% above a simple moving average (e.g., SMA200).
   - `VWMA`: Price > Z% above a volume weighted moving average (e.g., VWMA200).
   - `AFTER_TAX_PROFIT`: After-tax gain â‰¥ W%.
+  - `MACD`: MACD line crosses below the signal line.
 
 **Business Process**:
 1. **Creation**: User creates a rule by specifying `ruleType`, `ticker`, and `conditions`. Rule is set to `ENABLED`.
@@ -1150,7 +1154,7 @@ flowchart LR
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
-- **Data Points**: OHLC prices, SMA200, SMA50, SMA20, SMA7, VWMA200, VWMA50, VWMA20, VWMA7, 14-day RSI, VIX close, 14-day ATR.
+- **Data Points**: The system utilizes OHLC prices, SMA (7, 20, 50, 200), 14-day RSI, VIX close, 14-day ATR, and MACD data directly from the provider. All VWMA (Volume Weighted Moving Average) indicators are calculated internally by the backend.
 
 ### 6.4. Non-Functional Requirements
 
