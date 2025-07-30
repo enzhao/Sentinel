@@ -125,7 +125,7 @@ This section details the management of user portfolios. A user can create and ma
     - `atr14`: Optional<Number> (14-day Average True Range).
     - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
   - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
-  - **Note on VWMA**: All Volume Weighted Moving Average (VWMA) indicators are calculated internally by the Sentinel backend using the daily price and volume data. They are not fetched directly from the external data provider.
+  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
   - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
@@ -756,8 +756,9 @@ This section details the automated monitoring of market data and generation of n
 
 **Business Process**:
 1. **Monitoring**:
-   - Daily, after European market close, the Monitoring Engine fetches `MarketData` for all tickers in active rules.
-   - For each `ENABLED` rule, conditions are evaluated against `MarketData` and portfolio data.
+   - Daily, after European market close, the Monitoring Engine fetches the latest raw price data (OHLCV) for all tickers in active rules.
+   - The engine then calculates all required technical indicators (SMA, RSI, MACD, etc.).
+   - For each `ENABLED` rule, conditions are evaluated against the newly calculated `MarketData` and the user's portfolio data.
 2. **Alert Generation**:
    - If all conditions are met, an `Alert` is created with relevant `marketData` and `taxInfo` (for SELL rules, computed using FIFO).
    - Alert is queued for notification.
@@ -1060,7 +1061,7 @@ sequenceDiagram
 - **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
   - **idempotency keys** for state-changing requests, stored in a dedicated Firestore collection, TTL enabled on each document for automatic cleanup.
 - **Notification Service**: SendGrid (email), Firebase Cloud Messaging (push).
-- **Market Data**: Alpha Vantage API.
+- **Market Data**: Alpha Vantage API (for raw OHLCV price data).
 - **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
 
 #### 6.1.3. Architectural Diagram
@@ -1154,7 +1155,7 @@ flowchart LR
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
-- **Data Points**: The system utilizes OHLC prices, SMA (7, 20, 50, 200), 14-day RSI, VIX close, 14-day ATR, and MACD data directly from the provider. All VWMA (Volume Weighted Moving Average) indicators are calculated internally by the backend.
+- **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
 ### 6.4. Non-Functional Requirements
 
