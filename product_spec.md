@@ -53,9 +53,13 @@ Each section includes:
 - **Tax Calculations**: All tax-related calculations are informational, based on user-provided rates (e.g., capital gains tax, tax-free allowances).
 - **Market Data**: Sourced daily from Alpha Vantage, using closing prices for calculations unless specified.
 
-### 1.2. General User Interface/User Experience (UI/UX) Notes    
+### 1.2. General User Interface/User Experience (UI/UX) Notes
 
 - **Mobile-First Responsive Design**: The application's interface will be designed primarily for mobile phones. This means the layout will be clean, easy to navigate with a thumb, and optimized for smaller screens. When viewed on a larger screen, like a tablet or desktop computer, the application will automatically adapt its layout to make good use of the extra space, ensuring a comfortable and effective user experience on any device.
+- **Application Bar**: A persistent application bar is displayed at the top of the screen.
+    - On mobile devices or narrow screens, the bar displays the application title and a menu icon that, when tapped, reveals navigation links.
+    - On wider screens (tablets, desktops), the navigation links are displayed directly within the application bar for quick access.
+    - For authenticated users, the bar also provides access to user-specific actions, such as logging out.
 
 
 ### 1.3. General API and Technical Notes
@@ -100,7 +104,7 @@ This section details the management of user portfolios. A user can create and ma
 
 - **`MarketData` (Firestore Document):**
   - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
-  - The structure is `/marketData/{ticker}/dailyPrices/{YYYY-MM-DD}`.
+  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
   - Each document contains:
     - `date`: ISODateTime.
     - `ticker`: String.
@@ -110,8 +114,8 @@ This section details the management of user portfolios. A user can create and ma
     - `close`: Number (EUR).
     - `volume`: Integer.
     - `ma200`: Optional<Number> (200-day simple moving average).
-    - `rsi_weekly`: Optional<Number> (14-day weekly Relative Strength Index).
-    - `atr`: Optional<Number> (14-day Average True Range).
+    - `rsi14`: Optional<Number> (14-day weekly Relative Strength Index).
+    - `atr14`: Optional<Number> (14-day Average True Range).
   - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
@@ -540,7 +544,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. DELETE /api/users/me/portfolios/{portfolioId}/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
+    User->>Sentinel: 1. DELETE /api/users/me/<br>portfolios/{portfolioId}/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
     
@@ -979,7 +983,7 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| U_I_2001 | Login succeeds | Correct email and password provided for an existing user. | Response Firebase to User | User logged in. Frontend receives ID Token to use for API calls. | U_I_2001 |
+| U_I_2001 | Login succeeds | Correct email and password provided for an existing user. | Response Firebase to User | User logged in. Frontend receives ID Token to use for API calls. After successful login, the UI redirects the user to their default portfolio view. | U_I_2001 |
 | U_E_2101 | Invalid credentials | Incorrect password or email address does not exist. | Response Firebase to User | Login rejected by Firebase. | U_E_2101 |
 
 **Messages**:
@@ -1033,9 +1037,14 @@ sequenceDiagram
 - **Monolith for MVP**: The backend is a "Self-Contained System" (a well-structured monolith) for the MVP to prioritize development speed and simplicity. It can be refactored into microservices in the future if required by scale.
 
 #### 6.1.2. Components
+
 - **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
+  - **UI Framework**: Vuetify (Material Design).
+  - **State Management**: Pinia (Vuex alternative).
+- **Authentication**: Firebase Authentication for user management, including email/password login and secure ID token issuance.
 - **Backend API**: Python FastAPI, deployed on Google Cloud Run.
 - **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
+  - **idempotency keys** for state-changing requests, stored in a dedicated Firestore collection, TTL enabled on each document for automatic cleanup.
 - **Notification Service**: SendGrid (email), Firebase Cloud Messaging (push).
 - **Market Data**: Alpha Vantage API.
 - **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
