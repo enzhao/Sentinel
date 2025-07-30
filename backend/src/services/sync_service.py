@@ -1,6 +1,7 @@
 import asyncio
 from src.firebase_setup import db
 from src.services.market_data_service import alpha_vantage_service
+from src.models import MarketDataDB
 
 VIX_PROXY_TICKER = "VIXY"
 
@@ -18,6 +19,7 @@ class SyncService:
         unique_tickers = set()
         portfolios_stream = db.collection('portfolios').stream()
 
+        # Using async for to iterate over the async generator
         async for portfolio in portfolios_stream:
             holdings = portfolio.to_dict().get('holdings', [])
             for holding in holdings:
@@ -34,46 +36,35 @@ class SyncService:
     async def sync_market_data():
         """
         The main cron job function. It gets all unique tickers, fetches their
-        latest daily data and all technical indicators, and stores it in Firestore.
+        latest daily data and all technical indicators in a single call per ticker,
+        and stores it in Firestore.
         """
         tickers = await SyncService.get_all_unique_tickers()
         if not tickers:
             print("No tickers to sync. Exiting.")
             return
 
-        # Create a list of tasks for all API calls to run in parallel
-        tasks = []
-        ticker_list = list(tickers)
-        for ticker in ticker_list:
-            tasks.append(alpha_vantage_service.get_daily_data(ticker))
-            tasks.append(alpha_vantage_service.get_ma200(ticker))
-            tasks.append(alpha_vantage_service.get_weekly_rsi(ticker))
-            tasks.append(alpha_vantage_service.get_atr(ticker))
+        # Create a list of tasks to fetch all data for each ticker in parallel
+        tasks = [alpha_vantage_service.get_daily_data_with_indicators(ticker) for ticker in tickers]
         
         results = await asyncio.gather(*tasks)
         
-        # Process the results, grouping them by ticker
-        data_by_ticker = {}
-        for i, ticker in enumerate(ticker_list):
-            daily_data = results[i*4]
-            if daily_data:
-                daily_data.ma200 = results[i*4 + 1]
-                daily_data.rsi_weekly = results[i*4 + 2]
-                daily_data.atr = results[i*4 + 3]
-                data_by_ticker[ticker] = daily_data
+        # Filter out any None results from failed API calls
+        fetched_data: list[MarketDataDB] = [res for res in results if res is not None]
 
-        if not data_by_ticker:
+        if not fetched_data:
             print("No market data fetched. Nothing to save.")
             return
 
         batch = db.batch()
-        for ticker, data in data_by_ticker.items():
+        for data in fetched_data:
+            # The document ID is now the date string, under a specific ticker document
             date_str = data.date.strftime('%Y-%m-%d')
-            doc_ref = db.collection('marketData').document(ticker).collection('dailyPrices').document(date_str)
+            doc_ref = db.collection('marketData').document(data.ticker).collection('daily').document(date_str)
             batch.set(doc_ref, data.model_dump())
         
         batch.commit()
-        print(f"Successfully synced and stored market data for {len(data_by_ticker)} tickers.")
+        print(f"Successfully synced and stored market data for {len(fetched_data)} tickers.")
 
 # Instantiate the service
 sync_service = SyncService()

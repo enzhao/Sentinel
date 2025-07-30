@@ -7,26 +7,28 @@ from datetime import datetime
 @pytest.mark.asyncio
 async def test_is_data_present_when_exists():
     """
-    Tests that is_data_present returns True when the ticker document exists.
+    Tests that is_data_present returns True when the 'daily' subcollection has documents.
     """
-    mock_doc = MagicMock()
-    mock_doc.exists = True
-    
+    # Mock the stream to return a generator with one mock document
+    mock_stream = MagicMock()
+    mock_stream.return_value = (i for i in [MagicMock()])
+
     with patch('src.firebase_setup.db.collection') as mock_collection:
-        mock_collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_collection.return_value.document.return_value.collection.return_value.limit.return_value.stream = mock_stream
         
         assert await BackfillService.is_data_present("AAPL") is True
 
 @pytest.mark.asyncio
 async def test_is_data_present_when_not_exists():
     """
-    Tests that is_data_present returns False when the ticker document does not exist.
+    Tests that is_data_present returns False when the 'daily' subcollection is empty.
     """
-    mock_doc = MagicMock()
-    mock_doc.exists = False
-    
+    # Mock the stream to return an empty generator
+    mock_stream = MagicMock()
+    mock_stream.return_value = (i for i in [])
+
     with patch('src.firebase_setup.db.collection') as mock_collection:
-        mock_collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_collection.return_value.document.return_value.collection.return_value.limit.return_value.stream = mock_stream
         
         assert await BackfillService.is_data_present("UNKNOWN") is False
 

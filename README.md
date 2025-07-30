@@ -93,18 +93,21 @@ The backend setup is managed by a single script that automates the creation of a
     ```
     ✅ The backend API should now be running at `http://127.0.0.1:8000`.
 
+
 ##### Testing External Services
+
 The project includes utility scripts to perform live tests against external services. These are not part of the main test suite and should be run manually for validation.
 
-- **Live API Test (`live_api_test.py`):**
+- **Live API Test (`alpha_vantage_api_test`):**
   This script quickly fetches all required data points from Alpha Vantage to verify that your API key is working and that the service is accessible.
   ```bash
   # Run from the project root
-  backend/venv/bin/python util/live_api_test.py
+  backend/venv/bin/python util/alpha_vantage_api_test.py
   ```
 
 - **End-to-End Pipeline Test (`e2e_data_pipeline_test.py`):**
   This script performs a full data pipeline test: it fetches real data from Alpha Vantage, writes it to your **live** Firestore database, reads it back, verifies it, and then deletes the test data. It is the ultimate confirmation that the entire data flow is working.
+  
   ```bash
   # Run from the project root
   backend/venv/bin/python util/e2e_data_pipeline_test.py
@@ -206,3 +209,10 @@ Creating a new version, generating a changelog, and tagging the release is an au
     ```bash
     git push --follow-tags origin main
     ```
+
+
+## Important Notes
+
+For security reasons, I disabled public access to the backend API on Google Cloud Run. To test the cloud instance, I just first allow the public access for my backend service. This setting can be found in Cloud Run --> select my service --> Security tab.
+
+I also tuned down max instance to 1, and the allowed concurrency numbers. These settings can be found also under Cloud Run --> select my service, under one of the tabs. 

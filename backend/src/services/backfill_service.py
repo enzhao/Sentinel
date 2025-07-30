@@ -9,17 +9,18 @@ class BackfillService:
     @staticmethod
     async def is_data_present(ticker: str) -> bool:
         """
-        Checks if any historical data exists for a given ticker.
+        Checks if any historical data exists for a given ticker by checking for
+        documents in the 'daily' subcollection.
         """
-        # We can check for the existence of the ticker document in the marketData collection.
-        doc_ref = db.collection('marketData').document(ticker)
-        doc = doc_ref.get()
-        return doc.exists
+        docs = db.collection('marketData').document(ticker).collection('daily').limit(1).stream()
+        # The stream() method returns a generator. We check if it's empty.
+        return any(True for _ in docs)
 
     @staticmethod
     async def backfill_historical_data(ticker: str):
         """
         Orchestrates the backfill process for a single ticker.
+        This now fetches data with all historical indicators calculated.
         """
         print(f"Checking if historical data needs to be backfilled for {ticker}...")
         
@@ -28,6 +29,7 @@ class BackfillService:
             return
 
         print(f"No data found for {ticker}. Starting historical data backfill...")
+        # This function now returns data with all indicators calculated.
         historical_data = await alpha_vantage_service.get_historical_daily_data(ticker, days=200)
 
         if not historical_data:
@@ -37,7 +39,8 @@ class BackfillService:
         batch = db.batch()
         for data_point in historical_data:
             date_str = data_point.date.strftime('%Y-%m-%d')
-            doc_ref = db.collection('marketData').document(ticker).collection('dailyPrices').document(date_str)
+            # Corrected collection name to 'daily'
+            doc_ref = db.collection('marketData').document(ticker).collection('daily').document(date_str)
             batch.set(doc_ref, data_point.model_dump())
         
         batch.commit()

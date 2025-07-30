@@ -63,10 +63,17 @@ class MarketDataDB(BaseModel):
     low: float
     close: float
     volume: int
-    ma200: Optional[float] = None
-    rsi_weekly: Optional[float] = None
-    atr: Optional[float] = None
-
+    sma200: Optional[float] = None
+    sma50: Optional[float] = None
+    sma20: Optional[float] = None
+    sma7: Optional[float] = None
+    vwma200: Optional[float] = None
+    vwma50: Optional[float] = None
+    vwma20: Optional[float] = None
+    vwma7: Optional[float] = None
+    rsi14: Optional[float] = None
+    atr14: Optional[float] = None
+    macd: Optional[dict] = None  # Contains 'value', 'signal', 'histogram'
 
 # #############################################################################
 # COMPUTED INFO MODELS (for API responses)

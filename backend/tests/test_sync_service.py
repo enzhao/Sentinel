@@ -36,21 +36,34 @@ async def test_get_all_unique_tickers():
 @pytest.mark.asyncio
 async def test_sync_market_data_with_all_indicators():
     """
-    Tests the main sync logic, ensuring OHLC and all indicators are fetched and saved.
+    Tests the main sync logic, ensuring the consolidated data fetching call
+    is used and the complete, correct data is saved to Firestore.
     """
-    mock_tickers = {"AAPL"}
+    mock_tickers = {"AAPL", "VIXY"}
     
-    # Mock the responses from all Alpha Vantage service calls
-    mock_aapl_data = MarketDataDB(ticker="AAPL", open=1, high=2, low=3, close=200.5, volume=100)
-    mock_aapl_ma200 = 175.0
-    mock_aapl_rsi = 65.0
-    mock_aapl_atr = 10.5
-    
+    # Mock the fully populated MarketDataDB object that the service will return
+    mock_aapl_data = MarketDataDB(
+        ticker="AAPL",
+        date=datetime.now(),
+        open=150.0, high=155.0, low=149.0, close=154.5, volume=100000,
+        sma200=175.5, sma50=160.1, sma20=155.2, sma7=153.8,
+        vwma200=176.2, vwma50=161.5, vwma20=156.3, vwma7=154.1,
+        rsi14=65.75,
+        atr14=12.34
+    )
+    # Mock a None response for one of the tickers to simulate a failed API call
+    mock_vixy_data = None
+
+    # The service now calls get_daily_data_with_indicators once per ticker.
+    # We use side_effect to return different values for different tickers.
+    async def get_data_side_effect(ticker):
+        if ticker == "AAPL":
+            return mock_aapl_data
+        else:
+            return mock_vixy_data
+
     with patch('src.services.sync_service.SyncService.get_all_unique_tickers', new_callable=AsyncMock, return_value=mock_tickers):
-        with patch('src.services.market_data_service.alpha_vantage_service.get_daily_data', new_callable=AsyncMock, return_value=mock_aapl_data) as mock_fetch_daily, \
-             patch('src.services.market_data_service.alpha_vantage_service.get_ma200', new_callable=AsyncMock, return_value=mock_aapl_ma200) as mock_fetch_ma200, \
-             patch('src.services.market_data_service.alpha_vantage_service.get_weekly_rsi', new_callable=AsyncMock, return_value=mock_aapl_rsi) as mock_fetch_rsi, \
-             patch('src.services.market_data_service.alpha_vantage_service.get_atr', new_callable=AsyncMock, return_value=mock_aapl_atr) as mock_fetch_atr:
+        with patch('src.services.market_data_service.alpha_vantage_service.get_daily_data_with_indicators', side_effect=get_data_side_effect) as mock_fetch:
             
             with patch('src.firebase_setup.db.batch') as mock_batch:
                 mock_set = MagicMock()
@@ -61,18 +74,20 @@ async def test_sync_market_data_with_all_indicators():
                 await SyncService.sync_market_data()
 
                 # Assertions
-                mock_fetch_daily.assert_awaited_once_with("AAPL")
-                mock_fetch_ma200.assert_awaited_once_with("AAPL")
-                mock_fetch_rsi.assert_awaited_once_with("AAPL")
-                mock_fetch_atr.assert_awaited_once_with("AAPL")
+                # Should be called for each ticker
+                assert mock_fetch.call_count == len(mock_tickers)
                 
+                # Should only save the one successful result
                 assert mock_set.call_count == 1
                 mock_commit.assert_called_once()
 
                 # Check the actual data that was passed to the batch set
                 saved_data = mock_set.call_args[0][1]
                 assert saved_data['ticker'] == 'AAPL'
-                assert saved_data['close'] == 200.5
-                assert saved_data['ma200'] == 175.0
-                assert saved_data['rsi_weekly'] == 65.0
-                assert saved_data['atr'] == 10.5
+                assert saved_data['close'] == 154.5
+                assert saved_data['sma200'] == 175.5
+                assert saved_data['vwma200'] == 176.2
+                assert saved_data['rsi14'] == 65.75
+                assert saved_data['atr14'] == 12.34
+                assert 'sma7' in saved_data # Check a few other fields exist
+                assert 'vwma50' in saved_data
