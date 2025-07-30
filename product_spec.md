@@ -113,8 +113,15 @@ This section details the management of user portfolios. A user can create and ma
     - `low`: Number (EUR).
     - `close`: Number (EUR).
     - `volume`: Integer.
-    - `ma200`: Optional<Number> (200-day simple moving average).
-    - `rsi14`: Optional<Number> (14-day weekly Relative Strength Index).
+    - `sma200`: Optional<Number> (200-day simple moving average).
+    - `sma50`: Optional<Number> (50-day simple moving average).
+    - `sma20`: Optional<Number> (20-day simple moving average).
+    - `sma7`: Optional<Number> (7-day simple moving average).
+    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
+    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
+    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
+    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
+    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
     - `atr14`: Optional<Number> (14-day Average True Range).
   - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
 
@@ -610,8 +617,8 @@ This section details the management of buy and sell rules that encode the user�
   - `createdAt`, `modifiedAt`: ISODateTime.
 - `Condition`:
   - `conditionId`: Unique UUID.
-  - `type`: Enum (`DRAWDOWN`, `MA200`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`).
-  - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN).
+  - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`).
+  - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN, `{period: 200, operator: 'cross_below'}` for SMA).
 - `Alert` (generated, see Section 3):
   - `alertId`: Unique UUID.
   - `ruleId`: UUID linking to rule.
@@ -622,14 +629,16 @@ This section details the management of buy and sell rules that encode the user�
 **Supported Conditions**:
 - **BUY**:
   - `DRAWDOWN`: Index/ticker falls X% from 52-week high.
-  - `MA200`: Price crosses below 200-day moving average.
-  - `RSI`: Weekly RSI < 30.
+  - `SMA`: Price crosses below a simple moving average (e.g., SMA200).
+  - `VWMA`: Price crosses below a volume weighted moving average (e.g., VWMA200).
+  - `RSI`: 14-day RSI < 30.
   - `VIX`: VIX closes > Y.
 - **SELL**:
   - `PROFIT_TARGET`: Holding gain ≥ X%.
   - `TRAILING_DRAWDOWN`: Holding falls Y% from peak since purchase.
-  - `RSI`: Weekly RSI > 70.
-  - `MA200`: Price > Z% above MA200.
+  - `RSI`: 14-day RSI > 70.
+  - `SMA`: Price > Z% above a simple moving average (e.g., SMA200).
+  - `VWMA`: Price > Z% above a volume weighted moving average (e.g., VWMA200).
   - `AFTER_TAX_PROFIT`: After-tax gain ≥ W%.
 
 **Business Process**:
@@ -729,8 +738,9 @@ This section details the automated monitoring of market data and generation of n
   - `ticker`: String.
   - `closePrice`: EUR.
   - `highPrice`: EUR (52-week high for DRAWDOWN).
-  - `ma200`: EUR (200-day moving average).
-  - `rsiWeekly`: Number (weekly RSI).
+  - `sma200`: EUR (200-day simple moving average).
+  - `vwma200`: EUR (200-day volume weighted moving average).
+  - `rsi14`: Number (14-day RSI).
   - `vixClose`: Number (VIX closing value).
 - `Alert`:
   - `alertId`: Unique UUID.
@@ -787,7 +797,7 @@ sequenceDiagram
 **Example**:
 - Rule: BUY "QQQ.DE" when NASDAQ-100 drops 15% from peak and RSI < 30.
 - Market Data: NASDAQ-100 52-week high 12,000 EUR, close 10,200 EUR (15% drop), RSI 28.
-- Alert created: `marketData: {closePrice: 10200, rsiWeekly: 28}`, `notificationStatus: PENDING`.
+- Alert created: `marketData: {closePrice: 10200, rsi14: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
 ### 4.2. Monitoring and Notification Rules
@@ -1140,7 +1150,7 @@ flowchart LR
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
-- **Data Points**: OHLC prices, MA200, weekly RSI, VIX close, ATR.
+- **Data Points**: OHLC prices, SMA200, SMA50, SMA20, SMA7, VWMA200, VWMA50, VWMA20, VWMA7, 14-day RSI, VIX close, 14-day ATR.
 
 ### 6.4. Non-Functional Requirements
 
