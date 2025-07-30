@@ -33,6 +33,8 @@ cryptography==45.0.5
     #   pyjwt
 fastapi==0.116.1
     # via -r backend/requirements.in
+finta==1.3
+    # via -r backend/requirements.in
 firebase-admin==7.0.0
     # via -r backend/requirements.in
 google-api-core[grpc]==2.25.1
@@ -99,15 +101,15 @@ idna==3.10
 msgpack==1.1.1
     # via cachecontrol
 numpy==2.3.2
-    # via pandas
+    # via
+    #   finta
+    #   pandas
 packaging==25.0
     # via gunicorn
 pandas==2.3.1
     # via
     #   -r backend/requirements.in
-    #   pandas-ta
-pandas-ta==0.3.14b0
-    # via -r backend/requirements.in
+    #   finta
 passlib[bcrypt]==1.7.4
     # via -r backend/requirements.in
 proto-plus==1.26.1

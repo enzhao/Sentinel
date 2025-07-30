@@ -10,10 +10,11 @@ service = AlphaVantageService(api_key="TEST_KEY")
 
 def create_mock_async_get(json_response):
     """Helper to create a mock that can be awaited and has an awaitable .json() method."""
-    mock_response = AsyncMock()
+    mock_response = Mock()
     mock_response.raise_for_status = Mock()
-    mock_response.json = AsyncMock(return_value=json_response)
+    mock_response.json = Mock(return_value=json_response)
     
+    # The client's get method is async, so it returns an awaitable.
     async def get_mock(*args, **kwargs):
         return mock_response
         
