@@ -1,8 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import uuid
 from datetime import datetime
+from fastapi import BackgroundTasks
 
 # A sample decoded token to be returned by the mock auth verifier
 SAMPLE_USER = {"uid": "test-user-123", "email": "test@example.com"}
@@ -46,16 +47,20 @@ def test_create_and_get_enriched_portfolio(test_client: TestClient):
     assert create_response.status_code == 201
     portfolio_id = create_response.json()["portfolioId"]
 
-    # 3. Add a holding to that portfolio
-    add_holding_response = test_client.post(
-        f"/api/users/me/portfolios/{portfolio_id}/holdings",
-        json={
-            "ticker": "AAPL",
-            "lots": [{"purchaseDate": "2025-01-01T12:00:00Z", "quantity": 10, "purchasePrice": 150.0}]
-        },
-        headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
-    )
-    assert add_holding_response.status_code == 200
+    # 3. Add a holding to that portfolio, and check that backfill is triggered
+    with patch('src.services.backfill_service.backfill_service.backfill_historical_data') as mock_backfill:
+        add_holding_response = test_client.post(
+            f"/api/users/me/portfolios/{portfolio_id}/holdings",
+            json={
+                "ticker": "AAPL",
+                "lots": [{"purchaseDate": "2025-01-01T12:00:00Z", "quantity": 10, "purchasePrice": 150.0}]
+            },
+            headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
+        )
+        assert add_holding_response.status_code == 200
+        # Check that the background task was called
+        mock_backfill.assert_called_once_with("AAPL")
+
 
     # 4. Retrieve the final, updated portfolio
     get_response = test_client.get(

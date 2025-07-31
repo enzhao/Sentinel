@@ -3,6 +3,7 @@ from typing import List, Optional
 from src.models import PortfolioDB, CreatePortfolioRequest, UpdatePortfolioRequest, AddHoldingRequest, HoldingDB
 from src.firebase_setup import db
 from src.services.backfill_service import backfill_service
+from fastapi import BackgroundTasks
 
 
 portfolios_collection = db.collection('portfolios')
@@ -89,7 +90,7 @@ class PortfolioService:
         return True
 
     @staticmethod
-    def add_holding(portfolio_id: str, user_id: str, holding_data: AddHoldingRequest) -> Optional[PortfolioDB]:
+    def add_holding(portfolio_id: str, user_id: str, holding_data: AddHoldingRequest, background_tasks: BackgroundTasks) -> Optional[PortfolioDB]:
         """
         Adds a new holding to a portfolio.
         """
@@ -108,6 +109,9 @@ class PortfolioService:
         portfolios_collection.document(portfolio_id).update({
             'holdings': firestore.ArrayUnion([new_holding.model_dump()])
         })
+        
+        # Trigger a background task to backfill historical data for the new ticker
+        background_tasks.add_task(backfill_service.backfill_historical_data, new_holding.ticker)
 
         updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
         return PortfolioDB(**updated_portfolio_doc.to_dict())

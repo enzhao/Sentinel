@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from typing import List
 from src.auth import get_current_user
 from src.services.portfolio_service import portfolio_service
@@ -190,6 +190,7 @@ def delete_portfolio(
 def add_holding_to_portfolio(
     portfolio_id: str,
     holding_data: AddHoldingRequest,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     _idempotency_key: str = Depends(require_idempotency_key)
 ):
@@ -197,7 +198,7 @@ def add_holding_to_portfolio(
     Add a new holding with lots to a portfolio.
     """
     try:
-        updated_portfolio_db = portfolio_service.add_holding(portfolio_id, current_user["uid"], holding_data)
+        updated_portfolio_db = portfolio_service.add_holding(portfolio_id, current_user["uid"], holding_data, background_tasks)
         if not updated_portfolio_db:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
         
