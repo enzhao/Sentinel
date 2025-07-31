@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.2.0](https://github.com/enzhao/Sentinel/compare/v0.1.0...v0.2.0) (2025-07-31)
+
+
+### Features
+
+* **auth:** disable public user signup ([35bc64a](https://github.com/enzhao/Sentinel/commit/35bc64a1ac3f5a14f8b905cc60e0c312082f8835)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **backend:** calculate all technical indicators internally ([4b1ac9c](https://github.com/enzhao/Sentinel/commit/4b1ac9c04d19ff20960d4e29219f04bf9599cb2e)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **data:** expand market data model with VWMA ([161ec97](https://github.com/enzhao/Sentinel/commit/161ec976fa4514bcc5027788c9a482e005289481)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **frontend:** refactor UI to vuetify and update tests ([989a5b3](https://github.com/enzhao/Sentinel/commit/989a5b3d785ab2fe3db7f792be29b7f44c4ddafc)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **spec:** add MACD indicator and clarify VWMA calculation ([9550bef](https://github.com/enzhao/Sentinel/commit/9550bef915c7d33cd2f9dc5939126e67039ee35d)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+
+
+### Bug Fixes
+
+* **api:** use REST convention for user creation. [#4](https://github.com/enzhao/Sentinel/issues/4) ([72499ee](https://github.com/enzhao/Sentinel/commit/72499ee70eb5458cc4429393e6020817357cfe65))
+* **backend:** add expireAt to make TTL configurable in GC Firestore. [#4](https://github.com/enzhao/Sentinel/issues/4) ([6b7bad8](https://github.com/enzhao/Sentinel/commit/6b7bad8ef40b7d3a38e685c57d8509a0cd0af104))
+* **deps:** regenerate requirements.txt to fix Docker build ([b6f60f9](https://github.com/enzhao/Sentinel/commit/b6f60f95a10abbe02e7572b699cf26326352236e)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **firebase:** proxy api requests to cloud run ([1ddac9d](https://github.com/enzhao/Sentinel/commit/1ddac9dedce554fbf03f54b2a2cb59db538a5f13)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **frontend:** correct auth state mocking in tests ([de4e9b1](https://github.com/enzhao/Sentinel/commit/de4e9b1b8cbf9cea8a65c17ae89d46a6402d986e)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **signup:** add idempotencyKey handling and fix the API, also the frontend  [#4](https://github.com/enzhao/Sentinel/issues/4) ([04e0247](https://github.com/enzhao/Sentinel/commit/04e0247f21221742db8f7fc588d596502cf14de5))
+
 ## [0.1.0](https://github.com/enzhao/Sentinel/compare/v0.0.0...v0.1.0) (2025-07-28)
 
 
