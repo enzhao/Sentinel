@@ -1,4 +1,13 @@
 import os
+import sys
+from pathlib import Path
+
+# Add the 'backend' directory to the Python path
+# This is necessary because the script is now in 'util' and needs to import from 'backend/src'
+project_root = Path(__file__).parent.parent
+backend_path = project_root / "backend"
+sys.path.insert(0, str(backend_path))
+
 # Set the environment to 'local' before any other imports
 os.environ['ENV'] = 'local'
 

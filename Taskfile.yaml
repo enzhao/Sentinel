@@ -1,0 +1,90 @@
+version: '3'
+
+tasks:
+  generate-messages:
+    desc: "Parses product_spec.md to generate message files for frontend and backend."
+    cmds:
+      - echo "🐍 Generating message files from product_spec.md..."
+      - backend/venv/bin/python util/generate_messages.py
+      - echo "✅ Message files generated."
+    silent: false
+
+  generate-openapi:
+    desc: "Generates the OpenAPI spec (api/sentinel-invest-backend.yaml) from the FastAPI app."
+    cmds:
+      - echo "🐍 Generating OpenAPI specification from the application code..."
+      - backend/venv/bin/python util/generate_openapi.py
+      - echo "✅ OpenAPI specification generated successfully."
+    silent: false
+
+  backend:setup-venv:
+    desc: "Creates the Python virtual environment in the backend directory."
+    dir: backend
+    cmds:
+      - echo "🐍 Creating Python virtual environment..."
+      - python3 -m venv venv
+      - echo "✅ Virtual environment created at backend/venv."
+    silent: false
+
+  backend:compile-deps:
+    desc: "Generates requirements.txt from .in files using pip-compile."
+    dir: backend
+    cmds:
+      - echo "🐍 Compiling production dependencies..."
+      - venv/bin/pip-compile requirements.in
+      - echo "🐍 Compiling development dependencies..."
+      - venv/bin/pip-compile requirements-dev.in
+      - echo "✅ Dependency files generated."
+    silent: false
+
+  backend:install-deps:
+    desc: "Installs backend Python dependencies using pip-tools."
+    dir: backend
+    cmds:
+      - echo "🐍 Installing/syncing Python dependencies..."
+      - venv/bin/pip-sync requirements.txt requirements-dev.txt
+      - echo "✅ Dependencies are up to date."
+    silent: false
+
+  backend:sync-deps:
+    desc: "Compiles and installs/syncs backend dependencies in one step."
+    cmds:
+      - task: backend:compile-deps
+      - task: backend:install-deps
+    silent: false
+
+  backend:test:
+    desc: "Runs backend unit and integration tests with pytest."
+    dir: backend
+    cmds:
+      - echo "🧪 Running backend tests with coverage..."
+      - venv/bin/pytest --cov=src
+    silent: false
+
+  backend:build-docker:
+    desc: "Builds the production Docker image for the backend."
+    cmds:
+      - echo "🐳 Building Docker image..."
+      - docker build -t sentinel-backend ./backend
+      - echo "✅ Docker image 'sentinel-backend' built."
+    silent: false
+
+  backend:run-docker:
+    desc: "Runs the backend Docker container."
+    cmds:
+      - echo "🚀 Running backend container..."
+      - >
+        docker run --rm -p 8000:8000 
+        -e ENV=local 
+        -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json 
+        -v $(pwd)/backend/.env:/app/.env 
+        sentinel-backend
+    silent: false
+
+  backend:run-local:
+    desc: "Runs the full local backend workflow: test, build, and run."
+    cmds:
+      - task: backend:test
+      - task: backend:build-docker
+      - task: backend:run-docker
+    silent: false

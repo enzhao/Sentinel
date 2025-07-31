@@ -16,3 +16,18 @@ When asked to perform a task, please follow these steps:
 backend/venv/bin/pytest --cov=src backend/tests/
 ```
 
+## How to do a release:
+
+```bash
+npm run release -- --release-as minor  # can also be major or patch
+``` 
+Then,
+
+```bash
+git push --follow-tags origin main
+```
+
+
+## Instruction for committing code:
+
+commit the changes I have staged, using commitlint-conform message. Link this commit to ticket #4, but do not close this ticket. 

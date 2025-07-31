@@ -4,6 +4,8 @@ from .auth import get_current_user
 from .routers import user_router
 from .firebase_setup import db
 from .middleware import idempotency_middleware
+from . import messages  # Initialize the message manager
+
 
 app = FastAPI()
 

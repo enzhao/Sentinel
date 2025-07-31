@@ -3,50 +3,6 @@ info:
   title: FastAPI
   version: 0.1.0
 paths:
-  /api/users:
-    post:
-      tags:
-      - Users & Portfolios
-      summary: Create User and Default Portfolio
-      description: "Handles the one-time initialization of a new user after they have\
-        \ signed up\nvia Firebase Authentication.\n\nThis endpoint:\n1.  Verifies\
-        \ the user's ID token.\n2.  Checks if a user document already exists in Firestore.\
-        \ If so, it returns\n    the existing user, enforcing idempotency.\n3.  If\
-        \ the user is new, it creates a `User` document in Firestore with their\n\
-        \    UID, email, and chosen username.\n4.  Creates a default portfolio for\
-        \ the new user (e.g., \"My First Portfolio\").\n5.  Links the default portfolio\
-        \ to the user by setting `defaultPortfolioId`.\n6.  Returns the newly created\
-        \ and fully initialized `User` object."
-      operationId: create_user_and_portfolio_api_users_post
-      security:
-      - OAuth2PasswordBearer: []
-      parameters:
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InitializeUserRequest'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/users/me:
     get:
       tags:
@@ -507,17 +463,6 @@ components:
       required:
       - ticker
       title: Holding
-    InitializeUserRequest:
-      properties:
-        username:
-          type: string
-          maxLength: 30
-          minLength: 3
-          title: Username
-      type: object
-      required:
-      - username
-      title: InitializeUserRequest
     Lot:
       properties:
         currentPrice:

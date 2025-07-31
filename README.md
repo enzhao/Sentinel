@@ -4,7 +4,7 @@
 
 An automated, strategy-driven tool to help long-term investors make disciplined, data-driven decisions without the need for constant market-watching.
 
-## Core Philosophy
+## 1. Core Philosophy
 
 Sentinel is designed to be a **behavioral guardrail**. It helps investors stick to their own long-term strategy by filtering out short-term market noise and providing timely, actionable alerts based on pre-defined, data-driven rules. The core methodology is a hybrid **"Core-Satellite"** model, combining systematic accumulation with opportunistic, tax-aware rebalancing.
 
@@ -12,7 +12,7 @@ For a full breakdown of the project's vision, features, and architecture, please
 
 ---
 
-## Project Structure
+## 2. Project Structure
 
 ```bash
 .
@@ -48,53 +48,58 @@ For a full breakdown of the project's vision, features, and architecture, please
 
 ---
 
-## Getting Started
+## 3. Getting Started
 
-### 1. Cloud & Project Setup
+> **Note for Developers:** For detailed information on testing, message handling, and other development workflows, please see the **[Developer Guide](./docs/developer_guide.md)**.
+
+### 3.1. Cloud & Project Setup
 
 Before running the application locally, you must set up the required Google Cloud and Firebase services. Follow the step-by-step guide here:
 
 ➡️ **[./docs/google_cloud_setup.md](./docs/google_cloud_setup.md)**
 
-### 2. Local Development
+### 3.2. Local Development
 
 After completing the cloud setup, follow these steps to run the application on your local machine.
 
-#### Backend Setup
+#### 3.2.1 Backend Setup
 The backend setup is managed by a single script that automates the creation of a virtual environment, installation of dependencies, and setting of environment variables.
 
-1.  **Prerequisites:**
-    - Ensure you have `pyenv` installed to manage Python versions.
-    - **Install pip-tools:** This is a one-time setup for your system.
-      ```bash
-      pip install pip-tools
-      ```
-    - Place your `serviceAccountKey.json` file in the `/backend` directory.
-    - Create and configure your `backend/.env` file by copying the example:
-      ```bash
-      cp backend/.env.example backend/.env
-      ```
-      Then, add your Alpha Vantage API key to the new `.env` file.
+##### 3.2.1.1. Prerequisites:
 
-2.  **Run the Backend Build Script:**
-    From the project root, make the script executable and run it:
+- Ensure you have `pyenv` installed to manage Python versions.
+- **Install pip-tools:** This is a one-time setup for your system.
     ```bash
-    chmod +x run_local_backend.sh
-    ./run_local_backend.sh
+    pip install pip-tools
     ```
-    The script is the Makefile for the backend. It will run tests for backend, build a docker image and run a container.  
-
-3.  **Run the Backend Server without Docker:**
-    After the setup is complete, you can run the server at any time:
+- Place your `serviceAccountKey.json` file in the `/backend` directory.
+- Create and configure your `backend/.env` file by copying the example:
     ```bash
-    # Make sure your virtual environment is activated
-    source backend/venv/bin/activate
-    uvicorn src.main:app --reload
+    cp backend/.env.example backend/.env
     ```
-    ✅ The backend API should now be running at `http://127.0.0.1:8000`.
+    Then, add your Alpha Vantage API key to the new `.env` file.
+
+##### 3.2.1.2. Run the Backend Build Script:
+
+From the project root, make the script executable and run it:
+```bash
+chmod +x run_local_backend.sh
+./run_local_backend.sh
+```
+The script is the Makefile for the backend. It will run tests for backend, build a docker image and run a container.  
+
+##### 3.2.1.3. Run the Backend Server without Docker:
+
+After the setup is complete, you can run the server at any time:
+```bash
+# Make sure your virtual environment is activated
+source backend/venv/bin/activate
+uvicorn src.main:app --reload
+```
+✅ The backend API should now be running at `http://127.0.0.1:8000`.
 
 
-##### Testing External Services
+##### 3.2.1.4.Test External Services
 
 The project includes utility scripts to perform live tests against external services. These are not part of the main test suite and should be run manually for validation.
 
@@ -113,30 +118,37 @@ The project includes utility scripts to perform live tests against external serv
   backend/venv/bin/python util/e2e_data_pipeline_test.py
   ```
 
-##### API Specification
+###### 3.2.1.5 API Specification
+
 The backend API is documented using the OpenAPI standard. The specification file, `api/sentinel-invest-backend.yaml`, is generated automatically from the FastAPI application's code and its Pydantic models.
 
 - **Generating the Specification:**
-  If you make changes to the API (e.g., add new endpoints or modify data models), you must regenerate the specification file. Run the following command from the `backend` directory:
+  If you make changes to the API (e.g., add new endpoints or modify data models), you must regenerate the specification file. Run the following command from the **project root**:
   ```bash
   # Make sure your virtual environment is activated
-  python generate_openapi.py
+  backend/venv/bin/python util/generate_openapi.py
   ```
   This ensures that the documentation is always in sync with the implementation.
 
-##### Managing Backend Dependencies
+###### 3.2.1.6. Managing Backend Dependencies
 
 - To add or remove a package, edit the `requirements.in` file.
 - After editing, run `pip-compile requirements.in` to update `requirements.txt`.
 - Then, run `pip-sync` to update your local virtual environment.
 
-#### Frontend Setup
+#### 3.2.2. Frontend Setup
 1.  Open a **new terminal** and navigate to the frontend directory: `cd frontend`
 2.  Install dependencies: `npm install`
 3.  Run the frontend server: `npm run dev`
     ✅ The frontend application should now be running at `http://localhost:5173`.
 
-### 3. Local Docker Test (Optional)
+
+## 4. Testing
+
+The testing strategy for Sentinel Invest is documented in the [`testing_strategy.md`](docs/testing_strategy.md) file. It includes unit tests, integration tests, and end-to-end tests for both the backend and frontend.
+
+
+### 4.1. Local Docker Testing
 
 To test the production container locally, run the following commands from the project root:
 
@@ -152,25 +164,25 @@ To test the production container locally, run the following commands from the pr
 
 ---
 
-## Deployment
+## 5. Deployment
 
 The application is deployed automatically via the GitHub Actions workflow in `.github/workflows/deploy.yml` on every push to the `main` branch.
 
 -   The **backend** is containerized and deployed to **Google Cloud Run**.
 -   The **frontend** is built and deployed to **Firebase Hosting**.
 
-### Live URLs
+### 5.1. Live URLs
 
 -   **Frontend:** [https://sentinel-invest.web.app](https://sentinel-invest.web.app)
 -   **Backend API:** The URL is dynamic. Check the output of the `deploy-backend` job in the latest GitHub Actions run.
 
 ---
 
-## Development Workflow
+## 6. Development Workflow
 
 This project uses a standardized workflow to ensure a clean, understandable, and automated version history.
 
-### Commit Messages
+### 6.1. Commit Messages
 
 All commit messages must follow the [**Conventional Commits**](https://www.conventionalcommits.org/) specification. This is enforced automatically by a `commit-msg` hook.
 
@@ -186,7 +198,7 @@ The basic format is:
 -   `test`: Adding or correcting tests.
 -   `chore`: Changes to the build process or auxiliary tools (e.g., `chore(deps): update fastapi`)
 
-### Creating a Release
+### 6.2. Creating a Release
 
 Creating a new version, generating a changelog, and tagging the release is an automated process.
 
@@ -211,8 +223,27 @@ Creating a new version, generating a changelog, and tagging the release is an au
     ```
 
 
-## Important Notes
+## 7. Important Notes
 
 For security reasons, I disabled public access to the backend API on Google Cloud Run. To test the cloud instance, I just first allow the public access for my backend service. This setting can be found in Cloud Run --> select my service --> Security tab.
 
 I also tuned down max instance to 1, and the allowed concurrency numbers. These settings can be found also under Cloud Run --> select my service, under one of the tabs. 
+
+---
+
+## 8. Future Development Workflow
+
+To ensure the project remains robust and maintainable, we are transitioning to a spec-driven development process. All future development should follow these steps:
+
+1.  **Update the Product Spec**: Before writing any code, define the new business requirements or changes in `product_spec.md`. This is the human-readable source of truth.
+
+2.  **Update the OpenAPI Spec**: Manually translate the business requirements from the product spec into a formal API contract by editing `api/sentinel-invest-backend.yaml`. This file is the machine-readable source of truth for the API.
+
+3.  **Regenerate the API Skeleton**: Use an OpenAPI generator tool to create or update the boilerplate for the API routers and models from the YAML spec. This ensures the implementation perfectly matches the contract.
+    ```bash
+    npx @openapitools/openapi-generator-cli generate -i api/sentinel-invest-backend.yaml -g python-fastapi -o api/generated_backend_fastapi
+    ```
+
+4.  **Implement the Business Logic**: With the API skeleton in place, write or modify the business logic in the `services` directory (e.g., `portfolio_service.py`). The generated API endpoints will call these services.
+
+5.  **Write Tests**: Create unit and integration tests for the new business logic to ensure it is correct and robust. 
