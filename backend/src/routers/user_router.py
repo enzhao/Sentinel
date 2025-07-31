@@ -24,57 +24,57 @@ router = APIRouter(
 # User Management Endpoints
 # ======================================================================================
 
-@router.post("/users", status_code=status.HTTP_201_CREATED, response_model=User, summary="Create User and Default Portfolio")
-def create_user_and_portfolio(
-    request: InitializeUserRequest,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
-    """
-    Handles the one-time initialization of a new user after they have signed up
-    via Firebase Authentication.
+# @router.post("/users", status_code=status.HTTP_201_CREATED, response_model=User, summary="Create User and Default Portfolio")
+# def create_user_and_portfolio(
+#     request: InitializeUserRequest,
+#     current_user: dict = Depends(get_current_user),
+#     _idempotency_key: str = Depends(require_idempotency_key)
+# ):
+#     """
+#     Handles the one-time initialization of a new user after they have signed up
+#     via Firebase Authentication.
 
-    This endpoint:
-    1.  Verifies the user's ID token.
-    2.  Checks if a user document already exists in Firestore. If so, it returns
-        the existing user, enforcing idempotency.
-    3.  If the user is new, it creates a `User` document in Firestore with their
-        UID, email, and chosen username.
-    4.  Creates a default portfolio for the new user (e.g., "My First Portfolio").
-    5.  Links the default portfolio to the user by setting `defaultPortfolioId`.
-    6.  Returns the newly created and fully initialized `User` object.
-    """
-    uid = current_user["uid"]
-    email = current_user.get("email")
+#     This endpoint:
+#     1.  Verifies the user's ID token.
+#     2.  Checks if a user document already exists in Firestore. If so, it returns
+#         the existing user, enforcing idempotency.
+#     3.  If the user is new, it creates a `User` document in Firestore with their
+#         UID, email, and chosen username.
+#     4.  Creates a default portfolio for the new user (e.g., "My First Portfolio").
+#     5.  Links the default portfolio to the user by setting `defaultPortfolioId`.
+#     6.  Returns the newly created and fully initialized `User` object.
+#     """
+#     uid = current_user["uid"]
+#     email = current_user.get("email")
 
-    # Idempotency check: If user already exists, return them.
-    existing_user = user_service.get_user(uid)
-    if existing_user:
-        return existing_user
+#     # Idempotency check: If user already exists, return them.
+#     existing_user = user_service.get_user(uid)
+#     if existing_user:
+#         return existing_user
 
-    # Create the user document in Firestore
-    new_user = user_service.create_user(uid=uid, email=email, username=request.username)
-    if not new_user:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create user.")
+#     # Create the user document in Firestore
+#     new_user = user_service.create_user(uid=uid, email=email, username=request.username)
+#     if not new_user:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create user.")
 
-    # Create the default portfolio
-    default_portfolio_data = CreatePortfolioRequest(name="My First Portfolio")
-    new_portfolio = portfolio_service.create_portfolio(
-        user_id=uid,
-        portfolio_data=default_portfolio_data
-    )
-    if not new_portfolio:
-        # This case should ideally not be reached if user creation was successful
-        # and portfolio name is not a duplicate for a new user.
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create default portfolio.")
+#     # Create the default portfolio
+#     default_portfolio_data = CreatePortfolioRequest(name="My First Portfolio")
+#     new_portfolio = portfolio_service.create_portfolio(
+#         user_id=uid,
+#         portfolio_data=default_portfolio_data
+#     )
+#     if not new_portfolio:
+#         # This case should ideally not be reached if user creation was successful
+#         # and portfolio name is not a duplicate for a new user.
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create default portfolio.")
 
-    # Link the portfolio and update the user
-    update_settings = UpdateUserSettingsRequest(defaultPortfolioId=new_portfolio.portfolioId)
-    updated_user = user_service.update_user_settings(uid, update_settings)
-    if not updated_user:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to link default portfolio to user.")
+#     # Link the portfolio and update the user
+#     update_settings = UpdateUserSettingsRequest(defaultPortfolioId=new_portfolio.portfolioId)
+#     updated_user = user_service.update_user_settings(uid, update_settings)
+#     if not updated_user:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to link default portfolio to user.")
 
-    return updated_user
+#     return updated_user
 
 @router.get("/users/me", response_model=User)
 def get_user_me(current_user: dict = Depends(get_current_user)):

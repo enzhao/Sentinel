@@ -32,11 +32,9 @@ describe('AppBar.vue', () => {
 
     // Use `findComponent` for Vuetify components
     const loginBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log In')
-    const signupBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Sign Up')
     const logoutBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log Out')
 
     expect(loginBtn?.exists()).toBe(true)
-    expect(signupBtn?.exists()).toBe(true)
     expect(logoutBtn).toBe(undefined)
   })
 

@@ -1,6 +1,6 @@
 # Sentinel Invest 
 
-![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange) ![Coverage](https://img.shields.io/badge/coverage-78%25-green)
+![Status](https://img.shields.io/badge/status-Work%20In%20Progress-orange) ![Coverage](https://img.shields.io/badge/coverage-81%25-green)
 
 An automated, strategy-driven tool to help long-term investors make disciplined, data-driven decisions without the need for constant market-watching.
 

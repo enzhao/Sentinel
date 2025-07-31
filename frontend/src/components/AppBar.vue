@@ -42,7 +42,6 @@ const navItems = [
       <div class="d-none d-sm-flex align-center">
         <template v-if="!isAuthenticated">
           <v-btn to="/login" text>Log In</v-btn>
-          <v-btn to="/signup" color="secondary">Sign Up</v-btn>
         </template>
         <template v-else>
           <span class="mr-4">{{ user?.email }}</span>
@@ -60,9 +59,6 @@ const navItems = [
         <template v-if="!isAuthenticated">
           <v-list-item to="/login" @click="drawer = false">
             <v-list-item-title>Log In</v-list-item-title>
-          </v-list-item>
-          <v-list-item to="/signup" @click="drawer = false">
-            <v-list-item-title>Sign Up</v-list-item-title>
           </v-list-item>
         </template>
         <template v-else>

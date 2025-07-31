@@ -86,3 +86,6 @@ firebase-debug.log*
 
 # Service account keys
 **/serviceAccountKey.json
+
+
+util/create_user.py

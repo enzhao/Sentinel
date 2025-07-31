@@ -1,6 +1,5 @@
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
-import SignUpView from '../views/SignUpView.vue'
 import PortfolioView from '../views/PortfolioView.vue'
 import AboutView from '../views/AboutView.vue'
 
@@ -19,11 +18,6 @@ const routes = [
     path: '/login',
     name: 'login',
     component: LoginView
-  },
-  {
-    path: '/signup',
-    name: 'signup',
-    component: SignUpView
   },
   {
     path: '/portfolio',

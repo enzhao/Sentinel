@@ -15,76 +15,17 @@ def mock_auth():
     with patch('firebase_admin.auth.verify_id_token', return_value=SAMPLE_USER_AUTH) as _mock:
         yield _mock
 
-def test_create_user_happy_path(test_client: TestClient):
+def test_create_user_endpoint_is_disabled(test_client: TestClient):
     """
-    Tests that the first call to POST /api/users creates a new user and a default portfolio,
-    and correctly links them.
-    """
-    # Mock services to simulate a new user
-    with patch('src.services.user_service.user_service.get_user', return_value=None):
-        with patch('src.services.user_service.user_service.create_user') as mock_create_user:
-            with patch('src.services.portfolio_service.portfolio_service.create_portfolio') as mock_create_portfolio:
-                with patch('src.services.user_service.user_service.update_user_settings') as mock_update_user:
-
-                    # Define what the mocks should return
-                    username = "test-api"
-                    created_user = UserDB(uid=SAMPLE_USER_AUTH["uid"], email=SAMPLE_USER_AUTH["email"], username=username)
-                    created_portfolio = PortfolioDB(portfolioId="pf-default-123", userId=SAMPLE_USER_AUTH["uid"], name="My First Portfolio")
-                    
-                    # Create final user object by updating the defaultPortfolioId
-                    user_data = created_user.model_dump()
-                    user_data['defaultPortfolioId'] = created_portfolio.portfolioId
-                    final_user = UserDB(**user_data)
-
-                    mock_create_user.return_value = created_user
-                    mock_create_portfolio.return_value = created_portfolio
-                    mock_update_user.return_value = final_user
-
-                    response = test_client.post(
-                        "/api/users",
-                        json={"username": username},
-                        headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
-                    )
-
-                    assert response.status_code == 201
-                    mock_create_user.assert_called_once_with(uid=SAMPLE_USER_AUTH["uid"], email=SAMPLE_USER_AUTH["email"], username=username)
-                    mock_create_portfolio.assert_called_once()
-                    mock_update_user.assert_called_once()
-                    
-                    data = response.json()
-                    assert data["uid"] == SAMPLE_USER_AUTH["uid"]
-                    assert data["defaultPortfolioId"] == "pf-default-123"
-
-def test_create_user_already_exists(test_client: TestClient):
-    """
-    Tests that if a user already exists, POST /api/users returns the existing user data
-    without creating a new user or portfolio (idempotency).
-    """
-    existing_user = UserDB(uid=SAMPLE_USER_AUTH["uid"], email=SAMPLE_USER_AUTH["email"], username="existing_user", defaultPortfolioId="pf-existing-123")
-    
-    with patch('src.services.user_service.user_service.get_user', return_value=existing_user):
-        with patch('src.services.user_service.user_service.create_user') as mock_create_user:
-            response = test_client.post(
-                "/api/users",
-                json={"username": "any_name"}, # This won't be used
-                headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
-            )
-            assert response.status_code == 201 # The endpoint returns the user if exists
-            mock_create_user.assert_not_called()
-            data = response.json()
-            assert data["username"] == "existing_user"
-
-def test_create_user_missing_idempotency_key(test_client: TestClient):
-    """
-    Tests that a POST request to /api/users fails if the Idempotency-Key header is missing.
+    Tests that the POST /api/users endpoint is disabled and returns a 404 Not Found error.
+    This endpoint is intentionally disabled to control user creation.
     """
     response = test_client.post(
         "/api/users",
-        json={"username": "test-api"},
-        headers={"Authorization": "Bearer test-token"} # No Idempotency-Key
+        json={"username": "any_name"},
+        headers={"Authorization": "Bearer test-token", "Idempotency-Key": str(uuid.uuid4())}
     )
-    assert response.status_code == 400 # Based on idempotency_middleware
-    assert "Idempotency-Key header is required" in response.json()["detail"]
+    assert response.status_code == 404
 
 def test_get_user_me(test_client: TestClient):
     """

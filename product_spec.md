@@ -955,6 +955,7 @@ sequenceDiagram
 ```
 
 - **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data. After the frontend completes the Firebase signup, it immediately calls the Sentinel backend's `POST /api/users` endpoint. This backend endpoint is responsible for creating the `User` document in Firestore (including the user-provided `username`), creating a default `Portfolio`, and linking the two.
+> **Note**: For security reasons, the public `POST /api/users` endpoint has been disabled in the current deployment. The app author uses a backend script (`util/create_user.py`) to provision new users.
 - **Success Response**: User account is created in Firebase. The backend creates a corresponding `User` document in Firestore, creates a default `Portfolio`, and links the two.
 - **Sub-Rules**:
 
