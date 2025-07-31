@@ -42,16 +42,16 @@ The backend testing strategy focuses on verifying the correctness of the API, bu
     - Utility functions and data model validation.
     - Individual FastAPI dependencies.
 - **Method**: External dependencies like the database or external APIs are mocked using libraries like `unittest.mock`.
-- **Location**: `backend/tests/`
+- **Location**: `backend/tests/unit/`
 
 ### 3.2. Backend Integration Tests
 
-- **Purpose**: To test the interaction between different backend components, primarily focusing on API endpoints and their connection to the database.
+- **Purpose**: To test the interaction between different backend components. This includes testing API endpoints, service-layer logic, and database interactions.
 - **Scope**:
-    - **API Endpoint Tests**: Verifying that API endpoints (`/api/users/me/portfolios`) correctly process requests, perform business logic, and interact with the database.
-    - **Service-to-Database Tests**: Ensuring that service-layer logic correctly reads from and writes to the test database.
-- **Method**: These tests use a real, but separate, test database (`.env.test`) to ensure data isolation. They make HTTP requests to the test instance of the FastAPI application. Authentication is mocked at the API boundary to test endpoint logic without depending on the live Firebase service.
-- **Location**: `backend/tests/` (e.g., `test_portfolio_api.py`, `test_user_integration.py`)
+    - **API Endpoint Tests**: Verifying that API endpoints (e.g., `/api/users/me`, `/api/portfolios`) correctly process requests, trigger the appropriate business logic, and return the expected responses. These tests confirm that the web layer is correctly integrated with the service layer.
+    - **End-to-End Flow Tests**: Verifying a complete data flow through the system, such as a user signing up and their data being correctly persisted in the database.
+- **Method**: These tests use a real, but separate, test database (`.env.test`) to ensure data isolation. They make HTTP requests to a test instance of the FastAPI application. Authentication is typically mocked at the API boundary to test endpoint logic without depending on live external services.
+- **Location**: `backend/tests/integration/` (e.g., `test_user_api.py`, `test_portfolio_api.py`, `test_user_integration.py`)
 
 ---
 
