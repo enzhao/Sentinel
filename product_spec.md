@@ -28,18 +28,19 @@ Sentinel addresses three challenges faced by retail investors:
 
 The specification is organized as follows:
 - **Section 1: Common Notes**: Defines global rules and conventions that apply across the entire system.
-- **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves, including data models and processes for creation, updates, and retrieval.
-- **Section 3: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules, including rule evaluation logic.
-- **Section 4: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
-- **Section 5: User Authentication and Authorization**: Covers user identity and access control.
-- **Section 6: Technical Specifications**: Specifies the architecture, security, data sources.
+- **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
+- **Section 3: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
+- **Section 4: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules.
+- **Section 5: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
+- **Section 6: User Authentication and Authorization**: Covers user identity and access control.
+- **Section 7: Technical Specifications**: Specifies the architecture, security, data sources.
 
 Each section includes:
 1. **Data Model and Business Process**:
    - Data schemas for the entity/process.
    - A high-level description of the process, with examples and sequence diagrams.
 2. **Business Rules**:
-   - Detailed operational logic with unique Rule IDs (e.g., P_1000 for portfolio, R_1000 for rules).
+   - Detailed operational logic with unique Rule IDs (e.g., P_1000 for portfolio, H_1000 for holdings, R_1000 for rules).
    - Success (Informational, I_XXXX), Warning (E_XXXX), and Error conditions (E_E_XXXX).
    - Tables listing conditions, checkpoints, outcomes, and message keys.
    - Messages with placeholders (e.g., `{amount}`) for clarity.
@@ -92,23 +93,6 @@ This section details the management of user portfolios. A user can create and ma
     - `taxFreeAllowance`: Number (EUR, e.g., 1000).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
-
-- **`Holding` (Object within Portfolio):**
-  - `holdingId`: String (Unique UUID generated on creation).
-  - `ticker`: String (e.g., "VOO", "QQQ.DE").
-  - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
-  - `WKN`: String (Optional, e.g., "A0YEDG").
-  - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
-  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
-  - `currency`: Enum (`EUR`, `USD`, `GBP`).
-  - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
-  - `lots`: Array of `Lot` objects.
-
-- **`Lot` (Object within Holding):**
-  - `lotId`: String (Unique UUID generated on creation).
-  - `purchaseDate`: ISODateTime.
-  - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
 
 - **`MarketData` (Firestore Document):**
   - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
@@ -166,7 +150,6 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 -   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). This portfolio is marked as the default (`isDefault: true`).
 -   **Additional Portfolios:** The user can create additional portfolios, each with a unique name. These are created with `isDefault: false`.
 -   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio. This portfolio will be the one displayed by default after login. When a portfolio is set as the default, any other portfolio previously marked as default for that user will be unset.
--   **Adding Holdings:** Users can populate any of their portfolios by adding new holdings. When a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
 
 ##### 2.1.2.2. Retrieval
 
@@ -175,11 +158,11 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 ##### 2.1.2.3. Update
 
--   An authenticated user can modify any aspect of a specific portfolio they own, including its name and description, updating cash reserves, changing tax settings, or modifying its holdings.
+-   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
 
 ##### 2.1.2.4. Deletion
 
--   An authenticated user can delete an entire portfolio, or individual holdings/lots within a portfolio.
+-   An authenticated user can delete an entire portfolio.
 -   If a user deletes their default portfolio:
     -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
     -   If more than one portfolio remains, the application will prompt the user to select a new default.
@@ -357,12 +340,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Updates a specific portfolio's settings (like name, description, or `defaultCurrency`), cash reserves, or tax settings. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
-- **Examples**:
-    - **Example**:
-        - A user wants to add 10 shares of "VOO" to their "Real Money" portfolio (ID: `xyz-123`).
-        - They make a request to add a holding to portfolio `xyz-123`.
-        - The portfolio is updated in the database with the new holding, and the API responds immediately. In the background, the system checks if it has historical data for "VOO" and fetches it if needed.
+- **Description**: Updates a specific portfolio's settings (like name, description, or `defaultCurrency`), cash reserves, or tax settings. The target portfolio is identified by its `portfolioId`.
 - **Success Response**: The specified `Portfolio` document is updated in Firestore with the new data and a new `modifiedAt` timestamp.
 - **Sub-Rules**:
 
@@ -370,26 +348,19 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | P_I_3001 | Update succeeds | All provided data is valid, user is authenticated and owns the specified portfolio. | Response Sentinel to User | The specified portfolio is updated. | P_I_3001 |
 | P_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
-| **P_I_3003** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | P_E_3101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Update rejected with HTTP 403 Forbidden. | P_E_3101 |
 | P_E_3102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Update rejected with HTTP 404 Not Found. | P_E_3102 |
-| P_E_3103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
-| P_E_3104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
-| P_E_3105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3105 |
-| P_E_3106 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3106 |
-| P_E_3107 | Invalid portfolio settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, portfolio `name` or `description` is invalid, or `defaultCurrency` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3107 |
-| P_E_3108 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3108 |
+| P_E_3103 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
+| P_E_3104 | Invalid portfolio settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, portfolio `name` or `description` is invalid, or `defaultCurrency` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
+| P_E_3105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3105 |
 
 **Messages**:
 - **P_I_3001**: "Portfolio {portfolioId} updated successfully."
 - **P_E_3101**: "User is not authorized to modify portfolio {portfolioId}."
 - **P_E_3102**: "Portfolio with ID {portfolioId} not found."
-- **P_E_3103**: "Ticker '{ticker}' is invalid or not supported."
-- **P_E_3104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
-- **P_E_3105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
-- **P_E_3106**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
-- **P_E_3107**: "Portfolio name, description, currency, or tax settings are invalid."
-- **P_E_3108**: "A valid Idempotency-Key header is required for this operation."
+- **P_E_3103**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
+- **P_E_3104**: "Portfolio name, description, currency, or tax settings are invalid."
+- **P_E_3105**: "A valid Idempotency-Key header is required for this operation."
 
 ##### 2.2.3.2. P_3400: Set Default Portfolio
 
@@ -441,72 +412,6 @@ sequenceDiagram
 - **P_I_3401**: "Default portfolio updated successfully."
 - **P_E_3501**: "User is not authorized to set this portfolio as default."
 - **P_E_3502**: "Portfolio with the specified ID not found."
-
-##### 2.2.3.3. P_3600: Portfolio Update (Import from File)
-
-- **Sequence Diagram for Portfolio Update (Add Holding)**
-
-```mermaid
-sequenceDiagram
-    participant User as User (Frontend)
-    participant Sentinel as Sentinel Backend
-    participant AI as AI Service (LLM)
-    participant DB as Database
-
-    User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/import<br>(file, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
-    Sentinel->>AI: 3. Parse file content for transactions
-    activate AI
-    AI-->>Sentinel: 4. Return structured JSON data (lots)
-    deactivate AI
-    Sentinel-->>User: 5. Return parsed JSON data for review
-    deactivate Sentinel
-
-    Note over User: User reviews and corrects the data<br> on the frontend
-    
-    User->>Sentinel: 6. POST /api/users/me/portfolios/{portfolioId}/import/confirm<br> (corrected data, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 7. Validate corrected data
-    Sentinel->>DB: 8. Merge confirmed lots into the specified Portfolio
-    activate DB
-    DB-->>Sentinel: 9. Confirm Update
-    deactivate DB
-    Sentinel-->>User: 10. HTTP 200 (Portfolio Updated)
-    deactivate Sentinel
-```
-
-- **Description**: Handles the multi-step process of adding transaction history to a specific portfolio from a user-uploaded file.
-- **Examples**:
-    - **Example**:
-        - A user uploads a CSV file to import transactions into their "Paper Trading" portfolio.
-        - The backend calls the AI service and returns a JSON array with three parsed lot objects to the frontend.
-        - The user sees the three transactions in an editable table, corrects a typo in one of the purchase prices, and clicks "Confirm".
-        - The corrected data is sent to the backend and merged into the "Paper Trading" portfolio.
-- **Success Response**: The specified portfolio is successfully updated with the confirmed transaction lots from the file.
-- **Sub-Rules**:
-
-| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
-|:---|:---|:---|:---|:---|:---|
-| P_I_3601 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | P_I_3601 |
-| P_I_3602 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | P_I_3602 |
-| P_I_3603 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully merged into the specified portfolio. | Request User to Sentinel | Portfolio is updated in the database. | P_I_3603 |
-| P_I_3604 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
-| P_E_3701 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | P_E_3701 |
-| P_E_3702 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | P_E_3702 |
-| P_E_3703 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | P_E_3703 |
-| P_E_3704 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | P_E_3704 |
-| P_E_3705 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | P_E_3705 |
-
-**Messages**:
-- **P_I_3601**: "File uploaded successfully for portfolio {portfolioId}. Parsing in progress..."
-- **P_I_3602**: "File parsed successfully. Please review the extracted transactions."
-- **P_I_3603**: "Portfolio {portfolioId} successfully updated with imported transactions."
-- **P_E_3701**: "User is not authorized to import data to portfolio {portfolioId}."
-- **P_E_3702**: "Invalid file. Please upload a valid CSV or text file under 5MB."
-- **P_E_3703**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
-- **P_E_3704**: "The corrected data contains errors. Please check all fields and resubmit."
-- **P_E_3705**: "A valid Idempotency-Key header is required for this operation."
 
 #### 2.2.4. Portfolio Deletion
 
@@ -569,9 +474,150 @@ sequenceDiagram
 - **P_E_4102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-##### 2.2.4.2. P_4200: Portfolio Deletion (Holdings/Lots)
+---
 
-- **Sequence Diagram for Portfolio Deletion (Holdings/Lots)**
+## 3. Holding Management
+
+This section details the management of individual holdings and their purchase lots within a portfolio.
+
+### 3.1. Holding Data Model and Business Process
+
+#### 3.1.1. Associated Data Models
+
+- **`Holding` (Object within Portfolio):**
+  - `holdingId`: String (Unique UUID generated on creation).
+  - `ticker`: String (e.g., "VOO", "QQQ.DE").
+  - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
+  - `WKN`: String (Optional, e.g., "A0YEDG").
+  - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
+  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
+  - `currency`: Enum (`EUR`, `USD`, `GBP`).
+  - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
+  - `lots`: Array of `Lot` objects.
+
+- **`Lot` (Object within Holding):**
+  - `lotId`: String (Unique UUID generated on creation).
+  - `purchaseDate`: ISODateTime.
+  - `quantity`: Number (of shares, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+
+#### 3.1.2. Business Process
+
+The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots within a specific portfolio.
+
+- **Adding Holdings/Lots:** Users can populate any of their portfolios by adding new holdings or new lots to existing holdings. When a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
+- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see P_3600).
+
+### 3.2. Holding Management Rules
+
+This section will detail the specific rules for creating, updating, and deleting holdings and lots.
+
+#### 3.2.1. Holding/Lot Creation
+
+##### 3.2.1.1. H_1000: Manual Creation
+
+- **Description**: Manually adds a new holding to a portfolio, or a new purchase lot to an existing holding. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
+- **Success Response**: The specified `Portfolio` document is updated in Firestore with the new holding/lot and a new `modifiedAt` timestamp.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_1001 | Creation succeeds | All provided data is valid, user is authenticated and owns the specified portfolio. | Response Sentinel to User | The specified portfolio is updated with the new holding/lot. | H_I_1001 |
+| H_I_1002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
+| **H_I_1003** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
+| H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
+| H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
+| H_E_1103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1103 |
+| H_E_1104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1104 |
+| H_E_1105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1105 |
+| H_E_1106 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | H_E_1106 |
+
+**Messages**:
+- **H_I_1001**: "Holding/lot added successfully to portfolio {portfolioId}."
+- **H_E_1101**: "User is not authorized to modify portfolio {portfolioId}."
+- **H_E_1102**: "Portfolio with ID {portfolioId} not found."
+- **H_E_1103**: "Ticker '{ticker}' is invalid or not supported."
+- **H_E_1104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
+- **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
+- **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
+
+##### 3.2.1.2. H_1200: Import from File
+
+- **Sequence Diagram for Holding Import**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant AI as AI Service (LLM)
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/holdings/import<br>(file, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    Sentinel->>AI: 3. Parse file content for transactions
+    activate AI
+    AI-->>Sentinel: 4. Return structured JSON data (lots)
+    deactivate AI
+    Sentinel-->>User: 5. Return parsed JSON data for review
+    deactivate Sentinel
+
+    Note over User: User reviews and corrects the data<br> on the frontend
+    
+    User->>Sentinel: 6. POST /api/users/me/portfolios/{portfolioId}/holdings/import/confirm<br> (corrected data, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 7. Validate corrected data
+    Sentinel->>DB: 8. Merge confirmed lots into the specified Portfolio
+    activate DB
+    DB-->>Sentinel: 9. Confirm Update
+    deactivate DB
+    Sentinel-->>User: 10. HTTP 200 (Portfolio Updated)
+    deactivate Sentinel
+```
+
+- **Description**: Handles the multi-step process of adding holdings and lots to a specific portfolio from a user-uploaded file.
+- **Examples**:
+    - **Example**:
+        - A user uploads a CSV file to import transactions into their "Paper Trading" portfolio.
+        - The backend calls the AI service and returns a JSON array with three parsed lot objects to the frontend.
+        - The user sees the three transactions in an editable table, corrects a typo in one of the purchase prices, and clicks "Confirm".
+        - The corrected data is sent to the backend and merged into the "Paper Trading" portfolio.
+- **Success Response**: The specified portfolio is successfully updated with the confirmed transaction lots from the file.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_1201 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_1201 |
+| H_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_1202 |
+| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully merged into the specified portfolio. | Request User to Sentinel | Portfolio is updated in the database. | H_I_1203 |
+| H_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
+| H_E_1301 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_1301 |
+| H_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_1302 |
+| H_E_1303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | H_E_1303 |
+| H_E_1304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | H_E_1304 |
+| H_E_1305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | H_E_1305 |
+
+**Messages**:
+- **H_I_1201**: "File uploaded successfully for portfolio {portfolioId}. Parsing in progress..."
+- **H_I_1202**: "File parsed successfully. Please review the extracted transactions."
+- **H_I_1203**: "Portfolio {portfolioId} successfully updated with imported transactions."
+- **H_E_1301**: "User is not authorized to import data to portfolio {portfolioId}."
+- **H_E_1302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
+- **H_E_1303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
+- **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
+- **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
+
+#### 3.2.2. H_2000: Holding/Lot Retrieval
+
+- **Description**: (Placeholder) Retrieves the details of a specific holding or lot.
+
+#### 3.2.3. H_3000: Holding/Lot Update
+
+- **Description**: (Placeholder) Modifies the details of an existing holding or lot.
+
+#### 3.2.4. H_4000: Holding/Lot Deletion
+
+- **Sequence Diagram for Holding/Lot Deletion**
 
 ```mermaid
 sequenceDiagram
@@ -603,7 +649,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Deletes a specific purchase lot or an entire holding from within a user's portfolio.
+- **Description**: Deletes a specific purchase lot or an entire holding (including all its lots) from within a user's portfolio.
 - **Examples**:
     - **Example**:
         - A user has a holding of "AAPL" with two purchase lots in their "Real Money" portfolio. They realize they entered one lot incorrectly.
@@ -614,25 +660,25 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| P_I_4201 | Item deletion succeeds | User is authenticated, owns the portfolio, and the specified holding/lot ID exists within it. | Response Sentinel to User | Item successfully deleted. | P_I_4201 |
-| P_I_4202 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
-| P_E_4301 | User unauthorized | User is not authenticated or does not own the portfolio. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | P_E_4301 |
-| P_E_4302 | Item not found | The specified `holdingId` or `lotId` does not exist in the user's portfolio. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | P_E_4302 |
-| P_E_4303 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | P_E_4303 |
+| H_I_4001 | Item deletion succeeds | User is authenticated, owns the portfolio, and the specified holding/lot ID exists within it. | Response Sentinel to User | Item successfully deleted. | H_I_4001 |
+| H_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
+| H_E_4101 | User unauthorized | User is not authenticated or does not own the portfolio. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | H_E_4101 |
+| H_E_4102 | Item not found | The specified `holdingId` or `lotId` does not exist in the user's portfolio. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | H_E_4102 |
+| H_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | H_E_4103 |
 
 **Messages**:
-- **P_I_4201**: "Item successfully deleted from portfolio {portfolioId}."
-- **P_E_4301**: "User is not authorized to delete items from this portfolio."
-- **P_E_4302**: "The specified holding or lot could not be found in this portfolio."
-- **P_E_4303**: "A valid Idempotency-Key header is required for this operation."
+- **H_I_4001**: "Item successfully deleted from portfolio {portfolioId}."
+- **H_E_4101**: "User is not authorized to delete items from this portfolio."
+- **H_E_4102**: "The specified holding or lot could not be found in this portfolio."
+- **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
 --- 
 
-## 3. Strategy Rule Management
+## 4. Strategy Rule Management
 
 This section details the management of buy and sell rules that encode the user’s investment strategy.
 
-### 3.1. Rule Data Model and Business Process
+### 4.1. Rule Data Model and Business Process
 
 **Associated Data Models**:
 - `Rule`:
@@ -647,7 +693,7 @@ This section details the management of buy and sell rules that encode the user�
   - `conditionId`: Unique UUID.
   - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`, `MACD`).
   - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN, `{period: 200, operator: 'cross_below'}` for SMA).
-- `Alert` (generated, see Section 3):
+- `Alert` (generated, see Section 5):
   - `alertId`: Unique UUID.
   - `ruleId`: UUID linking to rule.
   - `triggeredAt`: ISODateTime.
@@ -699,11 +745,11 @@ sequenceDiagram
 **Example**:
 - User creates a BUY rule for "QQQ.DE": `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
 - Rule created with `ruleId: "rule-001"`, `status: "ENABLED"`.
-- If NASDAQ-100 drops 15% from peak and RSI < 30, an alert is triggered (Section 3).
+- If NASDAQ-100 drops 15% from peak and RSI < 30, an alert is triggered (Section 5).
 
-### 3.2. Rule Management Rules
+### 4.2. Rule Management Rules
 
-#### 3.2.1. R_1000: Rule Creation
+#### 4.2.1. R_1000: Rule Creation
 
 - **Description**: Creates a new buy or sell rule for a specific portfolio.
 - **Success Response**: Rule created with `ENABLED` status.
@@ -725,7 +771,7 @@ sequenceDiagram
 - **R_E_1103**: "Conditions invalid: Unknown type or invalid parameters."
 - **R_E_1104**: "Portfolio {portfolioId} not found."
 
-#### 3.2.2. R_2000: Rule Update
+#### 4.2.2. R_2000: Rule Update
 
 - **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
@@ -742,7 +788,7 @@ sequenceDiagram
 - **R_E_2101**: "User is not authorized to update rule {ruleId}."
 - **R_E_2102**: "Rule {ruleId} not found."
 
-#### 3.2.3. R_3000: Rule Retrieval
+#### 4.2.3. R_3000: Rule Retrieval
 
 - **Description**: Retrieves rule(s) for a portfolio. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules`.
 - **Success Response**: Rule(s) returned.
@@ -757,11 +803,11 @@ sequenceDiagram
 - **R_I_3001**: "Rules retrieved successfully for portfolio {portfolioId}."
 - **R_E_3101**: "User is not authorized to retrieve rules for portfolio {portfolioId}."
 
-## 4. Market Monitoring and Notification
+## 5. Market Monitoring and Notification
 
 This section details the automated monitoring of market data and generation of notifications when rules are triggered.
 
-### 4.1. Monitoring and Notification Data Model and Business Process
+### 5.1. Monitoring and Notification Data Model and Business Process
 
 **Associated Data Models**:
 - `MarketData` (fetched daily):
@@ -831,9 +877,9 @@ sequenceDiagram
 - Alert created: `marketData: {closePrice: 10200, rsi14: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
-### 4.2. Monitoring and Notification Rules
+### 5.2. Monitoring and Notification Rules
 
-#### 4.2.1. M_1000: Rule Evaluation and Alert Generation
+#### 5.2.1. M_1000: Rule Evaluation and Alert Generation
 
 - **Description**: Evaluates rules and generates alerts.
 - **Success Response**: Alerts created for triggered rules.
@@ -849,7 +895,7 @@ sequenceDiagram
 - **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
 - **M_E_1101**: "Market data unavailable for ticker {ticker}, evaluation skipped."
 
-#### 4.2.2. M_2000: Notification Delivery
+#### 5.2.2. M_2000: Notification Delivery
 
 - **Description**: Sends alerts to users.
 - **Success Response**: Notifications delivered.
@@ -864,13 +910,13 @@ sequenceDiagram
 - **N_I_2001**: "Notification for alert {alertId} sent successfully."
 - **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
 
-## 5. User Authentication and Authorization
+## 6. User Authentication and Authorization
 
 This section details the processes for user registration, login, logout, and the authorization mechanism for securing backend API endpoints. The system uses a decoupled authentication model where the frontend communicates directly with Firebase Authentication for identity management, and the Sentinel backend is only responsible for validating the resulting tokens.
 
-### 5.1. User Authentication Data Model and Business Process
+### 6.1. User Authentication Data Model and Business Process
 
-#### 5.1.1. Associated Data Models
+#### 6.1.1. Associated Data Models
 
 - **`User` (Firestore Document):**
   - A new top-level collection (`users`) will be created to store application-specific user data.
@@ -896,7 +942,7 @@ This section details the processes for user registration, login, logout, and the
   - A short-lived, signed token generated by the Firebase client-side SDK upon successful login or signup.
   - The frontend sends this token in the `Authorization` header of every API request to prove the user's identity.
 
-#### 5.1.2. Business Process
+#### 6.1.2. Business Process
 
 1. **Signup/Login (Frontend ↔ Firebase)**: The user interacts with the frontend UI. The Vue.js application communicates **directly and exclusively with the Firebase Authentication service** to handle user creation and password verification. The Sentinel backend is **not involved** in this process.
 2. **Token Issuance (Firebase → Frontend)**: Upon successful authentication, Firebase issues a secure ID Token (JWT) to the frontend. The frontend stores this token and the user's state.
@@ -908,7 +954,7 @@ This section details the processes for user registration, login, logout, and the
 
 **Note on User Deletion:** The functionality for a user to delete their own account is a planned feature for a future release and is out of scope for the MVP.
 
-#### 5.1.3. Sequence Diagram for an Authenticated API Call
+#### 6.1.3. Sequence Diagram for an Authenticated API Call
 
 ```mermaid
 sequenceDiagram
@@ -933,9 +979,9 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-### 5.2. User Authentication and Authorization Rules
+### 6.2. User Authentication and Authorization Rules
 
-#### 5.2.1. U_1000: User Signup
+#### 6.2.1. U_1000: User Signup
 
 - **Sequence Diagram for User Signup**
 ```mermaid
@@ -1005,7 +1051,7 @@ sequenceDiagram
 - **U_E_1105**: "Username must be at least 3 characters long."
 - **U_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-#### 5.2.2. U_2000: User Login
+#### 6.2.2. U_2000: User Login
 
 - **Sequence Diagram for User Login**
 ```mermaid
@@ -1032,7 +1078,7 @@ sequenceDiagram
 - **U_I_2001**: "User {username} logged in successfully."
 - **U_E_2101**: "Invalid login credentials. Please check your email and password."
 
-#### 5.2.3. U_3000: API Request Authorization
+#### 6.2.3. U_3000: API Request Authorization
 
 - **Sequence Diagram for API Request Authorization**
 ```mermaid
@@ -1069,16 +1115,16 @@ sequenceDiagram
 - **U_E_3103**: "The provided ID token has expired. Please log in again."
 
 
-## 6. Technical Specifications
+## 7. Technical Specifications
 
-### 6.1. Architecture
+### 7.1. Architecture
 
-#### 6.1.1. Architectural Principles
+#### 7.1.1. Architectural Principles
 
 - **Stateless Backend**: The backend API is designed to be completely stateless. User authentication is handled via short-lived, self-contained JWTs (Firebase ID Tokens) sent with each request. This eliminates the need for server-side sessions, enhances security, and allows for seamless horizontal scalability on platforms like Google Cloud Run.
 - **Monolith for MVP**: The backend is a "Self-Contained System" (a well-structured monolith) for the MVP to prioritize development speed and simplicity. It can be refactored into microservices in the future if required by scale.
 
-#### 6.1.2. Components
+#### 7.1.2. Components
 
 - **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
   - **UI Framework**: Vuetify (Material Design).
@@ -1091,7 +1137,7 @@ sequenceDiagram
 - **Market Data**: Alpha Vantage API (for raw OHLCV price data).
 - **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
 
-#### 6.1.3. Architectural Diagram
+#### 7.1.3. Architectural Diagram
 
 ```mermaid
 flowchart LR
@@ -1149,7 +1195,7 @@ flowchart LR
     class User,Platform,Ext zone;
 ```
 
-### 6.2. Security
+### 7.2. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
@@ -1176,7 +1222,7 @@ flowchart LR
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
-### 6.3. Data Sources
+### 7.3. Data Sources
 
 - **Provider**: Alpha Vantage.
 - **Frequency**: Data is fetched from the provider under two conditions:
@@ -1184,7 +1230,7 @@ flowchart LR
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-### 6.4. Non-Functional Requirements
+### 7.4. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
