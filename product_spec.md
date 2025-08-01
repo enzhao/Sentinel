@@ -505,8 +505,12 @@ This section details the management of individual holdings and their purchase lo
 
 The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots within a specific portfolio.
 
-- **Adding Holdings/Lots:** Users can populate any of their portfolios by adding new holdings or new lots to existing holdings. When a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
-- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see P_3600).
+- **Adding Holdings/Lots:** Users can add new holdings to a portfolio. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
+    - If a unique security is found, its identifiers (Ticker, ISIN, WKN) are automatically populated.
+    - If multiple securities (e.g., a stock listed on different exchanges with different tickers) are found for a given ISIN/WKN, the user is prompted to select the correct one.
+    - Once a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
+- **Adding Lots:** Users can add new purchase lots to an existing holding.
+- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200).
 
 ### 3.2. Holding Management Rules
 
@@ -514,29 +518,68 @@ This section will detail the specific rules for creating, updating, and deleting
 
 #### 3.2.1. Holding/Lot Creation
 
-##### 3.2.1.1. H_1000: Manual Creation
+##### 3.2.1.1. H_1000: Manual Creation (Interactive)
 
-- **Description**: Manually adds a new holding to a portfolio, or a new purchase lot to an existing holding. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
+- **Sequence Diagram for Interactive Holding Creation**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant Lookup as Financial Instrument<br>Lookup Service
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/.../holdings/lookup<br> { identifier: "AAPL" }
+    activate Sentinel
+    Sentinel->>Lookup: 2. Search for "AAPL"
+    activate Lookup
+    Lookup-->>Sentinel: 3. Return Instrument(s)
+    deactivate Lookup
+    
+    alt Unique Instrument Found
+        Sentinel-->>User: 4a. Return single instrument details<br> (Ticker, ISIN, WKN)
+    else Multiple Instruments Found
+        Sentinel-->>User: 4b. Return list of instruments for selection
+        User->>Sentinel: 5. POST /api/.../holdings<br> { selectedInstrument, lotDetails }
+    end
+
+    Sentinel->>Sentinel: 6. Validate all data
+    Sentinel->>DB: 7. Add Holding/Lot to Portfolio
+    activate DB
+    DB-->>Sentinel: 8. Confirm Update
+    deactivate DB
+    
+    Note over Sentinel: If ticker is new, trigger backfill (async)
+    
+    Sentinel-->>User: 9. HTTP 201 Created
+    deactivate Sentinel
+```
+
+- **Description**: Manually adds a new holding to a portfolio via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the lot details to complete the creation.
 - **Success Response**: The specified `Portfolio` document is updated in Firestore with the new holding/lot and a new `modifiedAt` timestamp.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_1001 | Creation succeeds | All provided data is valid, user is authenticated and owns the specified portfolio. | Response Sentinel to User | The specified portfolio is updated with the new holding/lot. | H_I_1001 |
-| H_I_1002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
-| **H_I_1003** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
+| H_I_1001 | Lookup succeeds (unique) | A single, unique instrument is found for the provided identifier. | Response Sentinel to User | The instrument's details (Ticker, ISIN, WKN) are returned to the user to proceed with adding lot details. | H_I_1001 |
+| H_I_1002 | Lookup succeeds (multiple) | Multiple instruments are found for the provided identifier. | Response Sentinel to User | A list of possible instruments is returned to the user for selection. | H_I_1002 |
+| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | The specified portfolio is updated with the new holding/lot. | H_I_1003 |
+| H_I_1004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
+| **H_I_1005** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
 | H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
-| H_E_1103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1103 |
+| H_E_1103 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1103 |
 | H_E_1104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1104 |
-| H_E_1105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1105 |
+| H_E_1105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values in the final creation step. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1105 |
 | H_E_1106 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | H_E_1106 |
 
 **Messages**:
-- **H_I_1001**: "Holding/lot added successfully to portfolio {portfolioId}."
+- **H_I_1001**: "Instrument found. Please provide purchase details."
+- **H_I_1002**: "Multiple instruments found. Please select one to continue."
+- **H_I_1003**: "Holding added successfully to portfolio {portfolioId}."
 - **H_E_1101**: "User is not authorized to modify portfolio {portfolioId}."
 - **H_E_1102**: "Portfolio with ID {portfolioId} not found."
-- **H_E_1103**: "Ticker '{ticker}' is invalid or not supported."
+- **H_E_1103**: "No instrument could be found for the identifier '{identifier}'."
 - **H_E_1104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
 - **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
 - **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
@@ -1224,7 +1267,8 @@ flowchart LR
 
 ### 7.3. Data Sources
 
-- **Provider**: Alpha Vantage.
+- **Market Data Provider**: Alpha Vantage.
+- **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
