@@ -30,7 +30,7 @@ The specification is organized as follows:
 - **Section 1: Common Notes**: Defines global rules and conventions that apply across the entire system.
 - **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
 - **Section 3: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
-- **Section 4: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules.
+- **Section 4: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
 - **Section 5: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
 - **Section 6: User Authentication and Authorization**: Covers user identity and access control.
 - **Section 7: Technical Specifications**: Specifies the architecture, security, data sources.
@@ -121,20 +121,22 @@ This section details the management of user portfolios. A user can create and ma
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
   - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
-  - **Note on Currency Conversion**: For any holdings denominated in a currency different from the portfolio's `defaultCurrency` (e.g., a USD stock in a EUR-based portfolio), the system must convert all monetary values to the portfolio's `defaultCurrency` for aggregation and display in the `ComputedInfo`. This requires a reliable, daily source for exchange rates, which is a new dependency to be managed by the backend.
+  - **Note on Currency Conversion**:
+    - For **portfolio-level** views and aggregations, all monetary values from holdings are converted to the portfolio's `defaultCurrency`. This requires a reliable, daily source for exchange rates.
+    - For the detailed view of a **single holding**, performance metrics can be displayed in the holding's native currency without conversion.
   - **At the `Lot` level:**
-    - `currentPrice`: Number (in the portfolio's `defaultCurrency`).
-    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
-    - `preTaxProfit`: Number (in the portfolio's `defaultCurrency`).
-    - `capitalGainTax`: Number (in the portfolio's `defaultCurrency`).
-    - `afterTaxProfit`: Number (in the portfolio's `defaultCurrency`).
+    - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+    - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+    - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+    - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+    - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
   - **At the `Holding` level (aggregated from its lots):**
-    - `totalCost`: Number (in the portfolio's `defaultCurrency`).
-    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
-    - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
-    - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+    - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
+    - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
+    - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+    - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
     - `gainLossPercentage`: Number (%).
-  - **At the `Portfolio` level (aggregated from all holdings):**
+  - **At the `Portfolio` level (aggregated from all holdings, always in portfolio's `defaultCurrency`):**
     - `totalCost`: Number (in the portfolio's `defaultCurrency`).
     - `currentValue`: Number (in the portfolio's `defaultCurrency`).
     - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
@@ -508,7 +510,7 @@ The management of holdings and lots follows standard CRUD operations. A user can
 - **Adding Holdings/Lots:** Users can add new holdings to a portfolio. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
     - If a unique security is found, its identifiers (Ticker, ISIN, WKN) are automatically populated.
     - If multiple securities (e.g., a stock listed on different exchanges with different tickers) are found for a given ISIN/WKN, the user is prompted to select the correct one.
-    - Once a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache the last 200 days of historical market data for that ticker.
+    - Once a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache at least one year (366 days) of historical market data for that ticker. This enables the display of the holding's historical price development.
 - **Adding Lots:** Users can add new purchase lots to an existing holding.
 - **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200).
 
@@ -565,7 +567,7 @@ sequenceDiagram
 | H_I_1002 | Lookup succeeds (multiple) | Multiple instruments are found for the provided identifier. | Response Sentinel to User | A list of possible instruments is returned to the user for selection. | H_I_1002 |
 | H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | The specified portfolio is updated with the new holding/lot. | H_I_1003 |
 | H_I_1004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
-| **H_I_1005** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store the last 200 days of historical data for the new ticker. The user's API request is not blocked. | N/A |
+| **H_I_1005** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store at least one year (366 days) of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
 | H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
 | H_E_1103 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1103 |
@@ -719,16 +721,15 @@ sequenceDiagram
 
 ## 4. Strategy Rule Management
 
-This section details the management of buy and sell rules that encode the user’s investment strategy.
+This section details the management of buy and sell rules that encode the user’s investment strategy for a specific holding.
 
 ### 4.1. Rule Data Model and Business Process
 
 **Associated Data Models**:
-- `Rule`:
+- `Rule` (Firestore sub-collection under a Holding):
   - `ruleId`: Unique UUID.
-  - `portfolioId`: UUID linking to portfolio.
+  - `holdingId`: UUID linking to the parent holding.
   - `ruleType`: Enum (`BUY`, `SELL`).
-  - `ticker`: String (target asset, e.g., "QQQ.DE").
   - `conditions`: Array of `Condition` objects.
   - `status`: Enum (`ENABLED`, `PAUSED`).
   - `createdAt`, `modifiedAt`: ISODateTime.
@@ -739,6 +740,7 @@ This section details the management of buy and sell rules that encode the user�
 - `Alert` (generated, see Section 5):
   - `alertId`: Unique UUID.
   - `ruleId`: UUID linking to rule.
+  - `holdingId`: UUID linking to the holding.
   - `triggeredAt`: ISODateTime.
   - `marketData`: Object with relevant data (e.g., current price, RSI).
   - `taxInfo`: Object (for SELL rules, includes preTaxProfit, capitalGainTax, afterTaxProfit).
@@ -761,11 +763,11 @@ This section details the management of buy and sell rules that encode the user�
   - `MACD`: MACD line crosses below the signal line.
 
 **Business Process**:
-1. **Creation**: User creates a rule by specifying `ruleType`, `ticker`, and `conditions`. Rule is set to `ENABLED`.
-2. **Update**: User modifies conditions or status (`ENABLED`/`PAUSED`).
-3. **Deletion**: User removes a rule.
-4. **Retrieval**: User retrieves all rules or a specific rule.
-5. **Validation**: Ensures valid tickers, condition parameters, and user authorization.
+1. **Creation**: User creates a rule for a specific holding by specifying `ruleType` and `conditions`. The rule is set to `ENABLED`.
+2. **Update**: User modifies a rule's conditions or status (`ENABLED`/`PAUSED`).
+3. **Deletion**: User removes a rule from a holding.
+4. **Retrieval**: User retrieves all rules for a specific holding.
+5. **Validation**: Ensures valid condition parameters and user authorization.
 
 **Sequence Diagram for Rule Creation**
 
@@ -774,10 +776,10 @@ sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
     participant DB as Database
-    User->>Sentinel: POST /api/users/me/portfolios/{portfolioId}/rules <br> {ruleType, ticker, conditions}
+    User->>Sentinel: POST /api/.../holdings/{holdingId}/rules <br> {ruleType, conditions}
     activate Sentinel
-    Sentinel->>Sentinel: Validate Request (Auth, Ticker, Conditions)
-    Sentinel->>DB: Create Rule
+    Sentinel->>Sentinel: Validate Request (Auth, Conditions)
+    Sentinel->>DB: Create Rule for Holding
     activate DB
     DB-->>Sentinel: Confirm Creation
     deactivate DB
@@ -786,37 +788,35 @@ sequenceDiagram
 ```
 
 **Example**:
-- User creates a BUY rule for "QQQ.DE": `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
-- Rule created with `ruleId: "rule-001"`, `status: "ENABLED"`.
-- If NASDAQ-100 drops 15% from peak and RSI < 30, an alert is triggered (Section 5).
+- A user has a holding of "QQQ.DE". They create a BUY rule for it with `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
+- The rule is created and linked to the "QQQ.DE" holding.
+- If the conditions are met, an alert is triggered (Section 5).
 
 ### 4.2. Rule Management Rules
 
 #### 4.2.1. R_1000: Rule Creation
 
-- **Description**: Creates a new buy or sell rule for a specific portfolio.
+- **Description**: Creates a new buy or sell rule for a specific holding.
 - **Success Response**: Rule created with `ENABLED` status.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the portfolio. | Response Sentinel to User | Rule created. | R_I_1001 |
+| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the portfolio and holding. | Response Sentinel to User | Rule created. | R_I_1001 |
 | R_I_1002 | Idempotency key valid | `Idempotency-Key` provided, valid UUID. | Request User to Sentinel | Request proceeds. | N/A |
-| R_E_1101 | User unauthorized | User not authenticated or not portfolio owner. | Request User to Sentinel | Creation rejected. | R_E_1101 |
-| R_E_1102 | Invalid ticker | Ticker not supported by Alpha Vantage. | Request User to Sentinel | Creation rejected. | R_E_1102 |
-| R_E_1103 | Invalid conditions | Unknown condition type or invalid parameters. | Request User to Sentinel | Creation rejected. | R_E_1103 |
-| R_E_1104 | Portfolio not found | `portfolioId` invalid. | Sentinel internal | Creation rejected. | R_E_1104 |
+| R_E_1101 | User unauthorized | User not authenticated or not owner of the portfolio/holding. | Request User to Sentinel | Creation rejected. | R_E_1101 |
+| R_E_1102 | Invalid conditions | Unknown condition type or invalid parameters. | Request User to Sentinel | Creation rejected. | R_E_1102 |
+| R_E_1103 | Holding not found | `holdingId` invalid. | Sentinel internal | Creation rejected. | R_E_1103 |
 
 **Messages**:
-- **R_I_1001**: "Rule {ruleId} created successfully for portfolio {portfolioId}."
-- **R_E_1101**: "User is not authorized to create rule for portfolio {portfolioId}."
-- **R_E_1102**: "Ticker '{ticker}' is invalid or not supported."
-- **R_E_1103**: "Conditions invalid: Unknown type or invalid parameters."
-- **R_E_1104**: "Portfolio {portfolioId} not found."
+- **R_I_1001**: "Rule {ruleId} created successfully for holding {holdingId}."
+- **R_E_1101**: "User is not authorized to create a rule for this holding."
+- **R_E_1102**: "Conditions invalid: Unknown type or invalid parameters."
+- **R_E_1103**: "Holding {holdingId} not found."
 
 #### 4.2.2. R_2000: Rule Update
 
-- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules/{ruleId}`.
+- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/.../holdings/{holdingId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
 - **Sub-Rules**:
 
@@ -833,7 +833,7 @@ sequenceDiagram
 
 #### 4.2.3. R_3000: Rule Retrieval
 
-- **Description**: Retrieves rule(s) for a portfolio. The endpoint is `/api/users/me/portfolios/{portfolioId}/rules`.
+- **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/.../holdings/{holdingId}/rules`.
 - **Success Response**: Rule(s) returned.
 - **Sub-Rules**:
 
@@ -843,8 +843,8 @@ sequenceDiagram
 | R_E_3101 | User unauthorized | User not authorized. | Request User to Sentinel | Retrieval rejected. | R_E_3101 |
 
 **Messages**:
-- **R_I_3001**: "Rules retrieved successfully for portfolio {portfolioId}."
-- **R_E_3101**: "User is not authorized to retrieve rules for portfolio {portfolioId}."
+- **R_I_3001**: "Rules retrieved successfully for holding {holdingId}."
+- **R_E_3101**: "User is not authorized to retrieve rules for this holding."
 
 ## 5. Market Monitoring and Notification
 
@@ -864,6 +864,7 @@ This section details the automated monitoring of market data and generation of n
 - `Alert`:
   - `alertId`: Unique UUID.
   - `ruleId`: UUID.
+  - `holdingId`: UUID.
   - `triggeredAt`: ISODateTime.
   - `marketData`: Relevant data at trigger time.
   - `taxInfo`: For SELL rules, includes lot-specific tax calculations.
@@ -871,11 +872,11 @@ This section details the automated monitoring of market data and generation of n
 
 **Business Process**:
 1. **Monitoring**:
-   - Daily, after European market close, the Monitoring Engine fetches the latest raw price data (OHLCV) for all tickers in active rules.
+   - Daily, after European market close, the Monitoring Engine fetches the latest raw price data (OHLCV) for all unique tickers across all user holdings.
    - The engine then calculates all required technical indicators (SMA, RSI, MACD, etc.).
-   - For each `ENABLED` rule, conditions are evaluated against the newly calculated `MarketData` and the user's portfolio data.
+   - For each holding with `ENABLED` rules, its rules are evaluated against the newly calculated `MarketData` and the user's portfolio data.
 2. **Alert Generation**:
-   - If all conditions are met, an `Alert` is created with relevant `marketData` and `taxInfo` (for SELL rules, computed using FIFO).
+   - If all conditions for a rule are met, an `Alert` is created with relevant `marketData` and `taxInfo` (for SELL rules, computed using FIFO).
    - Alert is queued for notification.
 3. **Notification**:
    - Notification Service sends alerts via email and/or push notification.
@@ -892,15 +893,15 @@ sequenceDiagram
     participant Notify as Notification Service
     Scheduler->>Engine: Trigger Daily Job
     activate Engine
-    Engine->>DB: Fetch Active Rules
+    Engine->>DB: Fetch All Holdings with Active Rules
     activate DB
-    DB-->>Engine: Return Rules
+    DB-->>Engine: Return Holdings and Rules
     deactivate DB
-    Engine->>API: Fetch Market Data
+    Engine->>API: Fetch Market Data for all relevant Tickers
     activate API
     API-->>Engine: Return Market Data
     deactivate API
-    Engine->>Engine: Evaluate Rules
+    Engine->>Engine: Evaluate Rules against Holdings
     alt Rule Triggered
         Engine->>DB: Create Alert
         activate DB
@@ -915,9 +916,9 @@ sequenceDiagram
 ```
 
 **Example**:
-- Rule: BUY "QQQ.DE" when NASDAQ-100 drops 15% from peak and RSI < 30.
-- Market Data: NASDAQ-100 52-week high 12,000 EUR, close 10,200 EUR (15% drop), RSI 28.
-- Alert created: `marketData: {closePrice: 10200, rsi14: 28}`, `notificationStatus: PENDING`.
+- A user has a holding of "QQQ.DE" with a rule to BUY when it drops 15% from its peak and RSI < 30.
+- Market Data: "QQQ.DE" 52-week high 400 EUR, close 340 EUR (15% drop), RSI 28.
+- Alert created: `holdingId: "holding-001"`, `marketData: {closePrice: 340, rsi14: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
 ### 5.2. Monitoring and Notification Rules
@@ -932,7 +933,7 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | M_I_1001 | Evaluation succeeds | Rules evaluated, alerts generated. | Engine Internal | Alerts queued. | M_I_1001 |
 | M_I_1002 | SELL Tax calculation | For SELL rules, FIFO-based tax info computed. | Engine Internal | `taxInfo` included in alert. | N/A |
-| M_E_1101 | Market data unavailable | API call fails for a ticker. | Engine to API | Rule evaluation skipped, error logged. | M_E_1101 |
+| M_E_1101 | Market data unavailable | API call fails for a ticker. | Engine to API | Rule evaluation for that holding is skipped, error logged. | M_E_1101 |
 
 **Messages**:
 - **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
@@ -1271,7 +1272,7 @@ flowchart LR
 - **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
 - **Frequency**: Data is fetched from the provider under two conditions:
     1.  **Daily Sync**: A scheduled job runs once per day to fetch the latest closing prices for all unique tickers currently held by users.
-    2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches the last 200 days of historical data for that ticker.
+    2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
 ### 7.4. Non-Functional Requirements
