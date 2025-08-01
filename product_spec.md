@@ -84,7 +84,6 @@ This section details the management of user portfolios. A user can create and ma
   - `name`: String (User-defined, e.g., "My Real Portfolio", "Tech Speculation").
   - `description`: String (Optional, user-defined description for the portfolio).
   - `defaultCurrency`: Enum (`EUR`, `USD`, `GBP`, default: `EUR`).
-  - `holdings`: Array of `Holding` objects.
   - `cashReserve`: Object containing:
     - `totalAmount`: Number (in `defaultCurrency`).
     - `warChestAmount`: Number (in `defaultCurrency`, portion for opportunistic buying).
@@ -156,7 +155,7 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 ##### 2.1.2.2. Retrieval
 
 -   An authenticated user can retrieve a list of all portfolios they own.
--   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend reads from its internal market data cache to enrich the response with calculated performance metrics.
+-   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
 
 ##### 2.1.2.3. Update
 
@@ -164,7 +163,7 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 ##### 2.1.2.4. Deletion
 
--   An authenticated user can delete an entire portfolio.
+-   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
 -   If a user deletes their default portfolio:
     -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
     -   If more than one portfolio remains, the application will prompt the user to select a new default.
@@ -239,22 +238,27 @@ sequenceDiagram
     User->>Sentinel: 1. GET /api/users/me/portfolios/{portfolioId}<br> (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User
-    Sentinel->>DB: 3. Fetch Raw Portfolio Data<br> (holdings, lots)
+    Sentinel->>DB: 3. Fetch Portfolio Document
     activate DB
-    DB-->>Sentinel: 4. Return Raw Portfolio Data
+    DB-->>Sentinel: 4. Return Portfolio Document
+    deactivate DB
+
+    Sentinel->>DB: 5. Query 'holdings' collection where<br> portfolioId == {portfolioId}
+    activate DB
+    DB-->>Sentinel: 6. Return Holding Documents
     deactivate DB
 
     Note over Sentinel, DB: Backend now enriches the data from its internal cache
-    Sentinel->>DB: 5. Fetch Latest Prices for Tickers<br> from /marketData collection
+    Sentinel->>DB: 7. Fetch Latest Prices for Tickers<br> from /marketData collection
     activate DB
-    DB-->>Sentinel: 6. Return Cached Market Prices
+    DB-->>Sentinel: 8. Return Cached Market Prices
     deactivate DB
 
-    Sentinel->>Sentinel: 7. Calculate Performance & Tax Info
-    Sentinel-->>User: 8. Return Enriched Portfolio Data
+    Sentinel->>Sentinel: 9. Combine data & Calculate Performance
+    Sentinel-->>User: 10. Return Enriched Portfolio Data
     deactivate Sentinel
 ```
-- **Description**: Retrieves the full, detailed content of a single portfolio for the authenticated user. The backend enriches the response by reading from its internal `marketData` cache to calculate performance metrics (e.g., percentage gain) and tax information.
+- **Description**: Retrieves the full, detailed content of a single portfolio for the authenticated user. The backend first fetches the `Portfolio` document, then queries the `holdings` collection to find all associated holdings. The combined data is enriched by reading from the internal `marketData` cache to calculate performance metrics (e.g., percentage gain) and tax information.
 - **Examples**:
     - **Example**:
         - A user, who owns a portfolio containing two holdings (10 shares of "VOO" and 5 shares of "AAPL"), requests the details of that specific portfolio.
@@ -436,14 +440,21 @@ sequenceDiagram
         activate DB
         DB-->>Sentinel: 4. Confirm Deletion
         deactivate DB
-        Sentinel-->>User: 5. Return HTTP 204 No Content<br> (Success)
+
+        Note over Sentinel, DB: Backend now deletes all associated holdings
+        Sentinel->>DB: 5. Query and delete all holdings where<br> portfolioId == {portfolioId}
+        activate DB
+        DB-->>Sentinel: 6. Confirm Deletion
+        deactivate DB
+
+        Sentinel-->>User: 7. Return HTTP 204 No Content<br> (Success)
     else Authorization Fails
         Sentinel-->>User: Return HTTP 403 Forbidden
     end
     deactivate Sentinel
 ``` 
 
-- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action. If the deleted portfolio was the user's default, the system handles the default designation as follows:
+- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action. The backend first deletes the portfolio document, then deletes all `Holding` documents that were linked to it. If the deleted portfolio was the user's default, the system handles the default designation as follows:
     - If, after deletion, only one portfolio remains, that portfolio is automatically set as the new default.
     - If more than one portfolio remains, the application prompts the user to designate a new default.
 - **Examples**:
@@ -455,12 +466,12 @@ sequenceDiagram
         - A user has three portfolios: "Default A" (the default), "Side B", and "Side C".
         - They delete "Default A".
         - The backend deletes the portfolio. The application then prompts the user to select either "Side B" or "Side C" as the new default.
-- **Success Response**: The specified `Portfolio` document is deleted from Firestore.
+- **Success Response**: The specified `Portfolio` document and all its associated `Holding` documents are deleted from Firestore.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| P_I_4001 | Portfolio deletion succeeds | User is authenticated and owns the specified portfolio. | Response Sentinel to User | Portfolio successfully deleted. | P_I_4001 |
+| P_I_4001 | Portfolio deletion succeeds | User is authenticated and owns the specified portfolio. | Response Sentinel to User | Portfolio and its holdings successfully deleted. | P_I_4001 |
 | P_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
 | P_I_4003 | Default deleted (auto-set) | The deleted portfolio was the default, and exactly one portfolio remains. | Response Sentinel to User | The remaining portfolio is automatically set as the new default. | P_I_4003 |
 | P_I_4004 | Default deleted (prompt) | The deleted portfolio was the default, and more than one portfolio remains. | Response Sentinel to User | The user is prompted to select a new default portfolio. | P_I_4004 |
@@ -480,14 +491,18 @@ sequenceDiagram
 
 ## 3. Holding Management
 
-This section details the management of individual holdings and their purchase lots within a portfolio.
+This section details the management of individual holdings and their purchase lots. Holdings are top-level resources linked to a portfolio.
 
 ### 3.1. Holding Data Model and Business Process
 
 #### 3.1.1. Associated Data Models
 
-- **`Holding` (Object within Portfolio):**
-  - `holdingId`: String (Unique UUID generated on creation).
+- **`Holding` (Firestore Document):**
+  - A new top-level collection (`holdings`) will be created.
+  - The document ID for each holding will be a unique `holdingId`.
+  - `holdingId`: String (Unique UUID, the document ID).
+  - `portfolioId`: String (UUID of the parent portfolio).
+  - `userId`: String (Firebase Auth UID, links the holding to its owner).
   - `ticker`: String (e.g., "VOO", "QQQ.DE").
   - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
   - `WKN`: String (Optional, e.g., "A0YEDG").
@@ -505,9 +520,9 @@ This section details the management of individual holdings and their purchase lo
 
 #### 3.1.2. Business Process
 
-The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots within a specific portfolio.
+The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots.
 
-- **Adding Holdings/Lots:** Users can add new holdings to a portfolio. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
+- **Adding Holdings/Lots:** Users can add new holdings. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
     - If a unique security is found, its identifiers (Ticker, ISIN, WKN) are automatically populated.
     - If multiple securities (e.g., a stock listed on different exchanges with different tickers) are found for a given ISIN/WKN, the user is prompted to select the correct one.
     - Once a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache at least one year (366 days) of historical market data for that ticker. This enables the display of the holding's historical price development.
@@ -531,7 +546,7 @@ sequenceDiagram
     participant Lookup as Financial Instrument<br>Lookup Service
     participant DB as Database
 
-    User->>Sentinel: 1. POST /api/.../holdings/lookup<br> { identifier: "AAPL" }
+    User->>Sentinel: 1. POST /api/users/me/holdings/lookup<br> { identifier: "AAPL" }
     activate Sentinel
     Sentinel->>Lookup: 2. Search for "AAPL"
     activate Lookup
@@ -542,13 +557,13 @@ sequenceDiagram
         Sentinel-->>User: 4a. Return single instrument details<br> (Ticker, ISIN, WKN)
     else Multiple Instruments Found
         Sentinel-->>User: 4b. Return list of instruments for selection
-        User->>Sentinel: 5. POST /api/.../holdings<br> { selectedInstrument, lotDetails }
+        User->>Sentinel: 5. POST /api/users/me/holdings<br> { portfolioId, selectedInstrument, lotDetails }
     end
 
     Sentinel->>Sentinel: 6. Validate all data
-    Sentinel->>DB: 7. Add Holding/Lot to Portfolio
+    Sentinel->>DB: 7. Create Holding document in 'holdings' collection
     activate DB
-    DB-->>Sentinel: 8. Confirm Update
+    DB-->>Sentinel: 8. Confirm Creation
     deactivate DB
     
     Note over Sentinel: If ticker is new, trigger backfill (async)
@@ -557,15 +572,15 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Manually adds a new holding to a portfolio via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the lot details to complete the creation.
-- **Success Response**: The specified `Portfolio` document is updated in Firestore with the new holding/lot and a new `modifiedAt` timestamp.
+- **Description**: Manually adds a new holding via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the `portfolioId` and lot details to complete the creation.
+- **Success Response**: A new `Holding` document is created in the top-level `holdings` collection.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
 | H_I_1001 | Lookup succeeds (unique) | A single, unique instrument is found for the provided identifier. | Response Sentinel to User | The instrument's details (Ticker, ISIN, WKN) are returned to the user to proceed with adding lot details. | H_I_1001 |
 | H_I_1002 | Lookup succeeds (multiple) | Multiple instruments are found for the provided identifier. | Response Sentinel to User | A list of possible instruments is returned to the user for selection. | H_I_1002 |
-| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | The specified portfolio is updated with the new holding/lot. | H_I_1003 |
+| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | A new `Holding` document is created. | H_I_1003 |
 | H_I_1004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
 | **H_I_1005** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store at least one year (366 days) of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
@@ -612,11 +627,11 @@ sequenceDiagram
     User->>Sentinel: 6. POST /api/users/me/portfolios/{portfolioId}/holdings/import/confirm<br> (corrected data, ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 7. Validate corrected data
-    Sentinel->>DB: 8. Merge confirmed lots into the specified Portfolio
+    Sentinel->>DB: 8. Create multiple Holding documents in 'holdings' collection
     activate DB
-    DB-->>Sentinel: 9. Confirm Update
+    DB-->>Sentinel: 9. Confirm Creation
     deactivate DB
-    Sentinel-->>User: 10. HTTP 200 (Portfolio Updated)
+    Sentinel-->>User: 10. HTTP 200 (Holdings Created)
     deactivate Sentinel
 ```
 
@@ -626,15 +641,15 @@ sequenceDiagram
         - A user uploads a CSV file to import transactions into their "Paper Trading" portfolio.
         - The backend calls the AI service and returns a JSON array with three parsed lot objects to the frontend.
         - The user sees the three transactions in an editable table, corrects a typo in one of the purchase prices, and clicks "Confirm".
-        - The corrected data is sent to the backend and merged into the "Paper Trading" portfolio.
-- **Success Response**: The specified portfolio is successfully updated with the confirmed transaction lots from the file.
+        - The corrected data is sent to the backend, which creates new `Holding` documents in the database.
+- **Success Response**: New `Holding` documents are created in the `holdings` collection for the confirmed transactions.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
 | H_I_1201 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_1201 |
 | H_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_1202 |
-| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully merged into the specified portfolio. | Request User to Sentinel | Portfolio is updated in the database. | H_I_1203 |
+| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to create new `Holding` documents. | Request User to Sentinel | New holdings are created in the database. | H_I_1203 |
 | H_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
 | H_E_1301 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_1301 |
 | H_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_1302 |
@@ -654,11 +669,41 @@ sequenceDiagram
 
 #### 3.2.2. H_2000: Holding/Lot Retrieval
 
-- **Description**: (Placeholder) Retrieves the details of a specific holding or lot.
+- **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_2001 | Single retrieval succeeds | `GET /api/users/me/holdings/{holdingId}`. User is authenticated and owns the holding. | Response Sentinel to User | Full, enriched holding data is returned. | H_I_2001 |
+| H_I_2002 | List retrieval succeeds | `GET /api/users/me/portfolios/{portfolioId}/holdings`. User is authenticated and owns the portfolio. | Response Sentinel to User | A list of enriched holdings for the portfolio is returned. | H_I_2002 |
+| H_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested item. | Request User to Sentinel | Retrieval rejected with HTTP 401/403. | H_E_2101 |
+| H_E_2102 | Item not found | The specified `holdingId` or `portfolioId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2102 |
+
+**Messages**:
+- **H_I_2001**: "Holding {holdingId} retrieved successfully."
+- **H_I_2002**: "Holdings for portfolio {portfolioId} retrieved successfully."
+- **H_E_2101**: "User is not authorized to access this resource."
+- **H_E_2102**: "The requested item was not found."
 
 #### 3.2.3. H_3000: Holding/Lot Update
 
-- **Description**: (Placeholder) Modifies the details of an existing holding or lot.
+- **Description**: Modifies the details of an existing holding or one of its lots. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
+- **Success Response**: The `Holding` document is updated in Firestore.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_3001 | Update succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Holding updated. | H_I_3001 |
+| H_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
+| H_E_3101 | User unauthorized | User not authorized. | Request User to Sentinel | Update rejected. | H_E_3101 |
+| H_E_3102 | Holding not found | `holdingId` invalid. | Sentinel internal | Update rejected. | H_E_3102 |
+| H_E_3103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | H_E_3103 |
+
+**Messages**:
+- **H_I_3001**: "Holding {holdingId} updated successfully."
+- **H_E_3101**: "User is not authorized to update holding {holdingId}."
+- **H_E_3102**: "Holding {holdingId} not found."
+- **H_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
 #### 3.2.4. H_4000: Holding/Lot Deletion
 
@@ -670,22 +715,27 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. DELETE /api/users/me/<br>portfolios/{portfolioId}/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
+    User->>Sentinel: 1. DELETE /api/users/me/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
     activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
     
     alt Authorization OK & Item Found
-        Sentinel->>DB: 3. Fetch Portfolio Document
-        activate DB
-        DB-->>Sentinel: 4. Return Portfolio Data
-        deactivate DB
-        
-        Sentinel->>Sentinel: 5. Remove specific holding/lot from data
-        
-        Sentinel->>DB: 6. Update Portfolio Document in DB
-        activate DB
-        DB-->>Sentinel: 7. Confirm Update
-        deactivate DB
+        alt Deleting a Lot
+            Sentinel->>DB: 3a. Fetch Holding Document
+            activate DB
+            DB-->>Sentinel: 4a. Return Holding Data
+            deactivate DB
+            Sentinel->>Sentinel: 5a. Remove specific lot from data
+            Sentinel->>DB: 6a. Update Holding Document in DB
+            activate DB
+            DB-->>Sentinel: 7a. Confirm Update
+            deactivate DB
+        else Deleting an entire Holding
+            Sentinel->>DB: 3b. Delete Holding Document from DB
+            activate DB
+            DB-->>Sentinel: 4b. Confirm Deletion
+            deactivate DB
+        end
         
         Sentinel-->>User: 8. Return HTTP 200 OK (Success)
     else Authorization Fails or Item Not Found
@@ -694,28 +744,82 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Deletes a specific purchase lot or an entire holding (including all its lots) from within a user's portfolio.
+- **Description**: Deletes a specific purchase lot from a holding, or an entire holding (including all its lots and rules).
 - **Examples**:
     - **Example**:
-        - A user has a holding of "AAPL" with two purchase lots in their "Real Money" portfolio. They realize they entered one lot incorrectly.
-        - The user sends a `DELETE` request with the specific `lotId` of the incorrect lot to the endpoint for their "Real Money" portfolio.
+        - A user has a holding of "AAPL" with two purchase lots. They realize they entered one lot incorrectly.
+        - The user sends a `DELETE` request with the specific `lotId` to the endpoint `/api/users/me/holdings/{holdingId}/lots/{lotId}`.
         - The backend removes only that specific lot from the holding's `lots` array, leaving the other lot intact.
-- **Success Response**: The specified item is removed from the `Portfolio` document in Firestore, and the `modifiedAt` timestamp is updated.
+- **Success Response**: The specified item is removed from the `Holding` document or the entire document is deleted.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_4001 | Item deletion succeeds | User is authenticated, owns the portfolio, and the specified holding/lot ID exists within it. | Response Sentinel to User | Item successfully deleted. | H_I_4001 |
+| H_I_4001 | Item deletion succeeds | User is authenticated, owns the holding, and the specified holding/lot ID exists. | Response Sentinel to User | Item successfully deleted. | H_I_4001 |
 | H_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
-| H_E_4101 | User unauthorized | User is not authenticated or does not own the portfolio. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | H_E_4101 |
-| H_E_4102 | Item not found | The specified `holdingId` or `lotId` does not exist in the user's portfolio. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | H_E_4102 |
+| H_E_4101 | User unauthorized | User is not authenticated or does not own the holding. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | H_E_4101 |
+| H_E_4102 | Item not found | The specified `holdingId` or `lotId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | H_E_4102 |
 | H_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | H_E_4103 |
 
 **Messages**:
-- **H_I_4001**: "Item successfully deleted from portfolio {portfolioId}."
-- **H_E_4101**: "User is not authorized to delete items from this portfolio."
-- **H_E_4102**: "The specified holding or lot could not be found in this portfolio."
+- **H_I_4001**: "Item successfully deleted."
+- **H_E_4101**: "User is not authorized to delete this item."
+- **H_E_4102**: "The specified holding or lot could not be found."
 - **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
+
+#### 3.2.5. H_5000: Move Holding
+
+- **Sequence Diagram for Moving a Holding**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/move<br>{ "destinationPortfolioId": "dest-pf-id" }<br>(with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holding and destination portfolio
+    
+    alt Authorization OK & Holding Found
+        Sentinel->>DB: 3. Update Holding Document in DB<br> set portfolioId = "dest-pf-id"
+        activate DB
+        DB-->>Sentinel: 4. Confirm Update
+        deactivate DB
+        
+        Sentinel-->>User: 5. Return HTTP 200 OK (Success)
+    else Authorization Fails or Item Not Found
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 400, 403, 404)
+    end
+    deactivate Sentinel
+```
+
+- **Description**: Moves an entire holding (including all its lots and associated rules) from one portfolio to another by updating its `portfolioId` field.
+- **Examples**:
+    - **Example**:
+        - A user has a holding of "AAPL" in their "Paper Trading" portfolio and wants to move it to their "Real Money" portfolio.
+        - The user sends a `POST` request to `/api/users/me/holdings/{aaplHoldingId}/move` with the body `{ "destinationPortfolioId": "realMoneyPortfolioId" }`.
+        - The backend verifies the user owns the holding and the destination portfolio, then updates the `portfolioId` on the "AAPL" holding document.
+- **Success Response**: The holding's `portfolioId` is successfully updated in Firestore.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_5001 | Holding move succeeds | User is authenticated, owns the holding and the destination portfolio. | Response Sentinel to User | Holding successfully moved. | H_I_5001 |
+| H_I_5002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful move request. | Request User to Sentinel | The response from the original successful request is returned; no new move is performed. | N/A |
+| H_E_5101 | User unauthorized | User is not authenticated or does not own the holding or the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 403 Forbidden. | H_E_5101 |
+| H_E_5102 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_5102 |
+| H_E_5103 | Portfolio not found | The destination `portfolioId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_5103 |
+| H_E_5104 | Invalid move request | The holding is already in the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 400 Bad Request. | H_E_5104 |
+| H_E_5105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Move rejected. | H_E_5105 |
+
+**Messages**:
+- **H_I_5001**: "Holding successfully moved to portfolio {destinationPortfolioName}."
+- **H_E_5101**: "User is not authorized to perform this action."
+- **H_E_5102**: "The specified holding could not be found."
+- **H_E_5103**: "The destination portfolio could not be found."
+- **H_E_5104**: "The holding is already in the destination portfolio."
+- **H_E_5105**: "A valid Idempotency-Key header is required for this operation."
 
 --- 
 
@@ -776,10 +880,10 @@ sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
     participant DB as Database
-    User->>Sentinel: POST /api/.../holdings/{holdingId}/rules <br> {ruleType, conditions}
+    User->>Sentinel: POST /api/users/me/holdings/{holdingId}/rules <br> {ruleType, conditions}
     activate Sentinel
     Sentinel->>Sentinel: Validate Request (Auth, Conditions)
-    Sentinel->>DB: Create Rule for Holding
+    Sentinel->>DB: Create Rule document in sub-collection of Holding
     activate DB
     DB-->>Sentinel: Confirm Creation
     deactivate DB
@@ -802,9 +906,9 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the portfolio and holding. | Response Sentinel to User | Rule created. | R_I_1001 |
+| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Rule created. | R_I_1001 |
 | R_I_1002 | Idempotency key valid | `Idempotency-Key` provided, valid UUID. | Request User to Sentinel | Request proceeds. | N/A |
-| R_E_1101 | User unauthorized | User not authenticated or not owner of the portfolio/holding. | Request User to Sentinel | Creation rejected. | R_E_1101 |
+| R_E_1101 | User unauthorized | User not authenticated or not owner of the holding. | Request User to Sentinel | Creation rejected. | R_E_1101 |
 | R_E_1102 | Invalid conditions | Unknown condition type or invalid parameters. | Request User to Sentinel | Creation rejected. | R_E_1102 |
 | R_E_1103 | Holding not found | `holdingId` invalid. | Sentinel internal | Creation rejected. | R_E_1103 |
 
@@ -816,7 +920,7 @@ sequenceDiagram
 
 #### 4.2.2. R_2000: Rule Update
 
-- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/.../holdings/{holdingId}/rules/{ruleId}`.
+- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/holdings/{holdingId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
 - **Sub-Rules**:
 
@@ -833,7 +937,7 @@ sequenceDiagram
 
 #### 4.2.3. R_3000: Rule Retrieval
 
-- **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/.../holdings/{holdingId}/rules`.
+- **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/users/me/holdings/{holdingId}/rules`.
 - **Success Response**: Rule(s) returned.
 - **Sub-Rules**:
 
@@ -893,9 +997,9 @@ sequenceDiagram
     participant Notify as Notification Service
     Scheduler->>Engine: Trigger Daily Job
     activate Engine
-    Engine->>DB: Fetch All Holdings with Active Rules
+    Engine->>DB: Query 'holdings' collection for all holdings
     activate DB
-    DB-->>Engine: Return Holdings and Rules
+    DB-->>Engine: Return Holdings and their Rules
     deactivate DB
     Engine->>API: Fetch Market Data for all relevant Tickers
     activate API
