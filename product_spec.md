@@ -81,6 +81,7 @@ This section details the management of user portfolios. A user can create and ma
   - `portfolioId`: String (Unique UUID, the document ID).
   - `userId`: String (Firebase Auth UID, links the portfolio to its owner).
   - `name`: String (User-defined, e.g., "My Real Portfolio", "Tech Speculation").
+  - `description`: String (Optional, user-defined description for the portfolio).
   - `holdings`: Array of `Holding` objects.
   - `cashReserve`: Object containing:
     - `totalAmount`: Number (EUR).
@@ -166,11 +167,14 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 ##### 2.1.2.3. Update
 
--   An authenticated user can modify any aspect of a specific portfolio they own, including renaming it, updating cash reserves, changing tax settings, or modifying its holdings.
+-   An authenticated user can modify any aspect of a specific portfolio they own, including its name and description, updating cash reserves, changing tax settings, or modifying its holdings.
 
 ##### 2.1.2.4. Deletion
 
 -   An authenticated user can delete an entire portfolio, or individual holdings/lots within a portfolio.
+-   If a user deletes their default portfolio:
+    -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
+    -   If more than one portfolio remains, the application will prompt the user to select a new default.
 
 ### 2.2. Portfolio and Cash Rules
 
@@ -343,7 +347,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Updates a specific portfolio's holdings, cash reserves, name, or tax settings via various API endpoints based on direct user input. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
+- **Description**: Updates a specific portfolio's holdings, cash reserves, name, description, or tax settings via various API endpoints based on direct user input. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
 - **Examples**:
     - **Example**:
         - A user wants to add 10 shares of "VOO" to their "Real Money" portfolio (ID: `xyz-123`).
@@ -362,7 +366,7 @@ sequenceDiagram
 | P_E_3103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
 | P_E_3104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
 | P_E_3105 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3105 |
-| P_E_3106 | Invalid tax/name settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, or portfolio `name` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3106 |
+| P_E_3106 | Invalid tax/name settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, or portfolio `name` or `description` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3106 |
 | P_E_3107 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3107 |
 
 **Messages**:
@@ -372,7 +376,7 @@ sequenceDiagram
 - **P_E_3103**: "Ticker '{ticker}' is invalid or not supported."
 - **P_E_3104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
 - **P_E_3105**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
-- **P_E_3106**: "Portfolio name or tax settings are invalid."
+- **P_E_3106**: "Portfolio name, description, or tax settings are invalid."
 - **P_E_3107**: "A valid Idempotency-Key header is required for this operation."
 
 ##### 2.2.3.2. P_3400: Set Default Portfolio
@@ -520,12 +524,18 @@ sequenceDiagram
     deactivate Sentinel
 ``` 
 
-- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action. If the deleted portfolio was the user's default, no other portfolio is automatically selected as the new default. The user must manually designate a new default portfolio.
+- **Description**: Deletes an entire portfolio and all of its associated holdings and data. This is a destructive and irreversible action. If the deleted portfolio was the user's default, the system handles the default designation as follows:
+    - If, after deletion, only one portfolio remains, that portfolio is automatically set as the new default.
+    - If more than one portfolio remains, the application prompts the user to designate a new default.
 - **Examples**:
-    - **Example**:
-        - A user decides they no longer need their "Paper Trading" portfolio (ID: `abc-456`).
-        - They initiate a delete request for portfolio `abc-456`.
-        - The backend verifies ownership and permanently deletes the entire portfolio document from Firestore.
+    - **Example 1 (Auto-set new default)**:
+        - A user has two portfolios: "Default A" (the default) and "Side B".
+        - They delete "Default A".
+        - The backend deletes the portfolio and, seeing only one portfolio remains, automatically designates "Side B" as the new default.
+    - **Example 2 (Prompt for new default)**:
+        - A user has three portfolios: "Default A" (the default), "Side B", and "Side C".
+        - They delete "Default A".
+        - The backend deletes the portfolio. The application then prompts the user to select either "Side B" or "Side C" as the new default.
 - **Success Response**: The specified `Portfolio` document is deleted from Firestore.
 - **Sub-Rules**:
 
@@ -533,12 +543,16 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | P_I_4001 | Portfolio deletion succeeds | User is authenticated and owns the specified portfolio. | Response Sentinel to User | Portfolio successfully deleted. | P_I_4001 |
 | P_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
+| P_I_4003 | Default deleted (auto-set) | The deleted portfolio was the default, and exactly one portfolio remains. | Response Sentinel to User | The remaining portfolio is automatically set as the new default. | P_I_4003 |
+| P_I_4004 | Default deleted (prompt) | The deleted portfolio was the default, and more than one portfolio remains. | Response Sentinel to User | The user is prompted to select a new default portfolio. | P_I_4004 |
 | P_E_4101 | User unauthorized | User is not authenticated or does not own the portfolio. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | P_E_4101 |
 | P_E_4102 | Portfolio not found | The specified `portfolioId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | P_E_4102 |
 | P_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | P_E_4103 |
 
 **Messages**:
 - **P_I_4001**: "Portfolio {portfolioId} was successfully deleted."
+- **P_I_4003**: "Default portfolio deleted. '{newDefaultPortfolioName}' has been automatically set as your new default."
+- **P_I_4004**: "Default portfolio deleted. Please select a new default portfolio."
 - **P_E_4101**: "User is not authorized to delete portfolio {portfolioId}."
 - **P_E_4102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_4103**: "A valid Idempotency-Key header is required for this operation."
