@@ -82,10 +82,11 @@ This section details the management of user portfolios. A user can create and ma
   - `userId`: String (Firebase Auth UID, links the portfolio to its owner).
   - `name`: String (User-defined, e.g., "My Real Portfolio", "Tech Speculation").
   - `description`: String (Optional, user-defined description for the portfolio).
+  - `defaultCurrency`: Enum (`EUR`, `USD`, `GBP`, default: `EUR`).
   - `holdings`: Array of `Holding` objects.
   - `cashReserve`: Object containing:
-    - `totalAmount`: Number (EUR).
-    - `warChestAmount`: Number (EUR, portion for opportunistic buying).
+    - `totalAmount`: Number (in `defaultCurrency`).
+    - `warChestAmount`: Number (in `defaultCurrency`, portion for opportunistic buying).
   - `taxSettings`: Object containing:
     - `capitalGainTaxRate`: Number (percentage, e.g., 26.4).
     - `taxFreeAllowance`: Number (EUR, e.g., 1000).
@@ -95,13 +96,19 @@ This section details the management of user portfolios. A user can create and ma
 - **`Holding` (Object within Portfolio):**
   - `holdingId`: String (Unique UUID generated on creation).
   - `ticker`: String (e.g., "VOO", "QQQ.DE").
+  - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
+  - `WKN`: String (Optional, e.g., "A0YEDG").
+  - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
+  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
+  - `currency`: Enum (`EUR`, `USD`, `GBP`).
+  - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
   - `lots`: Array of `Lot` objects.
 
 - **`Lot` (Object within Holding):**
   - `lotId`: String (Unique UUID generated on creation).
   - `purchaseDate`: ISODateTime.
   - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (EUR per share, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
 
 - **`MarketData` (Firestore Document):**
   - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
@@ -130,23 +137,24 @@ This section details the management of user portfolios. A user can create and ma
 
 - **`ComputedInfo` (Calculated on retrieval, not stored):**
   - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
+  - **Note on Currency Conversion**: For any holdings denominated in a currency different from the portfolio's `defaultCurrency` (e.g., a USD stock in a EUR-based portfolio), the system must convert all monetary values to the portfolio's `defaultCurrency` for aggregation and display in the `ComputedInfo`. This requires a reliable, daily source for exchange rates, which is a new dependency to be managed by the backend.
   - **At the `Lot` level:**
-    - `currentPrice`: Number (EUR).
-    - `currentValue`: Number (EUR).
-    - `preTaxProfit`: Number (EUR).
-    - `capitalGainTax`: Number (EUR).
-    - `afterTaxProfit`: Number (EUR).
+    - `currentPrice`: Number (in the portfolio's `defaultCurrency`).
+    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
+    - `preTaxProfit`: Number (in the portfolio's `defaultCurrency`).
+    - `capitalGainTax`: Number (in the portfolio's `defaultCurrency`).
+    - `afterTaxProfit`: Number (in the portfolio's `defaultCurrency`).
   - **At the `Holding` level (aggregated from its lots):**
-    - `totalCost`: Number (EUR).
-    - `currentValue`: Number (EUR).
-    - `preTaxGainLoss`: Number (EUR).
-    - `afterTaxGainLoss`: Number (EUR).
+    - `totalCost`: Number (in the portfolio's `defaultCurrency`).
+    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
+    - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+    - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
     - `gainLossPercentage`: Number (%).
   - **At the `Portfolio` level (aggregated from all holdings):**
-    - `totalCost`: Number (EUR).
-    - `currentValue`: Number (EUR).
-    - `preTaxGainLoss`: Number (EUR).
-    - `afterTaxGainLoss`: Number (EUR).
+    - `totalCost`: Number (in the portfolio's `defaultCurrency`).
+    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
+    - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+    - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
     - `gainLossPercentage`: Number (%).
 
 #### 2.1.2. Business Process
@@ -206,9 +214,9 @@ sequenceDiagram
     Sentinel-->>User: 7. HTTP 201 Created
     deactivate Sentinel
 ```
-- **Description**: Creates a new portfolio for the authenticated user. A default portfolio is created automatically on signup; this rule also covers user-initiated creation of additional portfolios.
+- **Description**: Creates a new portfolio for the authenticated user. A default portfolio is created automatically on signup; this rule also covers user-initiated creation of additional portfolios. When a portfolio is created, a `defaultCurrency` is assigned (defaulting to EUR if not specified).
 - **Examples**:
-    - **Example**: A user wants to start a new "Paper Trading" portfolio. She specifies the name of the portfolio. A new portfolio document is created in Firestore, linked to their `userId`.
+    - **Example**: A user wants to start a new "Paper Trading" portfolio with USD as its base currency. She specifies the name and currency of the portfolio. A new portfolio document is created in Firestore, linked to their `userId`.
 - **Success Response**: A new `Portfolio` document is created in Firestore.
 - **Sub-Rules**:
 
@@ -219,7 +227,8 @@ sequenceDiagram
 | P_E_1101 | User unauthorized | User is not authenticated. | Request User to Sentinel | Creation rejected. | P_E_1101 |
 | P_E_1102 | Name missing or invalid | Portfolio name is empty or too long. | Request User to Sentinel | Creation rejected. | P_E_1102 |
 | P_E_1103 | Name not unique | User already has a portfolio with the same name. | Sentinel internal | Creation rejected. | P_E_1103 |
-| P_E_1104 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | P_E_1104 |
+| P_E_1104 | Invalid default currency | The `defaultCurrency` provided is not one of the supported values (EUR, USD, GBP). | Request User to Sentinel | Creation rejected. | P_E_1104 |
+| P_E_1105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | P_E_1105 |
 
 **Messages**:
 
@@ -227,7 +236,8 @@ sequenceDiagram
 - **P_E_1101**: "User is not authenticated."
 - **P_E_1102**: "Portfolio name is invalid."
 - **P_E_1103**: "A portfolio with the name '{name}' already exists."
-- **P_E_1104**: "A valid Idempotency-Key header is required for this operation."
+- **P_E_1104**: "Invalid default currency. Must be one of: EUR, USD, GBP."
+- **P_E_1105**: "A valid Idempotency-Key header is required for this operation."
 
 #### 2.2.2. Portfolio Retrieval
 
@@ -347,7 +357,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Updates a specific portfolio's holdings, cash reserves, name, description, or tax settings via various API endpoints based on direct user input. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
+- **Description**: Updates a specific portfolio's settings (like name, description, or `defaultCurrency`), cash reserves, or tax settings. The target portfolio is identified by its `portfolioId`. When a new holding is added, a background task is triggered to backfill historical data for the ticker if it's new to the system.
 - **Examples**:
     - **Example**:
         - A user wants to add 10 shares of "VOO" to their "Real Money" portfolio (ID: `xyz-123`).
@@ -365,9 +375,10 @@ sequenceDiagram
 | P_E_3102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Update rejected with HTTP 404 Not Found. | P_E_3102 |
 | P_E_3103 | Invalid ticker | Ticker is not a valid format or is not recognized by the market data API. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
 | P_E_3104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
-| P_E_3105 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3105 |
-| P_E_3106 | Invalid tax/name settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, or portfolio `name` or `description` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3106 |
-| P_E_3107 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3107 |
+| P_E_3105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3105 |
+| P_E_3106 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3106 |
+| P_E_3107 | Invalid portfolio settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, portfolio `name` or `description` is invalid, or `defaultCurrency` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3107 |
+| P_E_3108 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3108 |
 
 **Messages**:
 - **P_I_3001**: "Portfolio {portfolioId} updated successfully."
@@ -375,9 +386,10 @@ sequenceDiagram
 - **P_E_3102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_3103**: "Ticker '{ticker}' is invalid or not supported."
 - **P_E_3104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
-- **P_E_3105**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
-- **P_E_3106**: "Portfolio name, description, or tax settings are invalid."
-- **P_E_3107**: "A valid Idempotency-Key header is required for this operation."
+- **P_E_3105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
+- **P_E_3106**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
+- **P_E_3107**: "Portfolio name, description, currency, or tax settings are invalid."
+- **P_E_3108**: "A valid Idempotency-Key header is required for this operation."
 
 ##### 2.2.3.2. P_3400: Set Default Portfolio
 
