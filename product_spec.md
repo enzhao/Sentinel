@@ -183,9 +183,9 @@ stateDiagram-v2
 
 This section details the management of user portfolios. A user can create and manage multiple distinct portfolios (e.g., a "real money" portfolio and a "paper trading" portfolio). Each portfolio contains its own set of holdings, cash reserves, and tax settings, forming the foundation for rule evaluation.
 
-### 3.1. Portfolio and Cash Data Model and Business Process
+### 3.1. Portfolio and Cash Data Model
 
-#### 3.1.1. Associated Data Models
+Associated Data Models:
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
@@ -251,35 +251,35 @@ This section details the management of user portfolios. A user can create and ma
     - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
     - `gainLossPercentage`: Number (%).
 
-#### 3.1.2. Business Process
+### 3.2. Business Process
 
 The management of portfolios follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated and authorized.
 
-##### 3.1.2.1. Creation
+#### 3.2.1. Creation
 
 -   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). This portfolio is marked as the default (`isDefault: true`).
 -   **Additional Portfolios:** The user can create additional portfolios, each with a unique name. These are created with `isDefault: false`.
 -   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio. This portfolio will be the one displayed by default after login. When a portfolio is set as the default, any other portfolio previously marked as default for that user will be unset.
 
-##### 3.1.2.2. Retrieval
+#### 3.2.2. Retrieval
 
 -   An authenticated user can retrieve a list of all portfolios they own.
 -   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
 
-##### 3.1.2.3. Update
+#### 3.2.3. Update
 
 -   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
 
-##### 3.1.2.4. Deletion
+#### 3.2.4. Deletion
 
 -   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
 -   If a user deletes their default portfolio:
     -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
     -   If more than one portfolio remains, the application will prompt the user to select a new default.
 
-### 3.2. Portfolio and Cash Rules
+### 3.3. Portfolio and Cash Rules
 
-#### 3.2.1. P_1000: Portfolio Creation
+#### 3.3.1. P_1000: Portfolio Creation
 
 - **Sequence Diagram for Portfolio Creation**
 
@@ -332,9 +332,9 @@ sequenceDiagram
 - **P_E_1104**: "Invalid default currency. Must be one of: EUR, USD, GBP."
 - **P_E_1105**: "A valid Idempotency-Key header is required for this operation."
 
-#### 3.2.2. Portfolio Retrieval
+#### 3.3.2. Portfolio Retrieval
 
-##### 3.2.2.1. P_2000: Single Portfolio Retrieval
+##### 3.3.2.1. P_2000: Single Portfolio Retrieval
 
 - **Sequence Diagram for Single Portfolio Retrieval**
 
@@ -390,7 +390,7 @@ sequenceDiagram
 - **P_E_2101**: "User is not authorized to access portfolio {portfolioId}."
 - **P_E_2102**: "Portfolio with ID {portfolioId} not found."
 
-##### 3.2.2.2. P_2200: Portfolio List Retrieval
+##### 3.3.2.2. P_2200: Portfolio List Retrieval
 
 - **Sequence Diagram for Portfolio List Retrieval**
 
@@ -426,9 +426,9 @@ sequenceDiagram
 - **P_I_2201**: "Portfolio list retrieved successfully for user {userId}."
 - **P_E_2301**: "User is not authenticated."
 
-#### 3.2.3. Portfolio Update
+#### 3.3.3. Portfolio Update
 
-##### 3.2.3.1. P_3000: Portfolio Update (Manual)
+##### 3.3.3.1. P_3000: Portfolio Update (Manual)
 
 - **Sequence Diagram for Portfolio Update (Manual)**
 
@@ -477,7 +477,7 @@ sequenceDiagram
 - **P_E_3104**: "Portfolio name, description, currency, or tax settings are invalid."
 - **P_E_3105**: "A valid Idempotency-Key header is required for this operation."
 
-##### 3.2.3.2. P_3400: Set Default Portfolio
+##### 3.3.3.2. P_3400: Set Default Portfolio
 
 - **Sequence Diagram for Setting Default Portfolio**
 
@@ -528,9 +528,9 @@ sequenceDiagram
 - **P_E_3501**: "User is not authorized to set this portfolio as default."
 - **P_E_3502**: "Portfolio with the specified ID not found."
 
-#### 3.2.4. Portfolio Deletion
+#### 3.3.4. Portfolio Deletion
 
-##### 3.2.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
+##### 3.3.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
 
 - **Sequence Diagram for Portfolio Deletion (Entire Portfolio)**
 
@@ -602,9 +602,9 @@ sequenceDiagram
 
 This section details the management of individual holdings. A holding represents a specific financial instrument (like a stock or ETF) within a user's portfolio. Each holding can be composed of one or more purchase lots, which are detailed in Chapter 5. Holdings are top-level resources linked to a portfolio.
 
-### 4.1. Holding Data Model and Business Process
+### 4.1. Holding Data Model
 
-#### 4.1.1. Associated Data Models
+Associated Data Models:
 
 - **`Holding` (Firestore Document):**
   - A new top-level collection (`holdings`) will be created.
@@ -623,33 +623,33 @@ This section details the management of individual holdings. A holding represents
   - `modifiedAt`: ISODateTime.
   - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
 
-#### 4.1.2. Business Process
+### 4.2. Business Process
 
 The management of holdings follows the standard CRUD (Create, Retrieve, Update, Delete) operations, as well as specialized processes for moving holdings and backfilling data. All operations are authenticated and authorized.
 
-##### 4.1.2.1. Creation
+#### 4.2.1. Creation
 -   **Manual Creation:** An authenticated user can create a new holding in one of their portfolios. The process is interactive: the user provides an identifier (Ticker, ISIN, or WKN), the backend looks up the instrument, and the user confirms the selection before providing details for the initial purchase lot.
 -   **Import from File:** An authenticated user can add multiple holdings and their initial lots at once by uploading a file. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then creates the holdings.
 -   **Data Backfill:** When a holding is created for a ticker that is new to the system (either manually or via import), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
 
-##### 4.1.2.2. Retrieval
+#### 4.2.2. Retrieval
 -   **List Retrieval:** An authenticated user can retrieve a list of all holdings for a specific portfolio they own. This provides a summary view of each holding.
 -   **Single Retrieval:** An authenticated user can retrieve the detailed contents of a single, specific holding. The response includes all of its purchase lots (see Chapter 5) and is enriched with computed performance and tax data from the market data cache.
 
-##### 4.1.2.3. Update
+#### 4.2.3. Update
 -   An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding; lot modifications are handled by the processes described in Chapter 5.
 
-##### 4.1.2.4. Deletion
+#### 4.2.4. Deletion
 -   An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
 
-##### 4.1.2.5. Move
+#### 4.2.5. Move
 -   An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
 
-### 4.2. Holding Management Rules
+### 4.3. Holding Management Rules
 
 This section will detail the specific rules for creating, updating, and deleting holdings.
 
-#### 4.2.1. H_1000: Holding Creation (Manual, Interactive)
+#### 4.3.1. H_1000: Holding Creation (Manual, Interactive)
 
 - **Sequence Diagram for Interactive Holding Creation**
 
@@ -717,7 +717,7 @@ sequenceDiagram
 - **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
 - **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.2. H_1200: Holding Creation (Import from File)
+#### 4.3.2. H_1200: Holding Creation (Import from File)
 
 - **Sequence Diagram for Holding Import**
 
@@ -789,7 +789,7 @@ sequenceDiagram
 - **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.3. H_2000: Holding Retrieval
+#### 4.3.3. H_2000: Holding Retrieval
 
 - **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio. Lot details are included. For lot-specific operations, see Chapter 5.
 - **Sub-Rules**:
@@ -807,7 +807,7 @@ sequenceDiagram
 - **H_E_2101**: "User is not authorized to access this resource."
 - **H_E_2102**: "The requested item was not found."
 
-#### 4.2.4. H_3000: Holding Update
+#### 4.3.4. H_3000: Holding Update
 
 - **Description**: Modifies the details of an existing holding (e.g., its `annualCosts`). This does not modify the lots within the holding. For lot modifications, see Chapter 5. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
 - **Success Response**: The `Holding` document is updated in Firestore.
@@ -827,7 +827,7 @@ sequenceDiagram
 - **H_E_3102**: "Holding {holdingId} not found."
 - **H_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.5. H_4000: Holding Deletion
+#### 4.3.5. H_4000: Holding Deletion
 
 - **Sequence Diagram for Holding Deletion**
 
@@ -872,7 +872,7 @@ sequenceDiagram
 - **H_E_4102**: "The specified holding could not be found."
 - **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.6. H_5000: Backfill for New Security
+#### 4.3.6. H_5000: Backfill for New Security
 
 - **Sequence Diagram for Asynchronous Backfill**
 
@@ -922,7 +922,7 @@ sequenceDiagram
 - **H_I_5003**: "Note: The security '{ticker}' is new. Only {days} days of historical data were available and have been backfilled."
 - **H_E_5101**: "Could not fetch historical data for ticker {ticker}. The operation will be retried later."
 
-#### 4.2.7. H_6000: Move Holding
+#### 4.3.7. H_6000: Move Holding
 
 - **Sequence Diagram for Moving a Holding**
 
@@ -982,9 +982,9 @@ sequenceDiagram
 
 This section details the management of individual purchase lots. Lots represent a specific purchase of a quantity of a security at a certain price and date. They always exist as part of a `Holding` (see Chapter 4).
 
-### 5.1. Lot Data Model and Business Process
+### 5.1. Lot Data Model
 
-#### 5.1.1. Associated Data Models
+Associated Data Models:
 
 - **`Lot` (Object within Holding):**
   - `lotId`: String (Unique UUID generated on creation).
@@ -994,29 +994,29 @@ This section details the management of individual purchase lots. Lots represent 
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
-#### 5.1.2. Business Process
+### 5.2. Business Process
 
 The management of lots follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated, authorized, and performed in the context of a parent holding.
 
-##### 5.1.2.1. Creation
+#### 5.2.1. Creation
 -   An authenticated user can add a new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding.
 
-##### 5.1.2.2. Retrieval
+#### 5.2.2. Retrieval
 -   Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots that constitute that holding.
 
-##### 5.1.2.3. Update
+#### 5.2.3. Update
 -   An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`.
 
-##### 5.1.2.4. Deletion
+#### 5.2.4. Deletion
 -   An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
 
-### 5.2. Lot Management Rules
+### 5.3. Lot Management Rules
 
 This section will detail the specific rules for creating, updating, and deleting lots.
 
-#### 5.2.1. Lot Creation
+#### 5.3.1. Lot Creation
 
-##### 5.2.1.1. L_1000: Manual Creation
+##### 5.3.1.1. L_1000: Manual Creation
 
 - **Sequence Diagram for Manual Lot Creation**
 
@@ -1067,7 +1067,7 @@ sequenceDiagram
 - **L_E_1103**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
 - **L_E_1104**: "A valid Idempotency-Key header is required for this operation."
 
-##### 5.2.1.2. L_1200: Import from File
+##### 5.3.1.2. L_1200: Import from File
 
 - **Sequence Diagram for Lot Import**
 
@@ -1128,10 +1128,10 @@ sequenceDiagram
 - **L_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **L_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 5.2.2. L_2000: Lot Retrieval
+#### 5.3.2. L_2000: Lot Retrieval
 - **Description**: This is implicitly handled by H_2000 (Holding Retrieval), which returns all lots within the holding. A dedicated endpoint to list only lots is not required for the MVP.
 
-#### 5.2.3. L_3000: Manual Lot Update
+#### 5.3.3. L_3000: Manual Lot Update
 
 - **Sequence Diagram for Manual Lot Update**
 
@@ -1180,7 +1180,7 @@ sequenceDiagram
 - **L_E_3102**: "Holding {holdingId} or Lot {lotId} not found."
 - **L_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 5.2.4. L_4000: Lot Deletion
+#### 5.3.4. L_4000: Lot Deletion
 - **Description**: Deletes a specific purchase lot from a holding. The endpoint is `DELETE /api/users/me/holdings/{holdingId}/lots/{lotId}`.
 - **Sequence Diagram for Lot Deletion**
 
