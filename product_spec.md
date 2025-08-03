@@ -149,6 +149,34 @@ flowchart LR
 
 ## 2. Frontend UI and User Interaction
 
+### 2.1 High Level Overview of User Interaction (View Transition)
+
+This section provides a high-level overview of the application's user interface flow. Each distinct screen or modal is considered a "View" and will be assigned a unique View ID for easy reference in detailed specifications.
+
+The diagram below illustrates the primary paths a user can take through the application. The typical journey begins with authentication. Once authenticated, the user is directed to their default portfolio's holding view, which serves as the main dashboard. From there, they can drill down into the details of a specific holding, manage strategy rules, or add new holdings to their portfolio.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "Unauthenticated" as Unauthenticated {
+        [*] --> Login
+        Login --> Signup
+        Signup --> Login
+    }
+
+    state "Authenticated" as Authenticated {
+        [*] --> PortfolioHoldingsView
+        PortfolioHoldingsView --> HoldingDetailView : User clicks a holding
+        HoldingDetailView --> PortfolioHoldingsView : User navigates back
+
+        PortfolioHoldingsView --|> AddHoldingModal : User clicks 'Add Holding'
+        HoldingDetailView --|> AddRuleModal : User clicks 'Add Rule'
+    }
+
+    Unauthenticated --> Authenticated : Login Success
+    Authenticated --> Unauthenticated : User clicks 'Logout'
+```
 ---
 
 ## 3. Portfolio and Cash Management
