@@ -27,13 +27,13 @@ Sentinel addresses three challenges faced by retail investors:
 ### 0.3. Structure and User Guide
 
 The specification is organized as follows:
-- **Section 1: Common Notes**: Defines global rules and conventions that apply across the entire system.
+- **Section 1: System Architecture and General Notes**: Defines the overall architecture and global conventions.
 - **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
 - **Section 3: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
 - **Section 4: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
 - **Section 5: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
 - **Section 6: User Authentication and Authorization**: Covers user identity and access control.
-- **Section 7: Technical Specifications**: Specifies the architecture, security, data sources.
+- **Section 7: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
 
 Each section includes:
 1. **Data Model and Business Process**:
@@ -47,14 +47,90 @@ Each section includes:
 
 ---
 
-## 1. Common Notes
+## 1. System Architecture and General Notes
 
-### 1.1. General Data and Business Process Notes
+### 1.1. Architectural Principles
+
+- **Stateless Backend**: The backend API is designed to be completely stateless. User authentication is handled via short-lived, self-contained JWTs (Firebase ID Tokens) sent with each request. This eliminates the need for server-side sessions, enhances security, and allows for seamless horizontal scalability on platforms like Google Cloud Run.
+- **Monolith for MVP**: The backend is a "Self-Contained System" (a well-structured monolith) for the MVP to prioritize development speed and simplicity. It can be refactored into microservices in the future if required by scale.
+
+### 1.2. Components
+
+- **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
+  - **UI Framework**: Vuetify (Material Design).
+  - **State Management**: Pinia (Vuex alternative).
+- **Authentication**: Firebase Authentication for user management, including email/password login and secure ID token issuance.
+- **Backend API**: Python FastAPI, deployed on Google Cloud Run.
+- **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
+  - **idempotency keys** for state-changing requests, stored in a dedicated Firestore collection, TTL enabled on each document for automatic cleanup.
+- **Notification Service**: SendGrid (email), Firebase Cloud Messaging (push).
+- **Market Data**: Alpha Vantage API (for raw OHLCV price data).
+- **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
+
+### 1.3. Architectural Diagram
+
+```mermaid
+flowchart LR
+    %% USER LAYER
+    subgraph User["User Interaction"]
+        A["Frontend Web App<br/>(Firebase Hosting)"]
+    end
+
+    %% PLATFORM CORE (Now includes Auth)
+    subgraph Platform["Google Cloud Platform"]
+        direction TB
+        G["Firebase Authentication"]
+        B{{"Backend API Server<br/>(Cloud Run)"}}
+        C[("Database<br/>(Firestore)<br/>- Portfolios<br/>- Market Data Cache")]
+        Scheduler["Cloud Scheduler"]
+        E["Notification Service"]
+    end
+
+    %% EXTERNAL ZONE
+    subgraph Ext["External Data/APIs"]
+        F>"Market Data API<br/>(Alpha Vantage)"]
+    end
+
+    %% Flows
+
+    %% ①② Authentication
+    A -- "① Login/Signup" --> G
+    G -- "② Issues ID Token" --> A
+
+    %% ③④⑤⑥ Portfolio Read
+    A -- "③ API Call with JWT<br/>(e.g., GET /api/users/me/portfolios)" --> B
+    B -- "④ Verifies JWT" --> G
+    B -- "⑤ Reads Portfolio Data" --> C
+    B -- "⑥ Reads Market Data Cache" --> C
+
+    %% Portfolio Write
+    A -- "⑦ API Call with JWT<br/>(e.g., POST /api/users/me/portfolios)" --> B
+    B -- "⑧ Writes Portfolio Data" --> C
+    B -- "⑨ Triggers Backfill (async)" --> F
+    F -- "⑩ Returns Historical Data" --> B
+    B -- "⑪ Writes to Market Data Cache" --> C
+
+    %% Scheduled Job (Daily Sync)
+    Scheduler -- "⑫ Triggers Daily Sync" --> B
+    B <-- "⑬ Fetches Latest Data" --> F
+    %% F -- "⑭ Returns Latest Data" --> B
+    B -- "⑭ Writes to Market Data Cache" --> C
+
+    %% OPTIONAL: Notification Flow Example
+    B -- "Rule Triggered" --> E
+    E -- "Email/Push Notification" --> A
+
+    %% Visual grouping
+    classDef zone fill:#F7F9FF,stroke:#555,stroke-width:2px;
+    class User,Platform,Ext zone;
+```
+
+### 1.4. General Data and Business Process Notes
 
 - **Tax Calculations**: All tax-related calculations are informational, based on user-provided rates (e.g., capital gains tax, tax-free allowances).
 - **Market Data**: Sourced daily from Alpha Vantage, using closing prices for calculations unless specified.
 
-### 1.2. General User Interface/User Experience (UI/UX) Notes
+### 1.5. General User Interface/User Experience (UI/UX) Notes
 
 - **Mobile-First Responsive Design**: The application's interface will be designed primarily for mobile phones. This means the layout will be clean, easy to navigate with a thumb, and optimized for smaller screens. When viewed on a larger screen, like a tablet or desktop computer, the application will automatically adapt its layout to make good use of the extra space, ensuring a comfortable and effective user experience on any device.
 - **Application Bar**: A persistent application bar is displayed at the top of the screen.
@@ -63,7 +139,7 @@ Each section includes:
     - For authenticated users, the bar also provides access to user-specific actions, such as logging out.
 
 
-### 1.3. General API and Technical Notes
+### 1.6. General API and Technical Notes
 
 - **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
 - **API Design**: All API endpoints that operate on a user's specific data are nested under the `/api/users/me/` path. This ensures that all operations are clearly scoped to the authenticated user, enhancing security and clarity. For example, to get a portfolio, the endpoint is `/api/users/me/portfolios/{portfolioId}`.
@@ -1323,85 +1399,7 @@ sequenceDiagram
 
 ## 7. Technical Specifications
 
-### 7.1. Architecture
-
-#### 7.1.1. Architectural Principles
-
-- **Stateless Backend**: The backend API is designed to be completely stateless. User authentication is handled via short-lived, self-contained JWTs (Firebase ID Tokens) sent with each request. This eliminates the need for server-side sessions, enhances security, and allows for seamless horizontal scalability on platforms like Google Cloud Run.
-- **Monolith for MVP**: The backend is a "Self-Contained System" (a well-structured monolith) for the MVP to prioritize development speed and simplicity. It can be refactored into microservices in the future if required by scale.
-
-#### 7.1.2. Components
-
-- **Frontend**: Vue.js v3 (TypeScript), hosted on Firebase Hosting.
-  - **UI Framework**: Vuetify (Material Design).
-  - **State Management**: Pinia (Vuex alternative).
-- **Authentication**: Firebase Authentication for user management, including email/password login and secure ID token issuance.
-- **Backend API**: Python FastAPI, deployed on Google Cloud Run.
-- **Database**: Google Cloud Firestore (NoSQL), containing user portfolios and a shared market data cache.
-  - **idempotency keys** for state-changing requests, stored in a dedicated Firestore collection, TTL enabled on each document for automatic cleanup.
-- **Notification Service**: SendGrid (email), Firebase Cloud Messaging (push).
-- **Market Data**: Alpha Vantage API (for raw OHLCV price data).
-- **Scheduler**: Google Cloud Scheduler (for triggering daily data sync).
-
-#### 7.1.3. Architectural Diagram
-
-```mermaid
-flowchart LR
-    %% USER LAYER
-    subgraph User["User Interaction"]
-        A["Frontend Web App<br/>(Firebase Hosting)"]
-    end
-
-    %% PLATFORM CORE (Now includes Auth)
-    subgraph Platform["Google Cloud Platform"]
-        direction TB
-        G["Firebase Authentication"]
-        B{{"Backend API Server<br/>(Cloud Run)"}}
-        C[("Database<br/>(Firestore)<br/>- Portfolios<br/>- Market Data Cache")]
-        Scheduler["Cloud Scheduler"]
-        E["Notification Service"]
-    end
-
-    %% EXTERNAL ZONE
-    subgraph Ext["External Data/APIs"]
-        F>"Market Data API<br/>(Alpha Vantage)"]
-    end
-
-    %% Flows
-
-    %% ①② Authentication
-    A -- "① Login/Signup" --> G
-    G -- "② Issues ID Token" --> A
-
-    %% ③④⑤⑥ Portfolio Read
-    A -- "③ API Call with JWT<br/>(e.g., GET /api/users/me/portfolios)" --> B
-    B -- "④ Verifies JWT" --> G
-    B -- "⑤ Reads Portfolio Data" --> C
-    B -- "⑥ Reads Market Data Cache" --> C
-
-    %% Portfolio Write
-    A -- "⑦ API Call with JWT<br/>(e.g., POST /api/users/me/portfolios)" --> B
-    B -- "⑧ Writes Portfolio Data" --> C
-    B -- "⑨ Triggers Backfill (async)" --> F
-    F -- "⑩ Returns Historical Data" --> B
-    B -- "⑪ Writes to Market Data Cache" --> C
-
-    %% Scheduled Job (Daily Sync)
-    Scheduler -- "⑫ Triggers Daily Sync" --> B
-    B <-- "⑬ Fetches Latest Data" --> F
-    %% F -- "⑭ Returns Latest Data" --> B
-    B -- "⑭ Writes to Market Data Cache" --> C
-
-    %% OPTIONAL: Notification Flow Example
-    B -- "Rule Triggered" --> E
-    E -- "Email/Push Notification" --> A
-
-    %% Visual grouping
-    classDef zone fill:#F7F9FF,stroke:#555,stroke-width:2px;
-    class User,Platform,Ext zone;
-```
-
-### 7.2. Security
+### 7.1. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
@@ -1428,7 +1426,7 @@ flowchart LR
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
-### 7.3. Data Sources
+### 7.2. Data Sources
 
 - **Market Data Provider**: Alpha Vantage.
 - **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
@@ -1437,7 +1435,7 @@ flowchart LR
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-### 7.4. Non-Functional Requirements
+### 7.3. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
