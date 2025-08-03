@@ -634,7 +634,8 @@ The management of holdings follows the standard CRUD (Create, Retrieve, Update, 
 -   **Single Retrieval:** An authenticated user can retrieve the detailed contents of a single, specific holding. The response includes all of its purchase lots (see Chapter 5) and is enriched with computed performance and tax data from the market data cache.
 
 #### 4.2.3. Update
--   An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding; lot modifications are handled by the processes described in Chapter 5.
+-   **Manual Update:** An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding.
+-   **Update via File Import:** An authenticated user can add multiple new purchase lots to an existing holding by uploading a file from their broker. This process is used to update a holding with new transactions. For details on adding, updating, or deleting individual lots manually, see Chapter 5.
 
 #### 4.2.4. Deletion
 -   An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
@@ -868,9 +869,11 @@ sequenceDiagram
 - **H_E_2301**: "User is not authorized to access this resource."
 - **H_E_2302**: "The requested holding was not found."
 
-#### 4.3.4. H_3000: Holding Update
+#### 4.3.4. Holding Update
 
-- **Description**: Modifies the details of an existing holding (e.g., its `annualCosts`). This does not modify the lots within the holding. For lot modifications, see Chapter 5. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
+##### 4.3.4.1. H_3000: Manual Holding Update
+
+- **Description**: Manually modifies the metadata of an existing holding (e.g., its `annualCosts`). This does not modify the lots within the holding. For lot modifications, see Chapter 5. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
 - **Success Response**: The `Holding` document is updated in Firestore.
 - **Sub-Rules**:
 
@@ -887,6 +890,67 @@ sequenceDiagram
 - **H_E_3101**: "User is not authorized to update holding {holdingId}."
 - **H_E_3102**: "Holding {holdingId} not found."
 - **H_E_3103**: "A valid Idempotency-Key header is required for this operation."
+
+##### 4.3.4.2. H_3200: Holding Update via File Import
+
+- **Sequence Diagram for Holding Update via File Import**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant AI as AI Service (LLM)
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/lots/import<br>(file, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    Sentinel->>AI: 3. Parse file content for transactions
+    activate AI
+    AI-->>Sentinel: 4. Return structured JSON data (lots)
+    deactivate AI
+    Sentinel-->>User: 5. Return parsed JSON data for review
+    deactivate Sentinel
+
+    Note over User: User reviews and corrects the data<br> on the frontend
+    
+    User->>Sentinel: 6. POST /api/users/me/holdings/{holdingId}/lots/import/confirm<br> (corrected data, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 7. Validate corrected data
+    Sentinel->>DB: 8. Add new lots to the existing Holding document
+    activate DB
+    DB-->>Sentinel: 9. Confirm Update
+    deactivate DB
+
+    Sentinel-->>User: 10. HTTP 200 (Lots Added)
+    deactivate Sentinel
+```
+
+- **Description**: Updates a holding by adding new purchase lots from a user-uploaded file. This multi-step process is used to record new transactions for a security the user already owns.
+- **Success Response**: New `Lot` objects are added to the `lots` array of the specified `Holding` document, and its `modifiedAt` timestamp is updated.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_3201 | File upload succeeds | User is authenticated and owns the target holding, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_3201 |
+| H_I_3202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_3202 |
+| H_I_3203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to add new lots to the holding. | Request User to Sentinel | New lots are added to the holding in the database. | H_I_3203 |
+| H_I_3204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
+| H_E_3301 | User unauthorized | User is not authenticated or does not own the target holding. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_3301 |
+| H_E_3302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_3302 |
+| H_E_3303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | H_E_3303 |
+| H_E_3304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | H_E_3304 |
+| H_E_3305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | H_E_3305 |
+
+**Messages**:
+- **H_I_3201**: "File uploaded successfully for holding {holdingId}. Parsing in progress..."
+- **H_I_3202**: "File parsed successfully. Please review the extracted transactions."
+- **H_I_3203**: "Holding {holdingId} successfully updated with imported lots."
+- **H_E_3301**: "User is not authorized to import data to holding {holdingId}."
+- **H_E_3302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
+- **H_E_3303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
+- **H_E_3304**: "The corrected data contains errors. Please check all fields and resubmit."
+- **H_E_3305**: "A valid Idempotency-Key header is required for this operation."
 
 #### 4.3.5. H_4000: Holding Deletion
 
