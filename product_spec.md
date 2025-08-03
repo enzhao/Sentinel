@@ -525,9 +525,9 @@ The management of holdings and lots follows standard CRUD operations. A user can
 - **Adding Holdings/Lots:** Users can add new holdings. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
     - If a unique security is found, its identifiers (Ticker, ISIN, WKN) are automatically populated.
     - If multiple securities (e.g., a stock listed on different exchanges with different tickers) are found for a given ISIN/WKN, the user is prompted to select the correct one.
-    - Once a holding is added for a ticker that the system has not seen before, the backend automatically triggers a background job to fetch and cache at least one year (366 days) of historical market data for that ticker. This enables the display of the holding's historical price development.
+    - If a holding is added for a ticker that is new to the system, the backend triggers an asynchronous backfill process (see H_5000) to cache its historical data.
 - **Adding Lots:** Users can add new purchase lots to an existing holding.
-- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200).
+- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200). Any new tickers encountered during an import will also trigger the backfill process (H_5000).
 
 ### 3.2. Holding Management Rules
 
@@ -545,6 +545,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant Lookup as Financial Instrument<br>Lookup Service
     participant DB as Database
+    participant Backfill as Backfill Service
 
     User->>Sentinel: 1. POST /api/users/me/holdings/lookup<br> { identifier: "AAPL" }
     activate Sentinel
@@ -566,9 +567,11 @@ sequenceDiagram
     DB-->>Sentinel: 8. Confirm Creation
     deactivate DB
     
-    Note over Sentinel: If ticker is new, trigger backfill (async)
-    
-    Sentinel-->>User: 9. HTTP 201 Created
+    alt Ticker is new
+        Sentinel->>Backfill: 9. Trigger backfill for new ticker (async)
+    end
+
+    Sentinel-->>User: 10. HTTP 201 Created
     deactivate Sentinel
 ```
 
@@ -580,9 +583,8 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | H_I_1001 | Lookup succeeds (unique) | A single, unique instrument is found for the provided identifier. | Response Sentinel to User | The instrument's details (Ticker, ISIN, WKN) are returned to the user to proceed with adding lot details. | H_I_1001 |
 | H_I_1002 | Lookup succeeds (multiple) | Multiple instruments are found for the provided identifier. | Response Sentinel to User | A list of possible instruments is returned to the user for selection. | H_I_1002 |
-| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | A new `Holding` document is created. | H_I_1003 |
+| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | A new `Holding` document is created. If the ticker is new to the system, the backfill process (H_5000) is triggered asynchronously. | H_I_1003 |
 | H_I_1004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
-| **H_I_1005** | **New Ticker Backfill** | A holding is added with a ticker that does not exist in the `marketData` collection. | Sentinel internal | A background task is triggered to fetch and store at least one year (366 days) of historical data for the new ticker. The user's API request is not blocked. | N/A |
 | H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
 | H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
 | H_E_1103 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1103 |
@@ -611,6 +613,7 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant AI as AI Service (LLM)
     participant DB as Database
+    participant Backfill as Backfill Service
 
     User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/holdings/import<br>(file, ID Token)
     activate Sentinel
@@ -631,7 +634,12 @@ sequenceDiagram
     activate DB
     DB-->>Sentinel: 9. Confirm Creation
     deactivate DB
-    Sentinel-->>User: 10. HTTP 200 (Holdings Created)
+
+    alt For each new ticker in imported data
+        Sentinel->>Backfill: 10. Trigger backfill for new ticker (async)
+    end
+
+    Sentinel-->>User: 11. HTTP 200 (Holdings Created)
     deactivate Sentinel
 ```
 
@@ -649,7 +657,7 @@ sequenceDiagram
 |:---|:---|:---|:---|:---|:---|
 | H_I_1201 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_1201 |
 | H_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_1202 |
-| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to create new `Holding` documents. | Request User to Sentinel | New holdings are created in the database. | H_I_1203 |
+| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to create new `Holding` documents. | Request User to Sentinel | New holdings are created in the database. Any new tickers will trigger the asynchronous backfill process (H_5000). | H_I_1203 |
 | H_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
 | H_E_1301 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_1301 |
 | H_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_1302 |
@@ -767,7 +775,57 @@ sequenceDiagram
 - **H_E_4102**: "The specified holding or lot could not be found."
 - **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 3.2.5. H_5000: Move Holding
+#### 3.2.5. H_5000: Backfill for New Security
+
+- **Sequence Diagram for Asynchronous Backfill**
+
+```mermaid
+sequenceDiagram
+    participant Trigger as Holding Creation Process
+    participant Backfill as Backfill Service
+    participant DB as Database
+    participant API as Market Data API
+    participant Notify as User Interfact
+
+    Trigger->>Backfill: 1. Trigger backfill for new ticker<br> (async)
+    activate Backfill
+    Backfill->>DB: 2. Check if data for ticker exists
+    activate DB
+    DB-->>Backfill: 3. Data does not exist
+    deactivate DB
+
+    Backfill->>API: 4. Fetch full historical data
+    activate API
+    API-->>Backfill: 5. Return historical data
+    deactivate API
+
+    Backfill->>DB: 6. Save all fetched data
+    activate DB
+    DB-->>Backfill: 7. Confirm data saved
+    deactivate DB
+
+    alt History is shorter than 366 days
+        Backfill->>Notify: 8. Send 'Short History' message to user
+    end
+    deactivate Backfill
+```
+
+- **Description**: This process is triggered automatically by the backend whenever a new holding is created (either manually via H_1000 or via import with H_1200) for a ticker that does not yet have any data in the `marketData` collection. The process runs asynchronously to avoid blocking the user's request and ensures that historical data is available for charting and rule evaluation.
+- **Success Response**: Historical data for the new ticker is fetched from the external provider and stored in the `marketData` collection in Firestore.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_5001 | Backfill Triggered | A new holding is created with a ticker that has no existing data in the `marketData` collection. | Sentinel Internal | An asynchronous job is initiated to fetch historical data for the new ticker. | N/A |
+| H_I_5002 | Full History Backfill | The external data provider has more than 366 days of historical data for the ticker. | Sentinel to Data Provider | The most recent 366 days of data are fetched and stored in the `marketData` collection. | N/A |
+| H_I_5003 | Partial History Backfill | The external data provider has less than 366 days of historical data for the ticker (i.e., it is a new security). | Sentinel to Data Provider | All available historical data is fetched and stored. A notification is returned to the user. | H_I_5003 |
+| H_E_5101 | Backfill Fails | The external data provider API returns an error or is unavailable. | Sentinel to Data Provider | The error is logged. The system will retry the backfill at a later time. No data is stored. | H_E_5101 |
+
+**Messages**:
+- **H_I_5003**: "Note: The security '{ticker}' is new. Only {days} days of historical data were available and have been backfilled."
+- **H_E_5101**: "Could not fetch historical data for ticker {ticker}. The operation will be retried later."
+
+#### 3.2.6. H_6000: Move Holding
 
 - **Sequence Diagram for Moving a Holding**
 
@@ -805,21 +863,21 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_5001 | Holding move succeeds | User is authenticated, owns the holding and the destination portfolio. | Response Sentinel to User | Holding successfully moved. | H_I_5001 |
-| H_I_5002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful move request. | Request User to Sentinel | The response from the original successful request is returned; no new move is performed. | N/A |
-| H_E_5101 | User unauthorized | User is not authenticated or does not own the holding or the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 403 Forbidden. | H_E_5101 |
-| H_E_5102 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_5102 |
-| H_E_5103 | Portfolio not found | The destination `portfolioId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_5103 |
-| H_E_5104 | Invalid move request | The holding is already in the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 400 Bad Request. | H_E_5104 |
-| H_E_5105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Move rejected. | H_E_5105 |
+| H_I_6001 | Holding move succeeds | User is authenticated, owns the holding and the destination portfolio. | Response Sentinel to User | Holding successfully moved. | H_I_6001 |
+| H_I_6002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful move request. | Request User to Sentinel | The response from the original successful request is returned; no new move is performed. | N/A |
+| H_E_6101 | User unauthorized | User is not authenticated or does not own the holding or the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 403 Forbidden. | H_E_6101 |
+| H_E_6102 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_6102 |
+| H_E_6103 | Portfolio not found | The destination `portfolioId` does not exist. | Sentinel internal | Move rejected with HTTP 404 Not Found. | H_E_6103 |
+| H_E_6104 | Invalid move request | The holding is already in the destination portfolio. | Request User to Sentinel | Move rejected with HTTP 400 Bad Request. | H_E_6104 |
+| H_E_6105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Move rejected. | H_E_6105 |
 
 **Messages**:
-- **H_I_5001**: "Holding successfully moved to portfolio {destinationPortfolioName}."
-- **H_E_5101**: "User is not authorized to perform this action."
-- **H_E_5102**: "The specified holding could not be found."
-- **H_E_5103**: "The destination portfolio could not be found."
-- **H_E_5104**: "The holding is already in the destination portfolio."
-- **H_E_5105**: "A valid Idempotency-Key header is required for this operation."
+- **H_I_6001**: "Holding successfully moved to portfolio {destinationPortfolioName}."
+- **H_E_6101**: "User is not authorized to perform this action."
+- **H_E_6102**: "The specified holding could not be found."
+- **H_E_6103**: "The destination portfolio could not be found."
+- **H_E_6104**: "The holding is already in the destination portfolio."
+- **H_E_6105**: "A valid Idempotency-Key header is required for this operation."
 
 --- 
 
