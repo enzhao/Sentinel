@@ -786,23 +786,87 @@ sequenceDiagram
 - **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.3.3. H_2000: Holding Retrieval
+#### 4.3.3. Holding Retrieval
 
-- **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio. Lot details are included. For lot-specific operations, see Chapter 5.
+##### 4.3.3.1. H_2000: Holding List Retrieval (Portfolio Details View)
+
+- **Sequence Diagram for Holding List Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. GET /api/users/me/portfolios/{portfolioId}/holdings<br> (with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    Sentinel->>DB: 3. Query 'holdings' collection where<br> portfolioId == {portfolioId}
+    activate DB
+    DB-->>Sentinel: 4. Return Holding Documents
+    deactivate DB
+
+    Note over Sentinel, DB: Backend enriches each holding with<br>computed values from the market data cache.
+
+    Sentinel-->>User: 5. Return List of Enriched Holdings
+    deactivate Sentinel
+```
+
+- **Description**: When a user selects a portfolio, the application navigates to the "Portfolio Details View". This view immediately triggers a request to fetch a list of all holdings belonging to that portfolio. The response contains a list of holding objects, each enriched with computed performance data but without the detailed list of individual lots. Each holding in the list is clickable, allowing the user to navigate to the "Holding Details View".
+- **Examples**:
+    - **Example**: A user clicks on their "Real Money" portfolio. The application calls `GET /api/users/me/portfolios/{real-money-portfolio-id}/holdings`. The backend returns a list of all holdings in that portfolio, each with its `ComputedInfoHolding` data. The UI then displays this list.
+- **Success Response**: A list of enriched `Holding` summary objects for the specified portfolio is returned.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_2001 | Single retrieval succeeds | `GET /api/users/me/holdings/{holdingId}`. User is authenticated and owns the holding. | Response Sentinel to User | Full, enriched holding data is returned, including all lots. | H_I_2001 |
-| H_I_2002 | List retrieval succeeds | `GET /api/users/me/portfolios/{portfolioId}/holdings`. User is authenticated and owns the portfolio. | Response Sentinel to User | A list of enriched holdings for the portfolio is returned. | H_I_2002 |
-| H_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested item. | Request User to Sentinel | Retrieval rejected with HTTP 401/403. | H_E_2101 |
-| H_E_2102 | Item not found | The specified `holdingId` or `portfolioId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2102 |
+| H_I_2001 | List retrieval succeeds | User is authenticated and owns the portfolio. | Response Sentinel to User | A list of enriched holdings for the portfolio is returned. | H_I_2001 |
+| H_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested portfolio. | Request User to Sentinel | Retrieval rejected with HTTP 401/403. | H_E_2101 |
+| H_E_2102 | Portfolio not found | The specified `portfolioId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2102 |
 
 **Messages**:
-- **H_I_2001**: "Holding {holdingId} retrieved successfully."
-- **H_I_2002**: "Holdings for portfolio {portfolioId} retrieved successfully."
+- **H_I_2001**: "Holdings for portfolio {portfolioId} retrieved successfully."
 - **H_E_2101**: "User is not authorized to access this resource."
-- **H_E_2102**: "The requested item was not found."
+- **H_E_2102**: "The requested portfolio was not found."
+
+##### 4.3.3.2. H_2200: Single Holding Retrieval (Holding Details View)
+
+- **Sequence Diagram for Single Holding Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. GET /api/users/me/holdings/{holdingId}<br> (with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    Sentinel->>DB: 3. Fetch Holding Document from 'holdings' collection
+    activate DB
+    DB-->>Sentinel: 4. Return Holding Document with 'lots' array
+    deactivate DB
+
+    Note over Sentinel, DB: Backend enriches the holding and each lot<br>with computed values from market data cache.
+
+    Sentinel-->>User: 5. Return Fully Enriched Holding with all Lots
+    deactivate Sentinel
+```
+
+- **Description**: When a user clicks on a specific holding from the list in the "Portfolio Details View", the application navigates to the "Holding Details View". This triggers a request to get the full details of that single holding, identified by its `holdingId`. The response for this request is a single, fully enriched `Holding` object that includes the complete list of all its `Lot` objects, with each lot also being fully enriched with its own computed data.
+- **Success Response**: A single, fully enriched `Holding` object is returned, including all its enriched lots.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_2201 | Single retrieval succeeds | User is authenticated and owns the holding. | Response Sentinel to User | Full, enriched holding data is returned, including all lots. | H_I_2201 |
+| H_E_2301 | User unauthorized | User is not authenticated or is not the owner of the requested holding. | Request User to Sentinel | Retrieval rejected with HTTP 401/403. | H_E_2301 |
+| H_E_2302 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2302 |
+
+**Messages**:
+- **H_I_2201**: "Holding {holdingId} retrieved successfully."
+- **H_E_2301**: "User is not authorized to access this resource."
+- **H_E_2302**: "The requested holding was not found."
 
 #### 4.3.4. H_3000: Holding Update
 
