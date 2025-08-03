@@ -1090,8 +1090,76 @@ A state machine for this flow will be defined in a future version of this specif
 #### 5.2.2. Retrieval
 -   Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots that constitute that holding.
 
-#### 5.2.3. Update
--   An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`.
+#### 5.2.3. Manual Update of a Single Lot
+
+An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`. This is a manual-only operation performed through the user interface; updating lots via file import is not supported.
+
+###### 5.2.3.1. Visual Representation
+The following diagram visualizes the state machine flow for manually updating a lot.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Editing : USER_CLICKS_EDIT_LOT
+    Editing --> Idle : USER_CLICKS_CANCEL
+    Editing --> ValidateForm : USER_CLICKS_SAVE
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    FormError --> Editing : USER_DISMISSES_ERROR
+    APIError --> Editing : USER_DISMISSES_ERROR
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+```
+
+###### 5.2.3.2. State Machine for Manual Lot Update
+```yaml
+flowId: FLOW_UPDATE_LOT_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific holding, including its list of lots."
+    events:
+      USER_CLICKS_EDIT_LOT: Editing
+
+  - name: Editing
+    description: "A modal or form appears, pre-filled with the selected lot's details, ready for editing."
+    events:
+      USER_CLICKS_SAVE: ValidateForm
+      USER_CLICKS_CANCEL: Idle
+
+  - name: ValidateForm
+    description: "The system is performing client-side validation on the updated form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
+
+  - name: Submitting
+    description: "The system is submitting the updated lot data to the backend."
+    entryAction:
+      service: "PUT /api/users/me/holdings/{holdingId}/lots/{lotId}"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The user is shown a success message confirming the lot was updated."
+    exitAction:
+      action: CLOSE_MODAL_AND_REFRESH_VIEW
+      target: VIEW_HOLDING_DETAIL
+
+  - name: FormError
+    description: "The user is shown an error message indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: Editing
+
+  - name: APIError
+    description: "The user is shown a generic error message that the lot could not be updated."
+    events:
+      USER_DISMISSES_ERROR: Editing
+```
 
 #### 5.2.4. Deletion
 -   An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
