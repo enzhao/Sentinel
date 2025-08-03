@@ -600,7 +600,7 @@ sequenceDiagram
 
 ## 4. Holding Management
 
-This section details the management of individual holdings and their purchase lots. Holdings are top-level resources linked to a portfolio.
+This section details the management of individual holdings. A holding represents a specific financial instrument (like a stock or ETF) within a user's portfolio. Each holding can be composed of one or more purchase lots, which are detailed in Chapter 5. Holdings are top-level resources linked to a portfolio.
 
 ### 4.1. Holding Data Model and Business Process
 
@@ -619,32 +619,37 @@ This section details the management of individual holdings and their purchase lo
   - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
   - `currency`: Enum (`EUR`, `USD`, `GBP`).
   - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
-  - `lots`: Array of `Lot` objects.
-
-- **`Lot` (Object within Holding):**
-  - `lotId`: String (Unique UUID generated on creation).
-  - `purchaseDate`: ISODateTime.
-  - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+  - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
 
 #### 4.1.2. Business Process
 
-The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots.
+The management of holdings follows the standard CRUD (Create, Retrieve, Update, Delete) operations, as well as specialized processes for moving holdings and backfilling data. All operations are authenticated and authorized.
 
-- **Adding Holdings/Lots:** Users can add new holdings. The process is initiated by providing one of three identifiers: Ticker, ISIN, or WKN. The backend uses a financial instrument lookup service to find the matching security.
-    - If a unique security is found, its identifiers (Ticker, ISIN, WKN) are automatically populated.
-    - If multiple securities (e.g., a stock listed on different exchanges with different tickers) are found for a given ISIN/WKN, the user is prompted to select the correct one.
-    - If a holding is added for a ticker that is new to the system, the backend triggers an asynchronous backfill process (see H_5000) to cache its historical data.
-- **Adding Lots:** Users can add new purchase lots to an existing holding.
-- **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200). Any new tickers encountered during an import will also trigger the backfill process (H_5000).
+##### 4.1.2.1. Creation
+-   **Manual Creation:** An authenticated user can create a new holding in one of their portfolios. The process is interactive: the user provides an identifier (Ticker, ISIN, or WKN), the backend looks up the instrument, and the user confirms the selection before providing details for the initial purchase lot.
+-   **Import from File:** An authenticated user can add multiple holdings and their initial lots at once by uploading a file. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then creates the holdings.
+-   **Data Backfill:** When a holding is created for a ticker that is new to the system (either manually or via import), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
+
+##### 4.1.2.2. Retrieval
+-   **List Retrieval:** An authenticated user can retrieve a list of all holdings for a specific portfolio they own. This provides a summary view of each holding.
+-   **Single Retrieval:** An authenticated user can retrieve the detailed contents of a single, specific holding. The response includes all of its purchase lots (see Chapter 5) and is enriched with computed performance and tax data from the market data cache.
+
+##### 4.1.2.3. Update
+-   An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding; lot modifications are handled by the processes described in Chapter 5.
+
+##### 4.1.2.4. Deletion
+-   An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
+
+##### 4.1.2.5. Move
+-   An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
 
 ### 4.2. Holding Management Rules
 
-This section will detail the specific rules for creating, updating, and deleting holdings and lots.
+This section will detail the specific rules for creating, updating, and deleting holdings.
 
-#### 4.2.1. Holding/Lot Creation
-
-##### 4.2.1.1. H_1000: Manual Creation (Interactive)
+#### 4.2.1. H_1000: Holding Creation (Manual, Interactive)
 
 - **Sequence Diagram for Interactive Holding Creation**
 
@@ -684,7 +689,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Manually adds a new holding via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the `portfolioId` and lot details to complete the creation.
+- **Description**: Manually adds a new holding via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the `portfolioId` and details for at least one initial purchase lot to complete the creation.
 - **Success Response**: A new `Holding` document is created in the top-level `holdings` collection.
 - **Sub-Rules**:
 
@@ -697,7 +702,7 @@ sequenceDiagram
 | H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
 | H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
 | H_E_1103 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1103 |
-| H_E_1104 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1104 |
+| H_E_1104 | Invalid lot data | The initial `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1104 |
 | H_E_1105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values in the final creation step. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1105 |
 | H_E_1106 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | H_E_1106 |
 
@@ -712,7 +717,7 @@ sequenceDiagram
 - **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
 - **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-##### 4.2.1.2. H_1200: Import from File
+#### 4.2.2. H_1200: Holding Creation (Import from File)
 
 - **Sequence Diagram for Holding Import**
 
@@ -752,7 +757,7 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-- **Description**: Handles the multi-step process of adding holdings and lots to a specific portfolio from a user-uploaded file.
+- **Description**: Handles the multi-step process of adding holdings and their initial lots to a specific portfolio from a user-uploaded file.
 - **Examples**:
     - **Example**:
         - A user uploads a CSV file to import transactions into their "Paper Trading" portfolio.
@@ -784,14 +789,14 @@ sequenceDiagram
 - **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.2. H_2000: Holding/Lot Retrieval
+#### 4.2.3. H_2000: Holding Retrieval
 
-- **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio.
+- **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio. Lot details are included. For lot-specific operations, see Chapter 5.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_2001 | Single retrieval succeeds | `GET /api/users/me/holdings/{holdingId}`. User is authenticated and owns the holding. | Response Sentinel to User | Full, enriched holding data is returned. | H_I_2001 |
+| H_I_2001 | Single retrieval succeeds | `GET /api/users/me/holdings/{holdingId}`. User is authenticated and owns the holding. | Response Sentinel to User | Full, enriched holding data is returned, including all lots. | H_I_2001 |
 | H_I_2002 | List retrieval succeeds | `GET /api/users/me/portfolios/{portfolioId}/holdings`. User is authenticated and owns the portfolio. | Response Sentinel to User | A list of enriched holdings for the portfolio is returned. | H_I_2002 |
 | H_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested item. | Request User to Sentinel | Retrieval rejected with HTTP 401/403. | H_E_2101 |
 | H_E_2102 | Item not found | The specified `holdingId` or `portfolioId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2102 |
@@ -802,15 +807,15 @@ sequenceDiagram
 - **H_E_2101**: "User is not authorized to access this resource."
 - **H_E_2102**: "The requested item was not found."
 
-#### 4.2.3. H_3000: Holding/Lot Update
+#### 4.2.4. H_3000: Holding Update
 
-- **Description**: Modifies the details of an existing holding or one of its lots. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
+- **Description**: Modifies the details of an existing holding (e.g., its `annualCosts`). This does not modify the lots within the holding. For lot modifications, see Chapter 5. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
 - **Success Response**: The `Holding` document is updated in Firestore.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_3001 | Update succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Holding updated. | H_I_3001 |
+| H_I_3001 | Update succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Holding metadata updated. | H_I_3001 |
 | H_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
 | H_E_3101 | User unauthorized | User not authorized. | Request User to Sentinel | Update rejected. | H_E_3101 |
 | H_E_3102 | Holding not found | `holdingId` invalid. | Sentinel internal | Update rejected. | H_E_3102 |
@@ -822,9 +827,9 @@ sequenceDiagram
 - **H_E_3102**: "Holding {holdingId} not found."
 - **H_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.4. H_4000: Holding/Lot Deletion
+#### 4.2.5. H_4000: Holding Deletion
 
-- **Sequence Diagram for Holding/Lot Deletion**
+- **Sequence Diagram for Holding Deletion**
 
 ```mermaid
 sequenceDiagram
@@ -832,59 +837,42 @@ sequenceDiagram
     participant Sentinel as Sentinel Backend
     participant DB as Database
 
-    User->>Sentinel: 1. DELETE /api/users/me/holdings/{holdingId}<br> (or /lots/{lotId}) (with ID Token)
+    User->>Sentinel: 1. DELETE /api/users/me/holdings/{holdingId}<br> (with ID Token)
     activate Sentinel
     Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
     
     alt Authorization OK & Item Found
-        alt Deleting a Lot
-            Sentinel->>DB: 3a. Fetch Holding Document
-            activate DB
-            DB-->>Sentinel: 4a. Return Holding Data
-            deactivate DB
-            Sentinel->>Sentinel: 5a. Remove specific lot from data
-            Sentinel->>DB: 6a. Update Holding Document in DB
-            activate DB
-            DB-->>Sentinel: 7a. Confirm Update
-            deactivate DB
-        else Deleting an entire Holding
-            Sentinel->>DB: 3b. Delete Holding Document from DB
-            activate DB
-            DB-->>Sentinel: 4b. Confirm Deletion
-            deactivate DB
-        end
+        Sentinel->>DB: 3. Delete Holding Document from DB
+        activate DB
+        DB-->>Sentinel: 4. Confirm Deletion
+        deactivate DB
         
-        Sentinel-->>User: 8. Return HTTP 200 OK (Success)
+        Sentinel-->>User: 5. Return HTTP 200 OK (Success)
     else Authorization Fails or Item Not Found
         Sentinel-->>User: Return HTTP 4xx Error (e.g., 403, 404)
     end
     deactivate Sentinel
 ```
 
-- **Description**: Deletes a specific purchase lot from a holding, or an entire holding (including all its lots and rules).
-- **Examples**:
-    - **Example**:
-        - A user has a holding of "AAPL" with two purchase lots. They realize they entered one lot incorrectly.
-        - The user sends a `DELETE` request with the specific `lotId` to the endpoint `/api/users/me/holdings/{holdingId}/lots/{lotId}`.
-        - The backend removes only that specific lot from the holding's `lots` array, leaving the other lot intact.
-- **Success Response**: The specified item is removed from the `Holding` document or the entire document is deleted.
+- **Description**: Deletes an entire holding, including all its lots and associated rules.
+- **Success Response**: The specified `Holding` document is deleted from Firestore.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_4001 | Item deletion succeeds | User is authenticated, owns the holding, and the specified holding/lot ID exists. | Response Sentinel to User | Item successfully deleted. | H_I_4001 |
+| H_I_4001 | Holding deletion succeeds | User is authenticated, owns the holding. | Response Sentinel to User | Holding successfully deleted. | H_I_4001 |
 | H_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
 | H_E_4101 | User unauthorized | User is not authenticated or does not own the holding. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | H_E_4101 |
-| H_E_4102 | Item not found | The specified `holdingId` or `lotId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | H_E_4102 |
+| H_E_4102 | Item not found | The specified `holdingId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | H_E_4102 |
 | H_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | H_E_4103 |
 
 **Messages**:
-- **H_I_4001**: "Item successfully deleted."
+- **H_I_4001**: "Holding successfully deleted."
 - **H_E_4101**: "User is not authorized to delete this item."
-- **H_E_4102**: "The specified holding or lot could not be found."
+- **H_E_4102**: "The specified holding could not be found."
 - **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 4.2.5. H_5000: Backfill for New Security
+#### 4.2.6. H_5000: Backfill for New Security
 
 - **Sequence Diagram for Asynchronous Backfill**
 
@@ -934,7 +922,7 @@ sequenceDiagram
 - **H_I_5003**: "Note: The security '{ticker}' is new. Only {days} days of historical data were available and have been backfilled."
 - **H_E_5101**: "Could not fetch historical data for ticker {ticker}. The operation will be retried later."
 
-#### 4.2.6. H_6000: Move Holding
+#### 4.2.7. H_6000: Move Holding
 
 - **Sequence Diagram for Moving a Holding**
 
@@ -990,11 +978,169 @@ sequenceDiagram
 
 --- 
 
-## 5. Strategy Rule Management
+## 5. Lot Management
+
+This section details the management of individual purchase lots. Lots represent a specific purchase of a quantity of a security at a certain price and date. They always exist as part of a `Holding` (see Chapter 4).
+
+### 5.1. Lot Data Model and Business Process
+
+#### 5.1.1. Associated Data Models
+
+- **`Lot` (Object within Holding):**
+  - `lotId`: String (Unique UUID generated on creation).
+  - `purchaseDate`: ISODateTime.
+  - `quantity`: Number (of shares, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+
+#### 5.1.2. Business Process
+
+The management of lots follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated, authorized, and performed in the context of a parent holding.
+
+##### 5.1.2.1. Creation
+-   An authenticated user can add a new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding.
+
+##### 5.1.2.2. Retrieval
+-   Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots that constitute that holding.
+
+##### 5.1.2.3. Update
+-   An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`.
+
+##### 5.1.2.4. Deletion
+-   An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
+
+### 5.2. Lot Management Rules
+
+This section will detail the specific rules for creating, updating, and deleting lots.
+
+#### 5.2.1. L_1000: Lot Creation
+
+- **Sequence Diagram for Lot Creation**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/lots<br> (lotDetails, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    Sentinel->>Sentinel: 3. Validate incoming lotDetails
+    
+    alt Validation & Authorization OK
+        Sentinel->>DB: 4. Fetch Holding Document
+        activate DB
+        DB-->>Sentinel: 5. Return Holding Data
+        deactivate DB
+        Sentinel->>Sentinel: 6. Add new lot to holding's 'lots' array
+        Sentinel->>DB: 7. Update Holding Document in DB
+        activate DB
+        DB-->>Sentinel: 8. Confirm Update Success
+        deactivate DB
+        Sentinel-->>User: 9. Return HTTP 201 Created (Success)
+    else Validation or Authorization Fails
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 400, 403, 404)
+    end
+    deactivate Sentinel
+```
+- **Description**: Adds a new purchase lot to an existing holding.
+- **Success Response**: The new lot is added to the `lots` array within the specified `Holding` document.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| L_I_1001 | Creation succeeds | All provided lot data is valid, and the user is authorized for the parent holding. | Response Sentinel to User | A new lot is added to the holding. | L_I_1001 |
+| L_I_1002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
+| L_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified holding. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | L_E_1101 |
+| L_E_1102 | Holding not found | The specified `holdingId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | L_E_1102 |
+| L_E_1103 | Invalid lot data | `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | L_E_1103 |
+| L_E_1104 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | L_E_1104 |
+
+**Messages**:
+- **L_I_1001**: "Lot added successfully to holding {holdingId}."
+- **L_E_1101**: "User is not authorized to modify holding {holdingId}."
+- **L_E_1102**: "Holding with ID {holdingId} not found."
+- **L_E_1103**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
+- **L_E_1104**: "A valid Idempotency-Key header is required for this operation."
+
+#### 5.2.2. L_2000: Lot Retrieval
+- **Description**: This is implicitly handled by H_2000 (Holding Retrieval), which returns all lots within the holding. A dedicated endpoint to list only lots is not required for the MVP.
+
+#### 5.2.3. L_3000: Lot Update
+- **Description**: Modifies the details of an existing lot within a holding. The endpoint is `PUT /api/users/me/holdings/{holdingId}/lots/{lotId}`.
+- **Success Response**: The specified lot is updated within the `Holding` document.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| L_I_3001 | Update succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Lot updated. | L_I_3001 |
+| L_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
+| L_E_3101 | User unauthorized | User not authorized. | Request User to Sentinel | Update rejected. | L_E_3101 |
+| L_E_3102 | Holding or Lot not found | `holdingId` or `lotId` invalid. | Sentinel internal | Update rejected. | L_E_3102 |
+| L_E_3103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | L_E_3103 |
+
+**Messages**:
+- **L_I_3001**: "Lot {lotId} updated successfully."
+- **L_E_3101**: "User is not authorized to update this lot."
+- **L_E_3102**: "Holding {holdingId} or Lot {lotId} not found."
+- **L_E_3103**: "A valid Idempotency-Key header is required for this operation."
+
+#### 5.2.4. L_4000: Lot Deletion
+- **Description**: Deletes a specific purchase lot from a holding. The endpoint is `DELETE /api/users/me/holdings/{holdingId}/lots/{lotId}`.
+- **Sequence Diagram for Lot Deletion**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. DELETE /api/users/me/holdings/{holdingId}/lots/{lotId}<br> (with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    
+    alt Authorization OK & Item Found
+        Sentinel->>DB: 3. Fetch Holding Document
+        activate DB
+        DB-->>Sentinel: 4. Return Holding Data
+        deactivate DB
+        Sentinel->>Sentinel: 5. Remove specific lot from 'lots' array
+        Sentinel->>DB: 6. Update Holding Document in DB
+        activate DB
+        DB-->>Sentinel: 7. Confirm Update
+        deactivate DB
+        Sentinel-->>User: 8. Return HTTP 200 OK (Success)
+    else Authorization Fails or Item Not Found
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 403, 404)
+    end
+    deactivate Sentinel
+```
+- **Success Response**: The specified lot is removed from the `Holding` document.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| L_I_4001 | Lot deletion succeeds | User is authenticated, owns the holding, and the specified lot ID exists. | Response Sentinel to User | Lot successfully deleted. | L_I_4001 |
+| L_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
+| L_E_4101 | User unauthorized | User is not authenticated or does not own the holding. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | L_E_4101 |
+| L_E_4102 | Item not found | The specified `holdingId` or `lotId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | L_E_4102 |
+| L_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | L_E_4103 |
+
+**Messages**:
+- **L_I_4001**: "Lot successfully deleted."
+- **L_E_4101**: "User is not authorized to delete this item."
+- **L_E_4102**: "The specified holding or lot could not be found."
+- **L_E_4103**: "A valid Idempotency-Key header is required for this operation."
+
+--- 
+
+## 6. Strategy Rule Management
 
 This section details the management of buy and sell rules that encode the user’s investment strategy for a specific holding.
 
-### 5.1. Rule Data Model and Business Process
+### 6.1. Rule Data Model and Business Process
 
 **Associated Data Models**:
 - `Rule` (Firestore sub-collection under a Holding):
@@ -1008,7 +1154,7 @@ This section details the management of buy and sell rules that encode the user�
   - `conditionId`: Unique UUID.
   - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`, `MACD`).
   - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN, `{period: 200, operator: 'cross_below'}` for SMA).
-- `Alert` (generated, see Section 5):
+- `Alert` (generated, see Section 7):
   - `alertId`: Unique UUID.
   - `ruleId`: UUID linking to rule.
   - `holdingId`: UUID linking to the holding.
@@ -1061,11 +1207,11 @@ sequenceDiagram
 **Example**:
 - A user has a holding of "QQQ.DE". They create a BUY rule for it with `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
 - The rule is created and linked to the "QQQ.DE" holding.
-- If the conditions are met, an alert is triggered (see Chapter 6).
+- If the conditions are met, an alert is triggered (see Chapter 7).
 
-### 5.2. Rule Management Rules
+### 6.2. Rule Management Rules
 
-#### 5.2.1. R_1000: Rule Creation
+#### 6.2.1. R_1000: Rule Creation
 
 - **Description**: Creates a new buy or sell rule for a specific holding.
 - **Success Response**: Rule created with `ENABLED` status.
@@ -1085,7 +1231,7 @@ sequenceDiagram
 - **R_E_1102**: "Conditions invalid: Unknown type or invalid parameters."
 - **R_E_1103**: "Holding {holdingId} not found."
 
-#### 5.2.2. R_2000: Rule Update
+#### 6.2.2. R_2000: Rule Update
 
 - **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/holdings/{holdingId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
@@ -1102,7 +1248,7 @@ sequenceDiagram
 - **R_E_2101**: "User is not authorized to update rule {ruleId}."
 - **R_E_2102**: "Rule {ruleId} not found."
 
-#### 5.2.3. R_3000: Rule Retrieval
+#### 6.2.3. R_3000: Rule Retrieval
 
 - **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/users/me/holdings/{holdingId}/rules`.
 - **Success Response**: Rule(s) returned.
@@ -1117,11 +1263,11 @@ sequenceDiagram
 - **R_I_3001**: "Rules retrieved successfully for holding {holdingId}."
 - **R_E_3101**: "User is not authorized to retrieve rules for this holding."
 
-## 6. Market Monitoring and Notification
+## 7. Market Monitoring and Notification
 
 This section details the automated monitoring of market data and generation of notifications when rules are triggered.
 
-### 6.1. Monitoring and Notification Data Model and Business Process
+### 7.1. Monitoring and Notification Data Model and Business Process
 
 **Associated Data Models**:
 - `MarketData` (fetched daily):
@@ -1192,9 +1338,9 @@ sequenceDiagram
 - Alert created: `holdingId: "holding-001"`, `marketData: {closePrice: 340, rsi14: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
-### 6.2. Monitoring and Notification Rules
+### 7.2. Monitoring and Notification Rules
 
-#### 6.2.1. M_1000: Rule Evaluation and Alert Generation
+#### 7.2.1. M_1000: Rule Evaluation and Alert Generation
 
 - **Description**: Evaluates rules and generates alerts.
 - **Success Response**: Alerts created for triggered rules.
@@ -1210,7 +1356,7 @@ sequenceDiagram
 - **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
 - **M_E_1101**: "Market data unavailable for ticker {ticker}, evaluation skipped."
 
-#### 6.2.2. M_2000: Notification Delivery
+#### 7.2.2. M_2000: Notification Delivery
 
 - **Description**: Sends alerts to users.
 - **Success Response**: Notifications delivered.
@@ -1225,13 +1371,13 @@ sequenceDiagram
 - **N_I_2001**: "Notification for alert {alertId} sent successfully."
 - **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
 
-## 7. User Authentication and Authorization
+## 8. User Authentication and Authorization
 
 This section details the processes for user registration, login, logout, and the authorization mechanism for securing backend API endpoints. The system uses a decoupled authentication model where the frontend communicates directly with Firebase Authentication for identity management, and the Sentinel backend is only responsible for validating the resulting tokens.
 
-### 7.1. User Authentication Data Model and Business Process
+### 8.1. User Authentication Data Model and Business Process
 
-#### 7.1.1. Associated Data Models
+#### 8.1.1. Associated Data Models
 
 - **`User` (Firestore Document):**
   - A new top-level collection (`users`) will be created to store application-specific user data.
@@ -1257,7 +1403,7 @@ This section details the processes for user registration, login, logout, and the
   - A short-lived, signed token generated by the Firebase client-side SDK upon successful login or signup.
   - The frontend sends this token in the `Authorization` header of every API request to prove the user's identity.
 
-#### 7.1.2. Business Process
+#### 8.1.2. Business Process
 
 1. **Signup/Login (Frontend ↔ Firebase)**: The user interacts with the frontend UI. The Vue.js application communicates **directly and exclusively with the Firebase Authentication service** to handle user creation and password verification. The Sentinel backend is **not involved** in this process.
 2. **Token Issuance (Firebase → Frontend)**: Upon successful authentication, Firebase issues a secure ID Token (JWT) to the frontend. The frontend stores this token and the user's state.
@@ -1269,7 +1415,7 @@ This section details the processes for user registration, login, logout, and the
 
 **Note on User Deletion:** The functionality for a user to delete their own account is a planned feature for a future release and is out of scope for the MVP.
 
-#### 7.1.3. Sequence Diagram for an Authenticated API Call
+#### 8.1.3. Sequence Diagram for an Authenticated API Call
 
 ```mermaid
 sequenceDiagram
@@ -1294,9 +1440,9 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-### 7.2. User Authentication and Authorization Rules
+### 8.2. User Authentication and Authorization Rules
 
-#### 7.2.1. U_1000: User Signup
+#### 8.2.1. U_1000: User Signup
 
 - **Sequence Diagram for User Signup**
 ```mermaid
@@ -1366,7 +1512,7 @@ sequenceDiagram
 - **U_E_1105**: "Username must be at least 3 characters long."
 - **U_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-#### 7.2.2. U_2000: User Login
+#### 8.2.2. U_2000: User Login
 
 - **Sequence Diagram for User Login**
 ```mermaid
@@ -1393,7 +1539,7 @@ sequenceDiagram
 - **U_I_2001**: "User {username} logged in successfully."
 - **U_E_2101**: "Invalid login credentials. Please check your email and password."
 
-#### 7.2.3. U_3000: API Request Authorization
+#### 8.2.3. U_3000: API Request Authorization
 
 - **Sequence Diagram for API Request Authorization**
 ```mermaid
@@ -1430,9 +1576,9 @@ sequenceDiagram
 - **U_E_3103**: "The provided ID token has expired. Please log in again."
 
 
-## 8. Technical Specifications
+## 9. Technical Specifications
 
-### 8.1. Security
+### 9.1. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
@@ -1459,7 +1605,7 @@ sequenceDiagram
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
-### 8.2. Data Sources
+### 9.2. Data Sources
 
 - **Market Data Provider**: Alpha Vantage.
 - **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
@@ -1468,7 +1614,7 @@ sequenceDiagram
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-### 8.3. Non-Functional Requirements
+### 9.3. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
