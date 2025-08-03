@@ -185,7 +185,7 @@ This section details the management of user portfolios. A user can create and ma
 
 ### 3.1. Portfolio and Cash Data Model
 
-Associated Data Models:
+#### 3.1.1. Stored Data Models
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
@@ -202,54 +202,16 @@ Associated Data Models:
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
-- **`MarketData` (Firestore Document):**
-  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
-  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
-  - Each document contains:
-    - `date`: ISODateTime.
-    - `ticker`: String.
-    - `open`: Number (EUR).
-    - `high`: Number (EUR).
-    - `low`: Number (EUR).
-    - `close`: Number (EUR).
-    - `volume`: Integer.
-    - `sma200`: Optional<Number> (200-day simple moving average).
-    - `sma50`: Optional<Number> (50-day simple moving average).
-    - `sma20`: Optional<Number> (20-day simple moving average).
-    - `sma7`: Optional<Number> (7-day simple moving average).
-    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
-    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
-    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
-    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
-    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
-    - `atr14`: Optional<Number> (14-day Average True Range).
-    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
-  - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
-  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
+#### 3.1.2. Computed Data Models
 
-- **`ComputedInfo` (Calculated on retrieval, not stored):**
-  - This information is calculated by reading from the internal `MarketData` cache and added to the `Portfolio`, `Holding`, and `Lot` objects in the API response.
-  - **Note on Currency Conversion**:
-    - For **portfolio-level** views and aggregations, all monetary values from holdings are converted to the portfolio's `defaultCurrency`. This requires a reliable, daily source for exchange rates.
-    - For the detailed view of a **single holding**, performance metrics can be displayed in the holding's native currency without conversion.
-  - **At the `Lot` level:**
-    - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-    - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-    - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-    - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-    - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - **At the `Holding` level (aggregated from its lots):**
-    - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
-    - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
-    - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
-    - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
-    - `gainLossPercentage`: Number (%).
-  - **At the `Portfolio` level (aggregated from all holdings, always in portfolio's `defaultCurrency`):**
-    - `totalCost`: Number (in the portfolio's `defaultCurrency`).
-    - `currentValue`: Number (in the portfolio's `defaultCurrency`).
-    - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
-    - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
-    - `gainLossPercentage`: Number (%).
+The information in this section is calculated on-the-fly by the backend API and embedded into the main data object (`Portfolio`) in the API response. It is not stored in the database.
+
+- **`ComputedInfoPortfolio` (Object embedded in `Portfolio`):**
+  - `totalCost`: Number (in the portfolio's `defaultCurrency`).
+  - `currentValue`: Number (in the portfolio's `defaultCurrency`).
+  - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+  - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+  - `gainLossPercentage`: Number (%).
 
 ### 3.2. Business Process
 
@@ -604,7 +566,7 @@ This section details the management of individual holdings. A holding represents
 
 ### 4.1. Holding Data Model
 
-Associated Data Models:
+#### 4.1.1. Stored Data Models
 
 - **`Holding` (Firestore Document):**
   - A new top-level collection (`holdings`) will be created.
@@ -622,6 +584,42 @@ Associated Data Models:
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
   - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
+
+- **`MarketData` (Firestore Document):**
+  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
+  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
+  - Each document contains:
+    - `date`: ISODateTime.
+    - `ticker`: String.
+    - `open`: Number (EUR).
+    - `high`: Number (EUR).
+    - `low`: Number (EUR).
+    - `close`: Number (EUR).
+    - `volume`: Integer.
+    - `sma200`: Optional<Number> (200-day simple moving average).
+    - `sma50`: Optional<Number> (50-day simple moving average).
+    - `sma20`: Optional<Number> (20-day simple moving average).
+    - `sma7`: Optional<Number> (7-day simple moving average).
+    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
+    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
+    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
+    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
+    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
+    - `atr14`: Optional<Number> (14-day Average True Range).
+    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
+  - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
+  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
+
+#### 4.1.2. Computed Data Models
+
+The information in this section is calculated on-the-fly by the backend API and embedded into each `Holding` object in the API response. It is not stored in the database.
+
+- **`ComputedInfoHolding` (Object embedded in `Holding`):**
+  - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
+  - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+  - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+  - `gainLossPercentage`: Number (%).
 
 ### 4.2. Business Process
 
@@ -984,7 +982,7 @@ This section details the management of individual purchase lots. Lots represent 
 
 ### 5.1. Lot Data Model
 
-Associated Data Models:
+#### 5.1.1. Stored Data Models
 
 - **`Lot` (Object within Holding):**
   - `lotId`: String (Unique UUID generated on creation).
@@ -993,6 +991,17 @@ Associated Data Models:
   - `purchasePrice`: Number (per share, positive, in the currency of the holding).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
+
+#### 5.1.2. Computed Data Models
+
+The information in this section is calculated on-the-fly by the backend API and embedded into each `Lot` object in the API response. It is not stored in the database.
+
+- **`ComputedInfoLot` (Object embedded in `Lot`):**
+  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
 
 ### 5.2. Business Process
 
