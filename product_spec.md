@@ -607,7 +607,6 @@ This section details the management of individual holdings. A holding represents
     - `rsi14`: Optional<Number> (14-day Relative Strength Index).
     - `atr14`: Optional<Number> (14-day Average True Range).
     - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
-  - **Note on VIX**: The VIX index itself is not fetched directly. Instead, data for a VIX-tracking ETF (e.g., `VIXY`) is fetched and stored under its own ticker in this same collection.
   - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
 
 #### 4.1.2. Computed Data Models
@@ -1472,6 +1471,15 @@ sequenceDiagram
 **Messages**:
 - **N_I_2001**: "Notification for alert {alertId} sent successfully."
 - **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
+
+---
+
+### 7.3. System-Required Market Data
+
+#### 7.3.1. M_3000: System Ticker Management
+- **Description**: To support rules based on broad market indicators (e.g., market volatility via the VIX), the system maintains a list of "system-required" proxy tickers. The data for these tickers is treated as essential global context and is not tied to any single user's portfolio. The primary proxy ticker for the MVP is `VIXY` (or a similar VIX-tracking ETF), which serves as the data source for the `VIX` rule condition.
+- **Process**: The daily Monitoring Engine (as described in section 7.1) is responsible for fetching and caching the latest market data for all system-required tickers, in addition to the tickers found in user holdings. If historical data for a system ticker is missing, the engine will backfill it.
+- **Configuration**: The list of system-required tickers will be maintained in the backend configuration to allow for future expansion.
 
 ## 8. User Authentication and Authorization
 
