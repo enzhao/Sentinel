@@ -1088,7 +1088,34 @@ An authenticated user can add multiple new lots to an *existing holding* by uplo
 A state machine for this flow will be defined in a future version of this specification.
 
 #### 5.2.2. Retrieval
--   Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots that constitute that holding.
+
+Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots. The client-side application then manages the display of this data, allowing the user to view a summary list and drill down into specific lot details without further API calls.
+
+###### 5.2.2.1. Visual Representation
+The following diagram visualizes the state machine flow for viewing lot details.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ViewingHolding
+    ViewingHolding --> ShowingLotDetail : USER_CLICKS_LOT
+    ShowingLotDetail --> ViewingHolding : USER_DISMISSES_DETAIL_VIEW
+```
+
+###### 5.2.2.2. State Machine for Viewing Lot Details
+```yaml
+flowId: FLOW_VIEW_LOT_DETAIL
+initialState: ViewingHolding
+states:
+  - name: ViewingHolding
+    description: "The user is viewing the details of a specific holding, including a summary list of its lots (purchase date, quantity, price)."
+    events:
+      USER_CLICKS_LOT: ShowingLotDetail
+
+  - name: ShowingLotDetail
+    description: "A modal or expanded view is displayed, showing the full stored and computed details for the selected lot."
+    events:
+      USER_DISMISSES_DETAIL_VIEW: ViewingHolding
+```
 
 #### 5.2.3. Manual Update of a Single Lot
 
@@ -1162,7 +1189,58 @@ states:
 ```
 
 #### 5.2.4. Deletion
--   An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
+An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
+
+###### 5.2.4.1. Visual Representation
+The following diagram visualizes the state machine flow for manually deleting a lot.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> ConfirmingDelete : USER_CLICKS_DELETE_LOT
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    APIError --> Idle : USER_DISMISSES_ERROR
+    Success --> [*] : REFRESH_VIEW
+```
+
+###### 5.2.4.2. State Machine for Manual Lot Deletion
+```yaml
+flowId: FLOW_DELETE_LOT_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific holding, including its list of lots."
+    events:
+      USER_CLICKS_DELETE_LOT: ConfirmingDelete
+
+  - name: ConfirmingDelete
+    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected lot."
+    events:
+      USER_CLICKS_CONFIRM_DELETE: Submitting
+      USER_CLICKS_CANCEL_DELETE: Idle
+
+  - name: Submitting
+    description: "The system is submitting the delete request to the backend."
+    entryAction:
+      service: "DELETE /api/users/me/holdings/{holdingId}/lots/{lotId}"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The lot is successfully deleted from the backend."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_HOLDING_DETAIL
+
+  - name: APIError
+    description: "The user is shown a generic error message that the lot could not be deleted."
+    events:
+      USER_DISMISSES_ERROR: Idle
+```
 
 ### 5.3. Lot Management Rules
 
