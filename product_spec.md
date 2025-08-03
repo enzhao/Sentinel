@@ -1014,9 +1014,11 @@ The management of lots follows the standard CRUD (Create, Retrieve, Update, Dele
 
 This section will detail the specific rules for creating, updating, and deleting lots.
 
-#### 5.2.1. L_1000: Lot Creation
+#### 5.2.1. Lot Creation
 
-- **Sequence Diagram for Lot Creation**
+##### 5.2.1.1. L_1000: Manual Creation
+
+- **Sequence Diagram for Manual Lot Creation**
 
 ```mermaid
 sequenceDiagram
@@ -1045,7 +1047,7 @@ sequenceDiagram
     end
     deactivate Sentinel
 ```
-- **Description**: Adds a new purchase lot to an existing holding.
+- **Description**: Manually adds a new purchase lot to an existing holding.
 - **Success Response**: The new lot is added to the `lots` array within the specified `Holding` document.
 - **Sub-Rules**:
 
@@ -1065,11 +1067,102 @@ sequenceDiagram
 - **L_E_1103**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
 - **L_E_1104**: "A valid Idempotency-Key header is required for this operation."
 
+##### 5.2.1.2. L_1200: Import from File
+
+- **Sequence Diagram for Lot Import**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant AI as AI Service (LLM)
+    participant DB as Database
+
+    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/lots/import<br>(file, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    Sentinel->>AI: 3. Parse file content for transactions
+    activate AI
+    AI-->>Sentinel: 4. Return structured JSON data (lots)
+    deactivate AI
+    Sentinel-->>User: 5. Return parsed JSON data for review
+    deactivate Sentinel
+
+    Note over User: User reviews and corrects the data<br> on the frontend
+    
+    User->>Sentinel: 6. POST /api/users/me/holdings/{holdingId}/lots/import/confirm<br> (corrected data, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 7. Validate corrected data
+    Sentinel->>DB: 8. Add new lots to the existing Holding document
+    activate DB
+    DB-->>Sentinel: 9. Confirm Update
+    deactivate DB
+
+    Sentinel-->>User: 10. HTTP 200 (Lots Added)
+    deactivate Sentinel
+```
+
+- **Description**: Handles the multi-step process of adding new lots to an existing holding from a user-uploaded file.
+- **Success Response**: New `Lot` objects are added to the `lots` array of the specified `Holding` document.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| L_I_1201 | File upload succeeds | User is authenticated and owns the target holding, file is valid. | Request User to Sentinel | File is accepted for parsing. | L_I_1201 |
+| L_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | L_I_1202 |
+| L_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to add new lots to the holding. | Request User to Sentinel | New lots are added to the holding in the database. | L_I_1203 |
+| L_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
+| L_E_1301 | User unauthorized | User is not authenticated or does not own the target holding. | Request User to Sentinel | Request rejected with HTTP 401/403. | L_E_1301 |
+| L_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | L_E_1302 |
+| L_E_1303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | L_E_1303 |
+| L_E_1304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | L_E_1304 |
+| L_E_1305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | L_E_1305 |
+
+**Messages**:
+- **L_I_1201**: "File uploaded successfully for holding {holdingId}. Parsing in progress..."
+- **L_I_1202**: "File parsed successfully. Please review the extracted transactions."
+- **L_I_1203**: "Holding {holdingId} successfully updated with imported lots."
+- **L_E_1301**: "User is not authorized to import data to holding {holdingId}."
+- **L_E_1302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
+- **L_E_1303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
+- **L_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
+- **L_E_1305**: "A valid Idempotency-Key header is required for this operation."
+
 #### 5.2.2. L_2000: Lot Retrieval
 - **Description**: This is implicitly handled by H_2000 (Holding Retrieval), which returns all lots within the holding. A dedicated endpoint to list only lots is not required for the MVP.
 
-#### 5.2.3. L_3000: Lot Update
-- **Description**: Modifies the details of an existing lot within a holding. The endpoint is `PUT /api/users/me/holdings/{holdingId}/lots/{lotId}`.
+#### 5.2.3. L_3000: Manual Lot Update
+
+- **Sequence Diagram for Manual Lot Update**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. PUT /api/users/me/holdings/{holdingId}/lots/{lotId}<br> (updatedData, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
+    
+    alt Authorization OK & Item Found
+        Sentinel->>DB: 3. Fetch Holding Document
+        activate DB
+        DB-->>Sentinel: 4. Return Holding Data
+        deactivate DB
+        Sentinel->>Sentinel: 5. Find lot by lotId and update its data
+        Sentinel->>DB: 6. Update Holding Document in DB
+        activate DB
+        DB-->>Sentinel: 7. Confirm Update
+        deactivate DB
+        Sentinel-->>User: 8. Return HTTP 200 OK (Success)
+    else Authorization Fails or Item Not Found
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 403, 404)
+    end
+    deactivate Sentinel
+```
+
+- **Description**: Manually modifies the details of an existing lot within a holding (e.g., to correct a typo in the purchase price). The endpoint is `PUT /api/users/me/holdings/{holdingId}/lots/{lotId}`.
 - **Success Response**: The specified lot is updated within the `Holding` document.
 - **Sub-Rules**:
 
