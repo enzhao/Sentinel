@@ -1282,8 +1282,61 @@ sequenceDiagram
 - **L_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **L_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 5.3.2. L_2000: Lot Retrieval
-- **Description**: This is implicitly handled by H_2000 (Holding Retrieval), which returns all lots within the holding. A dedicated endpoint to list only lots is not required for the MVP.
+#### 5.3.2. Lot Retrieval
+
+This section describes how lot information is retrieved and displayed. Unlike portfolios or holdings, lots are not independent top-level entities. They are always retrieved as part of their parent `Holding` object. The distinction between a "list" and "single" view is handled entirely on the client-side based on the data fetched via a single API call for the parent holding.
+
+##### 5.3.2.1. L_2000: Lot List Display (within Holding View)
+- **Sequence Diagram for Lot List Display**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. GET /api/users/me/holdings/{holdingId}<br> (triggers H_2000)
+    activate Sentinel
+    Sentinel->>DB: 2. Fetch Holding Document, including<br> its 'lots' array and market data
+    activate DB
+    DB-->>Sentinel: 3. Return Enriched Holding Data
+    deactivate DB
+    Sentinel-->>User: 4. Return Holding with all enriched Lots
+    deactivate Sentinel
+
+    Note over User: Frontend receives the full holding data.<br>It then renders the "Holding Details View",<br>displaying a list of lots.
+```
+- **Description**: When a user navigates to the "Holding Details View" for a specific holding, the frontend makes a single API call to retrieve the holding's data. The response from this call (as defined in rule H_2000) includes a complete list of all associated lots, with each lot object already enriched with its computed information (`ComputedInfoLot`). The frontend then displays these lots in a list format, showing only the `purchaseDate`, `quantity`, and `purchasePrice` for each lot. Each item in the list is clickable.
+- **Examples**:
+    - **Example**: A user clicks on their "VOO" holding. The application calls `GET /api/users/me/holdings/{voo-holding-id}`. The response contains the "VOO" holding object, which has a `lots` array with two purchase lots. The UI then renders a list showing the two lots. For each lot, it displays only the `purchaseDate`, `quantity`, and `purchasePrice`.
+- **Success Response**: The UI displays a clickable list of lots.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| L_I_2001 | Lot list display succeeds | The parent holding is retrieved successfully (see H_I_2001). | Response Sentinel to User | The frontend receives the data needed to render the list of lots. | N/A |
+| L_E_2101 | Holding not found | The parent holding cannot be retrieved (see H_E_2102). | Response Sentinel to User | An error is displayed instead of the holding view. | H_E_2102 |
+
+**Messages**:
+- (Messages are handled by the parent Holding retrieval process, see H_2000).
+
+##### 5.3.2.2. L_2200: Single Lot Detail Display
+- **Sequence Diagram for Single Lot Detail Display**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+
+    Note over User: User is viewing the list of lots for a holding.
+    User->>User: 1. Clicks on a specific lot in the list.
+    Note over User: No new API call is made.<br>The frontend uses the data it already has.
+    User->>User: 2. Frontend displays a detailed view (e.g., a modal or separate section)<br> for the selected lot.
+```
+- **Description**: When a user clicks on a single lot from the list within the "Holding Details View", the application displays a more detailed view for that specific lot. **No new API call is required for this action.** The frontend uses the data that was already fetched when the parent holding was loaded. This detailed view shows the basic fields (`purchaseDate`, `quantity`, `purchasePrice`) plus all the fields from the `ComputedInfoLot` object (e.g., `currentValue`, `preTaxProfit`, `afterTaxProfit`).
+- **Examples**:
+    - **Example**: Continuing the previous example, the user clicks on the first lot in the "VOO" holding list. A modal window appears. This modal displays the lot's `purchaseDate`, `quantity`, `purchasePrice`, and also its `currentPrice`, `currentValue`, `preTaxProfit`, `capitalGainTax`, and `afterTaxProfit`.
+- **Success Response**: The UI displays a detailed view of the selected lot.
+- **Sub-Rules**: This is a client-side UI interaction, so there are no backend sub-rules. The success of this step is contingent on the success of L_I_2001.
 
 #### 5.3.3. L_3000: Manual Lot Update
 
