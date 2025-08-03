@@ -1006,8 +1006,86 @@ The information in this section is calculated on-the-fly by the backend API and 
 
 The management of lots follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated, authorized, and performed in the context of a parent holding.
 
-#### 5.2.1. Creation
--   An authenticated user can add a new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding.
+#### 5.2.1. Lot Creation Methods
+
+Lots can be created in two ways: manually for a single transaction, or in bulk via a file import.
+
+##### 5.2.1.1. Manual Creation of a Single Lot
+An authenticated user can add a single new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding. The user interaction for this process is defined by the state machine below.
+
+###### 5.2.1.1.1. Visual Representation
+The following diagram visualizes the state machine flow for manually creating a lot.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> FormInput : USER_CLICKS_ADD_LOT
+    FormInput --> Idle : USER_CLICKS_CANCEL
+    FormInput --> ValidateForm : USER_CLICKS_SAVE
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    FormError --> FormInput : USER_DISMISSES_ERROR
+    APIError --> FormInput : USER_DISMISSES_ERROR
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+```
+
+###### 5.2.1.1.2. State Machine for Manual Lot Creation
+```yaml
+flowId: FLOW_CREATE_LOT_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific holding."
+    events:
+      USER_CLICKS_ADD_LOT: FormInput
+
+  - name: FormInput
+    description: "A modal or form appears, prompting the user to enter the new lot's details (purchase date, quantity, price)."
+    events:
+      USER_CLICKS_SAVE: ValidateForm
+      USER_CLICKS_CANCEL: Idle
+
+  - name: ValidateForm
+    description: "The system is performing client-side validation on the form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
+
+  - name: Submitting
+    description: "The system is submitting the new lot data to the backend."
+    entryAction:
+      service: "POST /api/users/me/holdings/{holdingId}/lots"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The user is shown a success message confirming the lot was added."
+    exitAction:
+      action: CLOSE_MODAL_AND_REFRESH_VIEW
+      target: VIEW_HOLDING_DETAIL
+
+  - name: FormError
+    description: "The user is shown an error message indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: FormInput
+
+  - name: APIError
+    description: "The user is shown a generic error message that the lot could not be saved."
+    events:
+      USER_DISMISSES_ERROR: FormInput
+```
+
+##### 5.2.1.2. Creation of Lots via File Import
+An authenticated user can add multiple new lots to an *existing holding* by uploading a file (e.g., a CSV from their broker). This process is designed for updating a holding with new transactions. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then adds the new lots to the specified holding.
+
+> **Note:** This process is for adding lots to an *existing* holding. For creating *new holdings* and their initial lots from a file, see the process described in **Section 4.2.1, Rule H_1200**.
+
+A state machine for this flow will be defined in a future version of this specification.
 
 #### 5.2.2. Retrieval
 -   Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots that constitute that holding.
