@@ -27,13 +27,14 @@ Sentinel addresses three challenges faced by retail investors:
 ### 0.3. Structure and User Guide
 
 The specification is organized as follows:
-- **Section 1: System Architecture and General Notes**: Defines the overall architecture and global conventions.
-- **Section 2: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
-- **Section 3: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
-- **Section 4: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
-- **Section 5: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
-- **Section 6: User Authentication and Authorization**: Covers user identity and access control.
-- **Section 7: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
+- **Chapter 1: System Architecture and General Notes**: Defines the overall architecture and global conventions.
+- **Chapter 2: Frontend UI and User Interaction**: Describes the application's user interface, page flows, and interaction scenarios.
+- **Chapter 3: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
+- **Chapter 4: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
+- **Chapter 5: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
+- **Chapter 6: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
+- **Chapter 7: User Authentication and Authorization**: Covers user identity and access control.
+- **Chapter 8: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
 
 Each section includes:
 1. **Data Model and Business Process**:
@@ -146,13 +147,17 @@ flowchart LR
 
 ---
 
-## 2. Portfolio and Cash Management
+## 2. Frontend UI and User Interaction
+
+---
+
+## 3. Portfolio and Cash Management
 
 This section details the management of user portfolios. A user can create and manage multiple distinct portfolios (e.g., a "real money" portfolio and a "paper trading" portfolio). Each portfolio contains its own set of holdings, cash reserves, and tax settings, forming the foundation for rule evaluation.
 
-### 2.1. Portfolio and Cash Data Model and Business Process
+### 3.1. Portfolio and Cash Data Model and Business Process
 
-#### 2.1.1. Associated Data Models
+#### 3.1.1. Associated Data Models
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
@@ -218,35 +223,35 @@ This section details the management of user portfolios. A user can create and ma
     - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
     - `gainLossPercentage`: Number (%).
 
-#### 2.1.2. Business Process
+#### 3.1.2. Business Process
 
 The management of portfolios follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated and authorized.
 
-##### 2.1.2.1. Creation
+##### 3.1.2.1. Creation
 
 -   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). This portfolio is marked as the default (`isDefault: true`).
 -   **Additional Portfolios:** The user can create additional portfolios, each with a unique name. These are created with `isDefault: false`.
 -   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio. This portfolio will be the one displayed by default after login. When a portfolio is set as the default, any other portfolio previously marked as default for that user will be unset.
 
-##### 2.1.2.2. Retrieval
+##### 3.1.2.2. Retrieval
 
 -   An authenticated user can retrieve a list of all portfolios they own.
 -   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
 
-##### 2.1.2.3. Update
+##### 3.1.2.3. Update
 
 -   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
 
-##### 2.1.2.4. Deletion
+##### 3.1.2.4. Deletion
 
 -   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
 -   If a user deletes their default portfolio:
     -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
     -   If more than one portfolio remains, the application will prompt the user to select a new default.
 
-### 2.2. Portfolio and Cash Rules
+### 3.2. Portfolio and Cash Rules
 
-#### 2.2.1. P_1000: Portfolio Creation
+#### 3.2.1. P_1000: Portfolio Creation
 
 - **Sequence Diagram for Portfolio Creation**
 
@@ -299,9 +304,9 @@ sequenceDiagram
 - **P_E_1104**: "Invalid default currency. Must be one of: EUR, USD, GBP."
 - **P_E_1105**: "A valid Idempotency-Key header is required for this operation."
 
-#### 2.2.2. Portfolio Retrieval
+#### 3.2.2. Portfolio Retrieval
 
-##### 2.2.2.1. P_2000: Single Portfolio Retrieval
+##### 3.2.2.1. P_2000: Single Portfolio Retrieval
 
 - **Sequence Diagram for Single Portfolio Retrieval**
 
@@ -357,7 +362,7 @@ sequenceDiagram
 - **P_E_2101**: "User is not authorized to access portfolio {portfolioId}."
 - **P_E_2102**: "Portfolio with ID {portfolioId} not found."
 
-##### 2.2.2.2. P_2200: Portfolio List Retrieval
+##### 3.2.2.2. P_2200: Portfolio List Retrieval
 
 - **Sequence Diagram for Portfolio List Retrieval**
 
@@ -393,9 +398,9 @@ sequenceDiagram
 - **P_I_2201**: "Portfolio list retrieved successfully for user {userId}."
 - **P_E_2301**: "User is not authenticated."
 
-#### 2.2.3. Portfolio Update
+#### 3.2.3. Portfolio Update
 
-##### 2.2.3.1. P_3000: Portfolio Update (Manual)
+##### 3.2.3.1. P_3000: Portfolio Update (Manual)
 
 - **Sequence Diagram for Portfolio Update (Manual)**
 
@@ -444,7 +449,7 @@ sequenceDiagram
 - **P_E_3104**: "Portfolio name, description, currency, or tax settings are invalid."
 - **P_E_3105**: "A valid Idempotency-Key header is required for this operation."
 
-##### 2.2.3.2. P_3400: Set Default Portfolio
+##### 3.2.3.2. P_3400: Set Default Portfolio
 
 - **Sequence Diagram for Setting Default Portfolio**
 
@@ -495,9 +500,9 @@ sequenceDiagram
 - **P_E_3501**: "User is not authorized to set this portfolio as default."
 - **P_E_3502**: "Portfolio with the specified ID not found."
 
-#### 2.2.4. Portfolio Deletion
+#### 3.2.4. Portfolio Deletion
 
-##### 2.2.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
+##### 3.2.4.1. P_4000: Portfolio Deletion (Entire Portfolio)
 
 - **Sequence Diagram for Portfolio Deletion (Entire Portfolio)**
 
@@ -565,13 +570,13 @@ sequenceDiagram
 
 ---
 
-## 3. Holding Management
+## 4. Holding Management
 
 This section details the management of individual holdings and their purchase lots. Holdings are top-level resources linked to a portfolio.
 
-### 3.1. Holding Data Model and Business Process
+### 4.1. Holding Data Model and Business Process
 
-#### 3.1.1. Associated Data Models
+#### 4.1.1. Associated Data Models
 
 - **`Holding` (Firestore Document):**
   - A new top-level collection (`holdings`) will be created.
@@ -594,7 +599,7 @@ This section details the management of individual holdings and their purchase lo
   - `quantity`: Number (of shares, positive).
   - `purchasePrice`: Number (per share, positive, in the currency of the holding).
 
-#### 3.1.2. Business Process
+#### 4.1.2. Business Process
 
 The management of holdings and lots follows standard CRUD operations. A user can add, view, modify, and delete holdings or individual lots.
 
@@ -605,13 +610,13 @@ The management of holdings and lots follows standard CRUD operations. A user can
 - **Adding Lots:** Users can add new purchase lots to an existing holding.
 - **Importing Holdings/Lots:** Users can also add holdings and lots by importing them from a file (see H_1200). Any new tickers encountered during an import will also trigger the backfill process (H_5000).
 
-### 3.2. Holding Management Rules
+### 4.2. Holding Management Rules
 
 This section will detail the specific rules for creating, updating, and deleting holdings and lots.
 
-#### 3.2.1. Holding/Lot Creation
+#### 4.2.1. Holding/Lot Creation
 
-##### 3.2.1.1. H_1000: Manual Creation (Interactive)
+##### 4.2.1.1. H_1000: Manual Creation (Interactive)
 
 - **Sequence Diagram for Interactive Holding Creation**
 
@@ -679,7 +684,7 @@ sequenceDiagram
 - **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
 - **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-##### 3.2.1.2. H_1200: Import from File
+##### 4.2.1.2. H_1200: Import from File
 
 - **Sequence Diagram for Holding Import**
 
@@ -751,7 +756,7 @@ sequenceDiagram
 - **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
 - **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
 
-#### 3.2.2. H_2000: Holding/Lot Retrieval
+#### 4.2.2. H_2000: Holding/Lot Retrieval
 
 - **Description**: Retrieves the details of a specific holding or a list of holdings for a portfolio.
 - **Sub-Rules**:
@@ -769,7 +774,7 @@ sequenceDiagram
 - **H_E_2101**: "User is not authorized to access this resource."
 - **H_E_2102**: "The requested item was not found."
 
-#### 3.2.3. H_3000: Holding/Lot Update
+#### 4.2.3. H_3000: Holding/Lot Update
 
 - **Description**: Modifies the details of an existing holding or one of its lots. The endpoint is `PUT /api/users/me/holdings/{holdingId}`.
 - **Success Response**: The `Holding` document is updated in Firestore.
@@ -789,7 +794,7 @@ sequenceDiagram
 - **H_E_3102**: "Holding {holdingId} not found."
 - **H_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 3.2.4. H_4000: Holding/Lot Deletion
+#### 4.2.4. H_4000: Holding/Lot Deletion
 
 - **Sequence Diagram for Holding/Lot Deletion**
 
@@ -851,7 +856,7 @@ sequenceDiagram
 - **H_E_4102**: "The specified holding or lot could not be found."
 - **H_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
-#### 3.2.5. H_5000: Backfill for New Security
+#### 4.2.5. H_5000: Backfill for New Security
 
 - **Sequence Diagram for Asynchronous Backfill**
 
@@ -901,7 +906,7 @@ sequenceDiagram
 - **H_I_5003**: "Note: The security '{ticker}' is new. Only {days} days of historical data were available and have been backfilled."
 - **H_E_5101**: "Could not fetch historical data for ticker {ticker}. The operation will be retried later."
 
-#### 3.2.6. H_6000: Move Holding
+#### 4.2.6. H_6000: Move Holding
 
 - **Sequence Diagram for Moving a Holding**
 
@@ -957,11 +962,11 @@ sequenceDiagram
 
 --- 
 
-## 4. Strategy Rule Management
+## 5. Strategy Rule Management
 
 This section details the management of buy and sell rules that encode the user’s investment strategy for a specific holding.
 
-### 4.1. Rule Data Model and Business Process
+### 5.1. Rule Data Model and Business Process
 
 **Associated Data Models**:
 - `Rule` (Firestore sub-collection under a Holding):
@@ -1028,11 +1033,11 @@ sequenceDiagram
 **Example**:
 - A user has a holding of "QQQ.DE". They create a BUY rule for it with `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
 - The rule is created and linked to the "QQQ.DE" holding.
-- If the conditions are met, an alert is triggered (Section 5).
+- If the conditions are met, an alert is triggered (see Chapter 6).
 
-### 4.2. Rule Management Rules
+### 5.2. Rule Management Rules
 
-#### 4.2.1. R_1000: Rule Creation
+#### 5.2.1. R_1000: Rule Creation
 
 - **Description**: Creates a new buy or sell rule for a specific holding.
 - **Success Response**: Rule created with `ENABLED` status.
@@ -1052,7 +1057,7 @@ sequenceDiagram
 - **R_E_1102**: "Conditions invalid: Unknown type or invalid parameters."
 - **R_E_1103**: "Holding {holdingId} not found."
 
-#### 4.2.2. R_2000: Rule Update
+#### 5.2.2. R_2000: Rule Update
 
 - **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/holdings/{holdingId}/rules/{ruleId}`.
 - **Success Response**: Rule updated.
@@ -1069,7 +1074,7 @@ sequenceDiagram
 - **R_E_2101**: "User is not authorized to update rule {ruleId}."
 - **R_E_2102**: "Rule {ruleId} not found."
 
-#### 4.2.3. R_3000: Rule Retrieval
+#### 5.2.3. R_3000: Rule Retrieval
 
 - **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/users/me/holdings/{holdingId}/rules`.
 - **Success Response**: Rule(s) returned.
@@ -1084,11 +1089,11 @@ sequenceDiagram
 - **R_I_3001**: "Rules retrieved successfully for holding {holdingId}."
 - **R_E_3101**: "User is not authorized to retrieve rules for this holding."
 
-## 5. Market Monitoring and Notification
+## 6. Market Monitoring and Notification
 
 This section details the automated monitoring of market data and generation of notifications when rules are triggered.
 
-### 5.1. Monitoring and Notification Data Model and Business Process
+### 6.1. Monitoring and Notification Data Model and Business Process
 
 **Associated Data Models**:
 - `MarketData` (fetched daily):
@@ -1159,9 +1164,9 @@ sequenceDiagram
 - Alert created: `holdingId: "holding-001"`, `marketData: {closePrice: 340, rsi14: 28}`, `notificationStatus: PENDING`.
 - Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
 
-### 5.2. Monitoring and Notification Rules
+### 6.2. Monitoring and Notification Rules
 
-#### 5.2.1. M_1000: Rule Evaluation and Alert Generation
+#### 6.2.1. M_1000: Rule Evaluation and Alert Generation
 
 - **Description**: Evaluates rules and generates alerts.
 - **Success Response**: Alerts created for triggered rules.
@@ -1177,7 +1182,7 @@ sequenceDiagram
 - **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
 - **M_E_1101**: "Market data unavailable for ticker {ticker}, evaluation skipped."
 
-#### 5.2.2. M_2000: Notification Delivery
+#### 6.2.2. M_2000: Notification Delivery
 
 - **Description**: Sends alerts to users.
 - **Success Response**: Notifications delivered.
@@ -1192,13 +1197,13 @@ sequenceDiagram
 - **N_I_2001**: "Notification for alert {alertId} sent successfully."
 - **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
 
-## 6. User Authentication and Authorization
+## 7. User Authentication and Authorization
 
 This section details the processes for user registration, login, logout, and the authorization mechanism for securing backend API endpoints. The system uses a decoupled authentication model where the frontend communicates directly with Firebase Authentication for identity management, and the Sentinel backend is only responsible for validating the resulting tokens.
 
-### 6.1. User Authentication Data Model and Business Process
+### 7.1. User Authentication Data Model and Business Process
 
-#### 6.1.1. Associated Data Models
+#### 7.1.1. Associated Data Models
 
 - **`User` (Firestore Document):**
   - A new top-level collection (`users`) will be created to store application-specific user data.
@@ -1224,7 +1229,7 @@ This section details the processes for user registration, login, logout, and the
   - A short-lived, signed token generated by the Firebase client-side SDK upon successful login or signup.
   - The frontend sends this token in the `Authorization` header of every API request to prove the user's identity.
 
-#### 6.1.2. Business Process
+#### 7.1.2. Business Process
 
 1. **Signup/Login (Frontend ↔ Firebase)**: The user interacts with the frontend UI. The Vue.js application communicates **directly and exclusively with the Firebase Authentication service** to handle user creation and password verification. The Sentinel backend is **not involved** in this process.
 2. **Token Issuance (Firebase → Frontend)**: Upon successful authentication, Firebase issues a secure ID Token (JWT) to the frontend. The frontend stores this token and the user's state.
@@ -1236,7 +1241,7 @@ This section details the processes for user registration, login, logout, and the
 
 **Note on User Deletion:** The functionality for a user to delete their own account is a planned feature for a future release and is out of scope for the MVP.
 
-#### 6.1.3. Sequence Diagram for an Authenticated API Call
+#### 7.1.3. Sequence Diagram for an Authenticated API Call
 
 ```mermaid
 sequenceDiagram
@@ -1261,9 +1266,9 @@ sequenceDiagram
     deactivate Sentinel
 ```
 
-### 6.2. User Authentication and Authorization Rules
+### 7.2. User Authentication and Authorization Rules
 
-#### 6.2.1. U_1000: User Signup
+#### 7.2.1. U_1000: User Signup
 
 - **Sequence Diagram for User Signup**
 ```mermaid
@@ -1333,7 +1338,7 @@ sequenceDiagram
 - **U_E_1105**: "Username must be at least 3 characters long."
 - **U_E_1106**: "A valid Idempotency-Key header is required for this operation."
 
-#### 6.2.2. U_2000: User Login
+#### 7.2.2. U_2000: User Login
 
 - **Sequence Diagram for User Login**
 ```mermaid
@@ -1360,7 +1365,7 @@ sequenceDiagram
 - **U_I_2001**: "User {username} logged in successfully."
 - **U_E_2101**: "Invalid login credentials. Please check your email and password."
 
-#### 6.2.3. U_3000: API Request Authorization
+#### 7.2.3. U_3000: API Request Authorization
 
 - **Sequence Diagram for API Request Authorization**
 ```mermaid
@@ -1397,9 +1402,9 @@ sequenceDiagram
 - **U_E_3103**: "The provided ID token has expired. Please log in again."
 
 
-## 7. Technical Specifications
+## 8. Technical Specifications
 
-### 7.1. Security
+### 8.1. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
@@ -1426,7 +1431,7 @@ sequenceDiagram
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
-### 7.2. Data Sources
+### 8.2. Data Sources
 
 - **Market Data Provider**: Alpha Vantage.
 - **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
@@ -1435,7 +1440,7 @@ sequenceDiagram
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-### 7.3. Non-Functional Requirements
+### 8.3. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
