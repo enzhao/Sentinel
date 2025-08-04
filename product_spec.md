@@ -728,8 +728,67 @@ An authenticated user can add multiple holdings and their initial lots at once b
 A state machine for this flow will be defined in a future version of this specification.
 
 #### 4.2.2. Retrieval
--   **List Retrieval:** An authenticated user can retrieve a list of all holdings for a specific portfolio they own. This provides a summary view of each holding.
--   **Single Retrieval:** An authenticated user can retrieve the detailed contents of a single, specific holding. The response includes all of its purchase lots (see Chapter 5) and is enriched with computed performance and tax data from the market data cache.
+
+Holdings are retrieved in two contexts: as a list summary within a portfolio, and as a single detailed entity.
+
+##### 4.2.2.1. List Retrieval (Portfolio Holdings View)
+When a user selects a portfolio (or upon login, when the default portfolio is loaded), the application navigates to the Portfolio Holdings View. This view displays a summary list of all holdings within that portfolio and serves as the primary dashboard.
+
+###### 4.2.2.1.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> ShowingHoldingList
+    ShowingHoldingList --> ShowingHoldingDetail : USER_CLICKS_HOLDING
+    ShowingHoldingDetail --> ShowingHoldingList : USER_CLICKS_BACK
+```
+
+###### 4.2.2.1.2. State Machine for Viewing Holding List
+```yaml
+flowId: FLOW_VIEW_HOLDING_LIST
+initialState: ShowingHoldingList
+states:
+  - name: ShowingHoldingList
+    description: "The user is viewing a summary list of all holdings for a selected portfolio."
+    events:
+      USER_CLICKS_HOLDING: ShowingHoldingDetail
+
+  - name: ShowingHoldingDetail
+    description: "The user has drilled down into the details of a single holding."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_HOLDING_DETAIL (see Section 4.2.2.2)
+```
+
+##### 4.2.2.2. Single Retrieval (Holding Detail View)
+From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. From here, the user can choose to go back to the list or add new lots to the holding.
+
+###### 4.2.2.2.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> ViewingHoldingDetail
+    ViewingHoldingDetail --> AddingLot : USER_CLICKS_ADD_LOT
+    AddingLot --> ViewingHoldingDetail : onCompletion / onCancel
+    ViewingHoldingDetail --> [*] : USER_CLICKS_BACK
+```
+
+###### 4.2.2.2.2. State Machine for Holding Detail View
+```yaml
+flowId: FLOW_VIEW_HOLDING_DETAIL
+initialState: ViewingHoldingDetail
+states:
+  - name: ViewingHoldingDetail
+    description: "The user is viewing detailed information for a single holding, including its list of lots."
+    events:
+      USER_CLICKS_ADD_LOT: AddingLot
+      USER_CLICKS_BACK: (exit flow)
+
+  - name: AddingLot
+    description: "The user has chosen to add a new lot to the current holding."
+    subflow:
+      flowId: FLOW_CREATE_LOT_MANUAL
+      onCompletion: ViewingHoldingDetail
+      onCancel: ViewingHoldingDetail
+```
 
 #### 4.2.3. Update
 -   **Manual Update:** An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding.
