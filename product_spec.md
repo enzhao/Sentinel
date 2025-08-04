@@ -819,11 +819,133 @@ states:
 ```
 
 #### 4.1.3. Update
--   **Manual Update:** An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding.
--   **Update via File Import:** An authenticated user can add multiple new purchase lots to an existing holding by uploading a file from their broker. This process is used to update a holding with new transactions. For details on adding, updating, or deleting individual lots manually, see Chapter 5.
+A holding can be updated in two primary ways: by directly modifying its metadata, or by adding new transactions to it via file import as described in section (TODO: add section number here).
+
+Here is the description of the manual update of holding metadata. An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding. The user interaction for this process is defined by the state machine below.
+
+##### 4.1.3.1. Visual Representation
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Editing : USER_CLICKS_EDIT_HOLDING
+    Editing --> Idle : USER_CLICKS_CANCEL
+    Editing --> ValidateForm : USER_CLICKS_SAVE
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    FormError --> Editing : USER_DISMISSES_ERROR
+    APIError --> Editing : USER_DISMISSES_ERROR
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+```
+
+###### 4.1.3.2. State Machine for Manual Holding Update
+
+```yaml
+  flowId: FLOW_UPDATE_HOLDING_MANUAL
+  initialState: Idle
+  states:
+     - name: Idle
+      description: "The user is viewing the details of a specific holding."
+      events:
+        USER_CLICKS_EDIT_HOLDING: Editing
+
+     - name: Editing
+      description: "A modal or form appears, pre-filled with the selected holding's metadata (e.g.,
+  annualCosts), ready for editing."
+      events:
+        USER_CLICKS_SAVE: ValidateForm
+        USER_CLICKS_CANCEL: Idle
+
+     - name: ValidateForm
+      description: "The system is performing client-side validation on the updated form inputs."
+      entryAction:
+        service: "ValidationService.validate(form)"
+        transitions:
+          valid: Submitting
+          invalid: FormError
+
+     - name: Submitting
+      description: "The system is submitting the updated holding data to the backend."
+      entryAction:
+        service: "PUT /api/users/me/holdings/{holdingId}"
+        transitions:
+          success: Success
+          failure: APIError
+
+     - name: Success
+      description: "The user is shown a success message confirming the holding was updated."
+      exitAction:
+        action: CLOSE_MODAL_AND_REFRESH_VIEW
+        target: VIEW_HOLDING_DETAIL
+
+     - name: FormError
+      description: "The user is shown an error message indicating which form fields are invalid."
+      events:
+        USER_DISMISSES_ERROR: Editing
+
+     - name: APIError
+      description: "The user is shown a generic error message that the holding could not be
+  updated."
+      events:
+        USER_DISMISSES_ERROR: Editing
+```
+
 
 #### 4.1.4. Deletion
--   An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
+An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
+
+##### 4.1.4.1. Visual Representation
+The following diagram visualizes the state machine flow for manually deleting a holding.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> ConfirmingDelete : USER_CLICKS_DELETE_HOLDING
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    APIError --> Idle : USER_DISMISSES_ERROR
+    Success --> [*] : REFRESH_VIEW
+```
+
+##### 4.1.4.2. State Machine for Manual Holding Deletion
+```yaml
+flowId: FLOW_DELETE_HOLDING_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific holding or the list of holdings."
+    events:
+      USER_CLICKS_DELETE_HOLDING: ConfirmingDelete
+
+  - name: ConfirmingDelete
+    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected holding."
+    events:
+      USER_CLICKS_CONFIRM_DELETE: Submitting
+      USER_CLICKS_CANCEL_DELETE: Idle
+
+  - name: Submitting
+    description: "The system is submitting the delete request to the backend."
+    entryAction:
+      service: "DELETE /api/users/me/holdings/{holdingId}"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The holding is successfully deleted from the backend."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_PORTFOLIO_HOLDINGS
+
+  - name: APIError
+    description: "The user is shown a generic error message that the holding could not be deleted."
+    events:
+      USER_DISMISSES_ERROR: Idle
+```
 
 #### 4.1.5. Move
 -   An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
