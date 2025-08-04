@@ -50,12 +50,47 @@ A state can contain one or more of the following blocks to define its behavior:
 
 The following example illustrates how the DSL is used to define the flow for a user manually adding a new holding to their portfolio.
 
+### Manual Creation of a Holding
+An authenticated user can add a new holding to their portfolio from the dashboard's holding list view. The process first requires the user to find and select a financial instrument. Once the instrument is selected, the system creates the new holding, which is initially empty. The user is then immediately given the option to add one or more purchase lots to this new holding. A newly created holding can remain empty if the user chooses. After the user indicates they are finished, the view returns to the holding list.
+
+#### Visual Representation
+
+```mermaid
+stateDiagram-v2
+    [*] --> HoldingListView
+    HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
+    LookupInput --> HoldingListView : USER_CLICKS_CANCEL
+    LookupInput --> SubmittingLookup : USER_SUBMITS_IDENTIFIER
+
+    SubmittingLookup --> ConfirmingHoldingCreation : success
+    SubmittingLookup --> LookupError : failure
+
+    ConfirmingHoldingCreation --> SubmittingHolding : USER_CONFIRMS_CREATION
+    ConfirmingHoldingCreation --> HoldingListView : USER_CLICKS_CANCEL
+
+    SubmittingHolding --> AddingLots : success
+    SubmittingHolding --> APIError : failure
+
+    state "Adding Lots" as AddingLots {
+        [*] --> ReadyToAdd
+        ReadyToAdd --> InvokingLotCreation : USER_CLICKS_ADD_LOT (see Section 5.2.1.1.2)
+        InvokingLotCreation --> ReadyToAdd : onCompletion / onCancel
+    }
+    
+    AddingLots --> HoldingListView : USER_CLICKS_FINISH
+
+    LookupError --> LookupInput : USER_DISMISSES_ERROR
+    APIError --> LookupInput : USER_DISMISSES_ERROR
 ```
+
+#### State Machine for Manual Holding Creation
+
+```yaml
 flowId: FLOW_ADD_HOLDING_MANUAL
-initialState: Idle
+initialState: HoldingListView
 states:
-  - name: Idle
-    description: "The user is viewing the portfolio and has not yet initiated the process."
+  - name: HoldingListView
+    description: "The user is viewing the list of holdings in their default portfolio."
     events:
       USER_CLICKS_ADD_HOLDING: LookupInput
 
@@ -63,60 +98,50 @@ states:
     description: "A modal appears prompting the user to enter a Ticker, ISIN, or WKN for the new holding."
     events:
       USER_SUBMITS_IDENTIFIER: SubmittingLookup
+      USER_CLICKS_CANCEL: HoldingListView
 
   - name: SubmittingLookup
     description: "The system is searching for the financial instrument."
     entryAction:
       service: "FinancialInstrumentLookupService.search(identifier)"
       transitions:
-        success_unique: EnterLotDetails
-        success_multiple: SelectFromMultiple
+        success: ConfirmingHoldingCreation
         failure: LookupError
 
-  - name: SelectFromMultiple
-    description: "The user is shown a list of matching instruments and must select one."
+  - name: ConfirmingHoldingCreation
+    description: "The user is shown the details of the found instrument and asked to confirm its creation."
     events:
-      USER_SELECTS_INSTRUMENT: EnterLotDetails
+      USER_CONFIRMS_CREATION: SubmittingHolding
+      USER_CLICKS_CANCEL: HoldingListView
 
-  - name: EnterLotDetails
-    description: "The user is presented with a form to input the details of the first purchase lot (date, quantity, price)."
-    events:
-      USER_CLICKS_SAVE: ValidateForm
-
-  - name: ValidateForm
-    description: "The system is performing client-side validation on the form inputs."
-    entryAction:
-      service: "ValidationService.validate(form)"
-      transitions:
-        valid: SubmitHolding
-        invalid: FormError
-
-  - name: SubmitHolding
-    description: "The system is submitting the new holding and lot data to the backend."
+  - name: SubmittingHolding
+    description: "The system is creating the new, empty holding."
     entryAction:
       service: "POST /api/users/me/holdings"
       transitions:
-        success: Success
+        success: AddingLots
         failure: APIError
 
-  - name: Success
-    description: "The user is shown a success message confirming the holding was added."
-    exitAction:
-      action: NAVIGATE_TO
-      target: VIEW_PORTFOLIO_HOLDINGS
+  - name: AddingLots
+    description: "The user is viewing the newly created holding and can now optionally add one or more purchase lots."
+    events:
+      USER_CLICKS_ADD_LOT: AddingSingleLot
+      USER_CLICKS_FINISH: HoldingListView
+  
+  - name: AddingSingleLot
+    description: "The system is now invoking the lot creation subflow, specified in section 5.2.1.1."
+    subflow:
+      flowId: FLOW_CREATE_LOT_MANUAL
+      onCompletion: AddingLots
+      onCancel: AddingLots
 
   - name: LookupError
     description: "The user is shown an error message that the instrument could not be found."
     events:
       USER_DISMISSES_ERROR: LookupInput
 
-  - name: FormError
-    description: "The user is shown an error message indicating which form fields are invalid."
-    events:
-      USER_DISMISSES_ERROR: EnterLotDetails
-
   - name: APIError
     description: "The user is shown a generic error message that the holding could not be saved."
     events:
-      USER_DISMISSES_ERROR: EnterLotDetails
+      USER_DISMISSES_ERROR: LookupInput
 ```
