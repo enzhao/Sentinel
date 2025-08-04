@@ -46,7 +46,21 @@ A state can contain one or more of the following blocks to define its behavior:
     - `onCompletion` (String, Required): The `name` of the state to transition to when the subflow finishes successfully.
     - `onCancel` (String, Required): The `name` of the state to transition to if the user cancels the subflow.
 
-## 3. Example: Manual Holding Creation Flow
+- `activates` (Array, Optional): A list of state transitions to trigger in other concurrent flows upon entering this state. This is used to synchronize the state of embedded components that are running in parallel on the same view.
+    - `flowId` (String, Required): The `flowId` of the concurrent state machine to affect.
+    - `targetState` (String, Required): The `name` of the state to transition to in the target flow.
+
+## 3. Advanced Concepts: `subflow` vs. `activates`
+
+It is important to understand the difference between `subflow` and `activates` to model complex UI interactions correctly.
+
+-   **`subflow`**: Use this for a **blocking, sequential process**. When a state invokes a `subflow`, the parent flow **pauses and waits**. It cannot proceed until the subflow either completes (`onCompletion`) or is cancelled (`onCancel`). This is ideal for embedding a complete, self-contained task within another, like a wizard or a modal form that must be filled out before returning to the main view.
+    -   **When to use**: Use `subflow` when Flow A needs to **call and wait for** Flow B to finish before Flow A can continue.
+
+-   **`activates`**: Use this for **non-blocking, parallel state synchronization**. When a state `activates` a state in another flow, the parent flow **does not pause**. It simply sends a one-way signal to a concurrent, independent state machine to change its state. This is for coordinating different components that are active on the same view at the same time.
+    -   **When to use**: Use `activates` when Flow A needs to **tell** Flow B to change its state, but both flows continue to run side-by-side, independently.
+
+## 4. Example: Manual Holding Creation Flow
 
 The following example illustrates how the DSL is used to define the flow for a user manually adding a new holding to their portfolio.
 

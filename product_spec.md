@@ -189,9 +189,87 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 #### 3.1.1. Creation
 
--   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). The ID of this new portfolio is then stored in the `defaultPortfolioId` field of the user's profile, marking it as their default.
--   **Additional Portfolios:** The user can create additional portfolios. These are not automatically set as the default.
+Portfolio creation can be initiated in two ways: automatically upon user signup, or manually by the user at any time.
+
+-   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). The ID of this new portfolio is then stored in the `defaultPortfolioId` field of the user's profile, marking it as their default. This ensures a smooth onboarding experience.
+
+-   **Manual Creation:** After login, the user lands on the dashboard view (the Portfolio Holdings View). From here, they can create additional portfolios.
+    -   The user clicks an "Add Portfolio" button, which transitions them to the "Create a Portfolio" view.
+    -   In this view, the user can fill in the portfolio's details (name, description, currency, etc.).
+    -   The view also contains an "Add a Holding" button. Clicking this button invokes the manual holding creation subflow (see Section 4.1.1.2, `FLOW_ADD_HOLDING_MANUAL`), allowing the user to populate the new portfolio with holdings before it's even created.
+    -   A new portfolio can be saved without any holdings. Once the user saves the portfolio, they are returned to the dashboard.
+
 -   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio by updating the `defaultPortfolioId` field on their user profile. This portfolio will be the one displayed by default after login.
+
+##### 3.1.1.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> DashboardView
+    DashboardView --> CreatePortfolioView : USER_CLICKS_ADD_PORTFOLIO
+    CreatePortfolioView --> DashboardView : USER_CLICKS_CANCEL
+
+    state "Create Portfolio View" as CreatePortfolioView {
+        [*] --> EditingPortfolio
+        EditingPortfolio --> AddingHolding : USER_CLICKS_ADD_HOLDING
+        AddingHolding --> EditingPortfolio : onCompletion / onCancel
+        EditingPortfolio --> Submitting : USER_CLICKS_SAVE
+    }
+
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+
+    APIError --> CreatePortfolioView : USER_DISMISSES_ERROR
+    Success --> DashboardView : (exit flow)
+```
+
+##### 3.1.1.2. State Machine for Manual Portfolio Creation
+```yaml
+flowId: FLOW_CREATE_PORTFOLIO_MANUAL
+initialState: DashboardView
+states:
+  - name: DashboardView
+    description: "The user is on the main dashboard, viewing their list of portfolios."
+    events:
+      USER_CLICKS_ADD_PORTFOLIO: CreatePortfolioView
+
+  - name: CreatePortfolioView
+    description: "The user is on the 'Create a Portfolio' view, with input fields for portfolio details and an 'Add Holding' button."
+    initialState: EditingPortfolio
+    states:
+      - name: EditingPortfolio
+        description: "The user is filling out the form for the new portfolio."
+        events:
+          USER_CLICKS_ADD_HOLDING: AddingHolding
+          USER_CLICKS_SAVE: Submitting
+          USER_CLICKS_CANCEL: DashboardView
+      
+      - name: AddingHolding
+        description: "The user has clicked 'Add Holding' and is now in the holding creation subflow."
+        subflow:
+          # See section 4.1.1.2 for flow definition
+          flowId: FLOW_ADD_HOLDING_MANUAL
+          onCompletion: EditingPortfolio
+          onCancel: EditingPortfolio
+
+  - name: Submitting
+    description: "The system is submitting the new portfolio data to the backend."
+    entryAction:
+      service: "POST /api/users/me/portfolios"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The portfolio was created successfully. The user is returned to the dashboard."
+    exitAction:
+      action: NAVIGATE_TO
+      target: DashboardView
+
+  - name: APIError
+    description: "The user is shown a generic error message that the portfolio could not be saved."
+    events:
+      USER_DISMISSES_ERROR: CreatePortfolioView
+```
 
 #### 3.1.2. Retrieval
 
@@ -200,7 +278,57 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 #### 3.1.3. Update
 
--   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
+An authenticated user can modify a specific portfolio they own. This is done from the "Portfolio Details View", which shows the portfolio's atomic fields (name, description, etc.) and the list of holdings it contains.
+
+The view has two modes: a "Read-Only Mode" and a "Manage Mode".
+
+-   **Read-Only Mode**: This is the default state. The user can see all the portfolio details and a read-only view of the holdings list. A "Manage Portfolio" button is displayed.
+-   **Manage Mode**: Clicking the "Manage Portfolio" button puts the entire view into an editable state:
+    1.  The portfolio's atomic fields (name, description, cash reserves, tax settings) become editable input fields.
+    2.  The embedded "Holdings List View" simultaneously switches to its own "Manage Mode", as defined in **Section 4.1.2.1**. This makes the "Add Holding", "Edit", "Delete", and "Move" buttons visible for the holdings.
+    3.  "Save" and "Cancel" buttons appear for the portfolio. Clicking "Save" will commit any changes to the portfolio's atomic fields, while "Cancel" will discard them and return the view to "Read-Only Mode". Changes made to the holdings list (e.g., adding a new holding) are handled by that component's subflow and are independent of the portfolio's "Save" action.
+
+##### 3.1.3.1. Visual Representation
+
+```mermaid
+stateDiagram-v2
+    [*] --> ReadOnly
+    ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
+    ManageMode --> Submitting : USER_CLICKS_SAVE
+
+    Submitting --> ReadOnly : success
+    Submitting --> ManageMode : failure
+```
+
+##### 3.1.3.2. State Machine for Manual Portfolio Update
+
+```yaml
+flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
+initialState: ReadOnly
+states:
+  - name: ReadOnly
+    description: "The user is viewing the portfolio's details and its list of holdings. A 'Manage Portfolio' button is visible."
+    events:
+      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
+
+  - name: ManageMode
+    description: "The user has entered manage mode. The portfolio's fields are editable. 'Save' and 'Cancel' buttons are visible."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDING_LIST"
+        targetState: "ManageMode"
+    events:
+      USER_CLICKS_SAVE: Submitting
+      USER_CLICKS_CANCEL: ReadOnly
+
+  - name: Submitting
+    description: "The system is submitting the updated portfolio data (atomic fields only) to the backend."
+    entryAction:
+      service: "PUT /api/users/me/portfolios/{portfolioId}"
+      transitions:
+        success: ReadOnly
+        failure: ManageMode # On failure, stay in manage mode and show an error
+```
 
 #### 3.1.4. Deletion
 
