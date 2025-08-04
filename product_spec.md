@@ -558,6 +558,96 @@ sequenceDiagram
 - **P_E_4102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
+#### 3.3.5. P_5000: Unified Transaction Import
+
+- **Sequence Diagram for Unified Transaction Import**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant AI as AI Service (LLM)
+    participant DB as Database
+    participant Backfill as Backfill Service
+
+    User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/transactions/import<br>(file, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
+    Sentinel->>AI: 3. Parse file content for transactions
+    activate AI
+    AI-->>Sentinel: 4. Return structured JSON data (list of potential lots)
+    deactivate AI
+
+    Note over Sentinel, DB: For each parsed transaction, backend checks<br>if holding already exists in the portfolio.
+
+    Sentinel->>DB: 5. For each ticker, query 'holdings' where<br> portfolioId == {portfolioId} AND ticker == {ticker}
+    activate DB
+    DB-->>Sentinel: 6. Return existing holdings
+    deactivate DB
+
+    Sentinel->>Sentinel: 7. Annotate each transaction:<br> 'CREATE' for new holdings, 'UPDATE' for existing.
+    Sentinel-->>User: 8. Return annotated list for review
+    deactivate Sentinel
+
+    Note over User: User reviews and corrects the data<br> on the frontend.
+
+    User->>Sentinel: 9. POST /api/users/me/portfolios/{portfolioId}/transactions/import/confirm<br> (corrected & annotated data, ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 10. Validate final data
+    
+    loop For each transaction in list
+        alt 'CREATE'
+            Sentinel->>DB: 11a. Create new Holding document
+            activate DB
+            DB-->>Sentinel: Confirm Creation
+            deactivate DB
+            Sentinel->>Backfill: 12a. Trigger backfill for new ticker (async)
+        else 'UPDATE'
+            Sentinel->>DB: 11b. Add lot to existing Holding document
+            activate DB
+            DB-->>Sentinel: Confirm Update
+            deactivate DB
+        end
+    end
+
+    Sentinel-->>User: 13. HTTP 200 OK (Import Complete)
+    deactivate Sentinel
+```
+
+- **Description**: Handles the unified, multi-step process of importing transactions from a user-uploaded file into a specific portfolio. The system intelligently determines whether each transaction should create a new holding or be added as a new lot to an existing holding.
+- **Examples**:
+    - **Example**:
+        - A user uploads a CSV file to their "Real Money" portfolio. The file contains a purchase of "AAPL" (which they already own) and "GOOG" (which is new).
+        - The backend calls the AI service, which parses both transactions.
+        - The backend checks the portfolio and sees a holding for "AAPL" exists, but not for "GOOG".
+        - It returns an annotated list to the frontend: `[{...data for AAPL, action: 'UPDATE'}, {...data for GOOG, action: 'CREATE'}]`.
+        - The user reviews the list, confirms it's correct, and submits.
+        - The backend adds a new lot to the existing "AAPL" holding and creates a brand new holding for "GOOG" with its first lot. The backfill process is triggered for "GOOG".
+- **Success Response**: New `Holding` documents are created and/or existing ones are updated with new lots in the `holdings` collection.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| P_I_5001 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | P_I_5001 |
+| P_I_5002 | AI parsing and annotation succeeds | The AI service successfully extracts structured transaction data, and the backend correctly annotates each transaction as 'CREATE' or 'UPDATE'. | Sentinel to AI Service & DB | Parsed and annotated JSON data is returned to the user for review. | P_I_5002 |
+| P_I_5003 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to create/update holdings and lots. | Request User to Sentinel | Holdings/lots are created/updated in the database. Any new tickers will trigger the asynchronous backfill process (H_5000). | P_I_5003 |
+| P_I_5004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
+| P_E_5101 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | P_E_5101 |
+| P_E_5102 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | P_E_5102 |
+| P_E_5103 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | P_E_5103 |
+| P_E_5104 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | P_E_5104 |
+| P_E_5105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | P_E_5105 |
+
+**Messages**:
+- **P_I_5001**: "File uploaded successfully for portfolio {portfolioId}. Parsing and processing in progress..."
+- **P_I_5002**: "File processed successfully. Please review the proposed changes for your portfolio."
+- **P_I_5003**: "Portfolio {portfolioId} successfully updated with imported transactions."
+- **P_E_5101**: "User is not authorized to import data to portfolio {portfolioId}."
+- **P_E_5102**: "Invalid file. Please upload a valid CSV or text file under 5MB."
+- **P_E_5103**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
+- **P_E_5104**: "The corrected data contains errors. Please check all fields and resubmit."
+- **P_E_5105**: "A valid Idempotency-Key header is required for this operation."
+
 ---
 
 ## 4. Holding Management
@@ -874,75 +964,7 @@ sequenceDiagram
 
 #### 4.3.2. H_1200: Holding Creation (Import from File)
 
-- **Sequence Diagram for Holding Import**
-
-```mermaid
-sequenceDiagram
-    participant User as User (Frontend)
-    participant Sentinel as Sentinel Backend
-    participant AI as AI Service (LLM)
-    participant DB as Database
-    participant Backfill as Backfill Service
-
-    User->>Sentinel: 1. POST /api/users/me/portfolios/{portfolioId}/holdings/import<br>(file, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for portfolioId
-    Sentinel->>AI: 3. Parse file content for transactions
-    activate AI
-    AI-->>Sentinel: 4. Return structured JSON data (lots)
-    deactivate AI
-    Sentinel-->>User: 5. Return parsed JSON data for review
-    deactivate Sentinel
-
-    Note over User: User reviews and corrects the data<br> on the frontend
-    
-    User->>Sentinel: 6. POST /api/users/me/portfolios/{portfolioId}/holdings/import/confirm<br> (corrected data, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 7. Validate corrected data
-    Sentinel->>DB: 8. Create multiple Holding documents in 'holdings' collection
-    activate DB
-    DB-->>Sentinel: 9. Confirm Creation
-    deactivate DB
-
-    alt For each new ticker in imported data
-        Sentinel->>Backfill: 10. Trigger backfill for new ticker (async)
-    end
-
-    Sentinel-->>User: 11. HTTP 200 (Holdings Created)
-    deactivate Sentinel
-```
-
-- **Description**: Handles the multi-step process of adding holdings and their initial lots to a specific portfolio from a user-uploaded file.
-- **Examples**:
-    - **Example**:
-        - A user uploads a CSV file to import transactions into their "Paper Trading" portfolio.
-        - The backend calls the AI service and returns a JSON array with three parsed lot objects to the frontend.
-        - The user sees the three transactions in an editable table, corrects a typo in one of the purchase prices, and clicks "Confirm".
-        - The corrected data is sent to the backend, which creates new `Holding` documents in the database.
-- **Success Response**: New `Holding` documents are created in the `holdings` collection for the confirmed transactions.
-- **Sub-Rules**:
-
-| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
-|:---|:---|:---|:---|:---|:---|
-| H_I_1201 | File upload succeeds | User is authenticated and owns the target portfolio, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_1201 |
-| H_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_1202 |
-| H_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to create new `Holding` documents. | Request User to Sentinel | New holdings are created in the database. Any new tickers will trigger the asynchronous backfill process (H_5000). | H_I_1203 |
-| H_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
-| H_E_1301 | User unauthorized | User is not authenticated or does not own the target portfolio. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_1301 |
-| H_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_1302 |
-| H_E_1303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | H_E_1303 |
-| H_E_1304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., invalid ticker, negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | H_E_1304 |
-| H_E_1305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | H_E_1305 |
-
-**Messages**:
-- **H_I_1201**: "File uploaded successfully for portfolio {portfolioId}. Parsing in progress..."
-- **H_I_1202**: "File parsed successfully. Please review the extracted transactions."
-- **H_I_1203**: "Portfolio {portfolioId} successfully updated with imported transactions."
-- **H_E_1301**: "User is not authorized to import data to portfolio {portfolioId}."
-- **H_E_1302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
-- **H_E_1303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
-- **H_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
-- **H_E_1305**: "A valid Idempotency-Key header is required for this operation."
+> **Note:** This process has been deprecated and merged into the unified transaction import feature. Please see **Section 3.3.5, Rule P_5000** for the current specification.
 
 #### 4.3.3. Holding Retrieval
 
@@ -1050,64 +1072,7 @@ sequenceDiagram
 
 ##### 4.3.4.2. H_3200: Holding Update via File Import
 
-- **Sequence Diagram for Holding Update via File Import**
-
-```mermaid
-sequenceDiagram
-    participant User as User (Frontend)
-    participant Sentinel as Sentinel Backend
-    participant AI as AI Service (LLM)
-    participant DB as Database
-
-    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/lots/import<br>(file, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
-    Sentinel->>AI: 3. Parse file content for transactions
-    activate AI
-    AI-->>Sentinel: 4. Return structured JSON data (lots)
-    deactivate AI
-    Sentinel-->>User: 5. Return parsed JSON data for review
-    deactivate Sentinel
-
-    Note over User: User reviews and corrects the data<br> on the frontend
-    
-    User->>Sentinel: 6. POST /api/users/me/holdings/{holdingId}/lots/import/confirm<br> (corrected data, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 7. Validate corrected data
-    Sentinel->>DB: 8. Add new lots to the existing Holding document
-    activate DB
-    DB-->>Sentinel: 9. Confirm Update
-    deactivate DB
-
-    Sentinel-->>User: 10. HTTP 200 (Lots Added)
-    deactivate Sentinel
-```
-
-- **Description**: Updates a holding by adding new purchase lots from a user-uploaded file. This multi-step process is used to record new transactions for a security the user already owns.
-- **Success Response**: New `Lot` objects are added to the `lots` array of the specified `Holding` document, and its `modifiedAt` timestamp is updated.
-- **Sub-Rules**:
-
-| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
-|:---|:---|:---|:---|:---|:---|
-| H_I_3201 | File upload succeeds | User is authenticated and owns the target holding, file is valid. | Request User to Sentinel | File is accepted for parsing. | H_I_3201 |
-| H_I_3202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | H_I_3202 |
-| H_I_3203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to add new lots to the holding. | Request User to Sentinel | New lots are added to the holding in the database. | H_I_3203 |
-| H_I_3204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
-| H_E_3301 | User unauthorized | User is not authenticated or does not own the target holding. | Request User to Sentinel | Request rejected with HTTP 401/403. | H_E_3301 |
-| H_E_3302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | H_E_3302 |
-| H_E_3303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | H_E_3303 |
-| H_E_3304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | H_E_3304 |
-| H_E_3305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | H_E_3305 |
-
-**Messages**:
-- **H_I_3201**: "File uploaded successfully for holding {holdingId}. Parsing in progress..."
-- **H_I_3202**: "File parsed successfully. Please review the extracted transactions."
-- **H_I_3203**: "Holding {holdingId} successfully updated with imported lots."
-- **H_E_3301**: "User is not authorized to import data to holding {holdingId}."
-- **H_E_3302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
-- **H_E_3303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
-- **H_E_3304**: "The corrected data contains errors. Please check all fields and resubmit."
-- **H_E_3305**: "A valid Idempotency-Key header is required for this operation."
+> **Note:** This process has been deprecated and merged into the unified transaction import feature. Please see **Section 3.3.5, Rule P_5000** for the current specification.
 
 #### 4.3.5. H_4000: Holding Deletion
 
@@ -1586,64 +1551,7 @@ sequenceDiagram
 
 ##### 5.3.1.2. L_1200: Import from File
 
-- **Sequence Diagram for Lot Import**
-
-```mermaid
-sequenceDiagram
-    participant User as User (Frontend)
-    participant Sentinel as Sentinel Backend
-    participant AI as AI Service (LLM)
-    participant DB as Database
-
-    User->>Sentinel: 1. POST /api/users/me/holdings/{holdingId}/lots/import<br>(file, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for holdingId
-    Sentinel->>AI: 3. Parse file content for transactions
-    activate AI
-    AI-->>Sentinel: 4. Return structured JSON data (lots)
-    deactivate AI
-    Sentinel-->>User: 5. Return parsed JSON data for review
-    deactivate Sentinel
-
-    Note over User: User reviews and corrects the data<br> on the frontend
-    
-    User->>Sentinel: 6. POST /api/users/me/holdings/{holdingId}/lots/import/confirm<br> (corrected data, ID Token)
-    activate Sentinel
-    Sentinel->>Sentinel: 7. Validate corrected data
-    Sentinel->>DB: 8. Add new lots to the existing Holding document
-    activate DB
-    DB-->>Sentinel: 9. Confirm Update
-    deactivate DB
-
-    Sentinel-->>User: 10. HTTP 200 (Lots Added)
-    deactivate Sentinel
-```
-
-- **Description**: Handles the multi-step process of adding new lots to an existing holding from a user-uploaded file.
-- **Success Response**: New `Lot` objects are added to the `lots` array of the specified `Holding` document.
-- **Sub-Rules**:
-
-| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
-|:---|:---|:---|:---|:---|:---|
-| L_I_1201 | File upload succeeds | User is authenticated and owns the target holding, file is valid. | Request User to Sentinel | File is accepted for parsing. | L_I_1201 |
-| L_I_1202 | AI parsing succeeds | The AI service successfully extracts structured transaction data from the file content. | Sentinel to AI Service | Parsed JSON data is returned to the user for review. | L_I_1202 |
-| L_I_1203 | Import confirmation succeeds | User submits reviewed data, data is valid, and is successfully used to add new lots to the holding. | Request User to Sentinel | New lots are added to the holding in the database. | L_I_1203 |
-| L_I_1204 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful confirmation request. | Request User to Sentinel | The response from the original successful request is returned; no new import is performed. | N/A |
-| L_E_1301 | User unauthorized | User is not authenticated or does not own the target holding. | Request User to Sentinel | Request rejected with HTTP 401/403. | L_E_1301 |
-| L_E_1302 | Invalid file type or size | File is not a supported type or exceeds the maximum size limit. | Request User to Sentinel | Upload rejected with HTTP 400 Bad Request. | L_E_1302 |
-| L_E_1303 | AI parsing fails | The AI service cannot parse the file or returns an error. | Sentinel to AI Service | Error is returned to the user. | L_E_1303 |
-| L_E_1304 | Confirmed data invalid | The data submitted by the user after review fails validation (e.g., negative quantity). | Request User to Sentinel | Confirmation rejected with HTTP 400 Bad Request. | L_E_1304 |
-| L_E_1305 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID for the confirmation step. | Request User to Sentinel | Confirmation rejected. | L_E_1305 |
-
-**Messages**:
-- **L_I_1201**: "File uploaded successfully for holding {holdingId}. Parsing in progress..."
-- **L_I_1202**: "File parsed successfully. Please review the extracted transactions."
-- **L_I_1203**: "Holding {holdingId} successfully updated with imported lots."
-- **L_E_1301**: "User is not authorized to import data to holding {holdingId}."
-- **L_E_1302**: "Invalid file. Please upload a valid CSV or text file under 5MB."
-- **L_E_1303**: "Could not automatically parse the transaction file. Please check the file content or try manual entry."
-- **L_E_1304**: "The corrected data contains errors. Please check all fields and resubmit."
-- **L_E_1305**: "A valid Idempotency-Key header is required for this operation."
+> **Note:** This process has been deprecated and merged into the unified transaction import feature. Please see **Section 3.3.5, Rule P_5000** for the current specification.
 
 #### 5.3.2. Lot Retrieval
 
