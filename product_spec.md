@@ -1591,34 +1591,81 @@ states:
       USER_DISMISSES_ERROR: FormInput
 ```
 
-#### 5.1.2. Retrieval
+#### 5.1.2. Retrieval and Management
 
-Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots. The client-side application then manages the display of this data, allowing the user to view a summary list and drill down into specific lot details without further API calls.
+Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object when the user navigates to the Holding Detail View. The user interaction for viewing and managing the list of lots is defined entirely within the state machine for the parent holding's detail view, which provides a unified interface for managing a holding and its constituent lots.
+
+The flow begins when a user is viewing the details of a holding. In the default read-only mode, they see a simple list of lots. By entering the holding's "Manage Mode", they gain access to controls for adding a new lot, or editing and deleting existing lots in the list.
 
 ##### 5.1.2.1. Visual Representation
-The following diagram visualizes the state machine flow for viewing lot details.
+
+The following diagram illustrates the user flow for managing a list of lots within the context of the parent Holding Detail View.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ViewingHolding
-    ViewingHolding --> ShowingLotDetail : USER_CLICKS_LOT
-    ShowingLotDetail --> ViewingHolding : USER_DISMISSES_DETAIL_VIEW
+    [*] --> ReadOnly
+    ReadOnly --> ManageMode : USER_CLICKS_EDIT_HOLDING
+
+    state "Manage Mode" as ManageMode {
+        [*] --> Idle
+        Idle --> ReadOnly : USER_CLICKS_CANCEL_OR_SAVE
+        
+        Idle --> AddingLot : USER_CLICKS_ADD_LOT
+        AddingLot --> Idle : onCompletion / onCancel
+
+        Idle --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
+        EditingLot --> Idle : onCompletion / onCancel
+
+        Idle --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
+        DeletingLot --> Idle : onCompletion / onCancel
+    }
 ```
 
-##### 5.1.2.2. State Machine for Viewing Lot Details
-```yaml
-flowId: FLOW_VIEW_LOT_DETAIL
-initialState: ViewingHolding
-states:
-  - name: ViewingHolding
-    description: "The user is viewing the details of a specific holding, including a summary list of its lots (purchase date, quantity, price)."
-    events:
-      USER_CLICKS_LOT: ShowingLotDetail
+##### 5.1.2.2. State Machine for Lot List Management
 
-  - name: ShowingLotDetail
-    description: "A modal or expanded view is displayed, showing the full stored and computed details for the selected lot."
+The following state machine describes the process from the perspective of managing the lots list. Note that this flow is a conceptual subset of the complete `FLOW_VIEW_HOLDING_DETAIL` state machine defined in Section 4.1.2.2.2.
+
+```yaml
+flowId: FLOW_MANAGE_LOTS_LIST
+initialState: ReadOnly
+states:
+  - name: ReadOnly
+    description: "The user is viewing the holding's details, which includes a read-only list of its lots. An 'Edit' button for the holding is visible."
     events:
-      USER_DISMISSES_DETAIL_VIEW: ViewingHolding
+      USER_CLICKS_EDIT_HOLDING: ManageMode
+
+  - name: ManageMode
+    description: "The user is in the holding's manage mode. An 'Add Lot' button is visible, and each lot in the list now has 'Edit' and 'Delete' buttons."
+    events:
+      USER_CLICKS_SAVE_HOLDING: ReadOnly
+      USER_CLICKS_CANCEL_HOLDING: ReadOnly
+      USER_CLICKS_ADD_LOT: AddingLot
+      USER_CLICKS_EDIT_LOT_ITEM: EditingLot
+      USER_CLICKS_DELETE_LOT_ITEM: DeletingLot
+
+  - name: AddingLot
+    description: "The user has clicked 'Add Lot' and is now in the lot creation subflow."
+    subflow:
+      # See section 5.1.1.2 for flow definition
+      flowId: FLOW_CREATE_LOT_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: EditingLot
+    description: "The user has clicked the 'Edit' button on a lot item and is now in the lot update subflow."
+    subflow:
+      # See section 5.1.3.2 for flow definition
+      flowId: FLOW_UPDATE_LOT_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: DeletingLot
+    description: "The user has clicked the 'Delete' button on a lot item and is now in the lot deletion subflow."
+    subflow:
+      # See section 5.1.4.2 for flow definition
+      flowId: FLOW_DELETE_LOT_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
 ```
 
 #### 5.1.3. Manual Update of a Single Lot
