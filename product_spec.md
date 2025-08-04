@@ -206,18 +206,21 @@ Portfolio creation can be initiated in two ways: automatically upon user signup,
 stateDiagram-v2
     [*] --> DashboardView
     DashboardView --> CreatePortfolioView : USER_CLICKS_ADD_PORTFOLIO
-    CreatePortfolioView --> DashboardView : USER_CLICKS_CANCEL
 
     state "Create Portfolio View" as CreatePortfolioView {
         [*] --> EditingPortfolio
         EditingPortfolio --> AddingHolding : USER_CLICKS_ADD_HOLDING
         AddingHolding --> EditingPortfolio : onCompletion / onCancel
-        EditingPortfolio --> Submitting : USER_CLICKS_SAVE
+        EditingPortfolio --> ValidateForm : USER_CLICKS_SAVE
+        EditingPortfolio --> DashboardView : USER_CLICKS_CANCEL
     }
 
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
     Submitting --> Success : success
     Submitting --> APIError : failure
 
+    FormError --> CreatePortfolioView : USER_DISMISSES_ERROR
     APIError --> CreatePortfolioView : USER_DISMISSES_ERROR
     Success --> DashboardView : (exit flow)
 ```
@@ -240,7 +243,7 @@ states:
         description: "The user is filling out the form for the new portfolio."
         events:
           USER_CLICKS_ADD_HOLDING: AddingHolding
-          USER_CLICKS_SAVE: Submitting
+          USER_CLICKS_SAVE: ValidateForm
           USER_CLICKS_CANCEL: DashboardView
       
       - name: AddingHolding
@@ -250,6 +253,14 @@ states:
           flowId: FLOW_ADD_HOLDING_MANUAL
           onCompletion: EditingPortfolio
           onCancel: EditingPortfolio
+
+  - name: ValidateForm
+    description: "The system is performing client-side validation on the form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
 
   - name: Submitting
     description: "The system is submitting the new portfolio data to the backend."
@@ -264,6 +275,11 @@ states:
     exitAction:
       action: NAVIGATE_TO
       target: DashboardView
+
+  - name: FormError
+    description: "The user is shown an error message indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: CreatePortfolioView
 
   - name: APIError
     description: "The user is shown a generic error message that the portfolio could not be saved."
@@ -294,11 +310,21 @@ The view has two modes: a "Read-Only Mode" and a "Manage Mode".
 stateDiagram-v2
     [*] --> ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
+    ManageMode --> ValidateForm : USER_CLICKS_SAVE
     ManageMode --> ReadOnly : USER_CLICKS_CANCEL
-    ManageMode --> Submitting : USER_CLICKS_SAVE
+
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
 
     Submitting --> ReadOnly : success
-    Submitting --> ManageMode : failure
+    Submitting --> APIError : failure
+
+    FormError --> ManageMode : USER_DISMISSES_ERROR
+    APIError --> ManageMode : USER_DISMISSES_ERROR
+
+    note right of ManageMode
+      activates:<br>FLOW_VIEW_HOLDING_LIST<br>→ ManageMode
+    end note
 ```
 
 ##### 3.1.3.2. State Machine for Manual Portfolio Update
@@ -318,8 +344,16 @@ states:
       - flowId: "FLOW_VIEW_HOLDING_LIST"
         targetState: "ManageMode"
     events:
-      USER_CLICKS_SAVE: Submitting
+      USER_CLICKS_SAVE: ValidateForm
       USER_CLICKS_CANCEL: ReadOnly
+
+  - name: ValidateForm
+    description: "The system is performing client-side validation on the updated form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
 
   - name: Submitting
     description: "The system is submitting the updated portfolio data (atomic fields only) to the backend."
@@ -327,7 +361,17 @@ states:
       service: "PUT /api/users/me/portfolios/{portfolioId}"
       transitions:
         success: ReadOnly
-        failure: ManageMode # On failure, stay in manage mode and show an error
+        failure: APIError
+
+  - name: FormError
+    description: "The user is shown an error message indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
+
+  - name: APIError
+    description: "The user is shown a generic error message that the portfolio could not be updated."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
 ```
 
 #### 3.1.4. Deletion
@@ -336,6 +380,10 @@ states:
 -   If a user deletes their default portfolio:
     -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
     -   If more than one portfolio remains, the application will prompt the user to select a new default.
+
+#### 3.1.5. Unified Transaction Import
+
+Refer to section 3.3.5. 
 
 ### 3.2. Portfolio and Cash Data Model
 
