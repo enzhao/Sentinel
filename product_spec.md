@@ -219,9 +219,9 @@ The management of portfolios follows the standard CRUD (Create, Retrieve, Update
 
 #### 3.2.1. Creation
 
--   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). This portfolio is marked as the default (`isDefault: true`).
--   **Additional Portfolios:** The user can create additional portfolios, each with a unique name. These are created with `isDefault: false`.
--   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio. This portfolio will be the one displayed by default after login. When a portfolio is set as the default, any other portfolio previously marked as default for that user will be unset.
+-   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). The ID of this new portfolio is then stored in the `defaultPortfolioId` field of the user's profile, marking it as their default.
+-   **Additional Portfolios:** The user can create additional portfolios. These are not automatically set as the default.
+-   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio by updating the `defaultPortfolioId` field on their user profile. This portfolio will be the one displayed by default after login.
 
 #### 3.2.2. Retrieval
 
@@ -1219,7 +1219,7 @@ A state machine for this flow will be defined in a future version of this specif
 
 Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots. The client-side application then manages the display of this data, allowing the user to view a summary list and drill down into specific lot details without further API calls.
 
-###### 5.2.2.1. Visual Representation
+##### 5.2.2.1. Visual Representation
 The following diagram visualizes the state machine flow for viewing lot details.
 
 ```mermaid
@@ -1229,7 +1229,7 @@ stateDiagram-v2
     ShowingLotDetail --> ViewingHolding : USER_DISMISSES_DETAIL_VIEW
 ```
 
-###### 5.2.2.2. State Machine for Viewing Lot Details
+##### 5.2.2.2. State Machine for Viewing Lot Details
 ```yaml
 flowId: FLOW_VIEW_LOT_DETAIL
 initialState: ViewingHolding
@@ -1249,7 +1249,7 @@ states:
 
 An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`. This is a manual-only operation performed through the user interface; updating lots via file import is not supported.
 
-###### 5.2.3.1. Visual Representation
+##### 5.2.3.1. Visual Representation
 The following diagram visualizes the state machine flow for manually updating a lot.
 
 ```mermaid
@@ -1267,7 +1267,7 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-###### 5.2.3.2. State Machine for Manual Lot Update
+##### 5.2.3.2. State Machine for Manual Lot Update
 ```yaml
 flowId: FLOW_UPDATE_LOT_MANUAL
 initialState: Idle
@@ -1317,9 +1317,9 @@ states:
 ```
 
 #### 5.2.4. Deletion
-An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero.
+An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero. The holding persists with a quantity of zero, allowing new lots to be added to it in the future; the system does not prompt the user to delete the empty holding.
 
-###### 5.2.4.1. Visual Representation
+##### 5.2.4.1. Visual Representation
 The following diagram visualizes the state machine flow for manually deleting a lot.
 
 ```mermaid
@@ -1334,7 +1334,7 @@ stateDiagram-v2
     Success --> [*] : REFRESH_VIEW
 ```
 
-###### 5.2.4.2. State Machine for Manual Lot Deletion
+##### 5.2.4.2. State Machine for Manual Lot Deletion
 ```yaml
 flowId: FLOW_DELETE_LOT_MANUAL
 initialState: Idle
