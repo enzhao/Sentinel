@@ -760,62 +760,172 @@ states:
 Holdings are retrieved in two contexts: as a list summary within a portfolio, and as a single detailed entity.
 
 ##### 4.1.2.1. List Retrieval (Portfolio Holdings View)
-When a user selects a portfolio (or upon login, when the default portfolio is loaded), the application navigates to the Portfolio Holdings View. This view displays a summary list of all holdings within that portfolio and serves as the primary dashboard.
+When a user selects a portfolio (or upon login, when the default portfolio is loaded), the application navigates to the Portfolio Holdings View. This view displays a summary list of all holdings within that portfolio and serves as the primary dashboard. The view has two modes: a default "Read-Only Mode" and a "Manage Mode".
 
 ###### 4.1.2.1.1. Visual Representation
 ```mermaid
 stateDiagram-v2
-    [*] --> ShowingHoldingList
-    ShowingHoldingList --> ShowingHoldingDetail : USER_CLICKS_HOLDING
-    ShowingHoldingDetail --> ShowingHoldingList : USER_CLICKS_BACK
+    [*] --> ReadOnlyMode
+    ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
+    ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
+
+    ReadOnlyMode --> HoldingDetailView : USER_CLICKS_HOLDING_BODY
+    ManageMode --> HoldingDetailView : USER_CLICKS_HOLDING_BODY
+
+    state "Manage Mode" as ManageMode {
+        [*] --> Idle
+        Idle --> AddingHolding : USER_CLICKS_ADD_HOLDING
+        Idle --> EditingHolding : USER_CLICKS_EDIT_HOLDING_ITEM
+        Idle --> DeletingHolding : USER_CLICKS_DELETE_HOLDING_ITEM
+
+        AddingHolding --> Idle : onCompletion / onCancel
+        EditingHolding --> Idle : onCompletion / onCancel
+        DeletingHolding --> Idle : onCompletion / onCancel
+    }
 ```
 
 ###### 4.1.2.1.2. State Machine for Viewing Holding List
 ```yaml
 flowId: FLOW_VIEW_HOLDING_LIST
-initialState: ShowingHoldingList
+initialState: ReadOnlyMode
 states:
-  - name: ShowingHoldingList
-    description: "The user is viewing a summary list of all holdings for a selected portfolio."
+  - name: ReadOnlyMode
+    description: "The user is viewing a read-only list of holdings. A 'Manage' button is visible."
     events:
-      USER_CLICKS_HOLDING: ShowingHoldingDetail
+      USER_CLICKS_MANAGE: ManageMode
+      USER_CLICKS_HOLDING_BODY: HoldingDetailView
 
-  - name: ShowingHoldingDetail
-    description: "The user has drilled down into the details of a single holding."
+  - name: ManageMode
+    description: "The user has entered manage mode. An 'Add Holding' button is visible, and each holding item shows 'Edit' and 'Delete' buttons. A 'Done' button is visible."
+    events:
+      USER_CLICKS_DONE: ReadOnlyMode
+      USER_CLICKS_HOLDING_BODY: HoldingDetailView
+      USER_CLICKS_ADD_HOLDING: AddingHolding
+      USER_CLICKS_EDIT_HOLDING_ITEM: EditingHolding
+      USER_CLICKS_DELETE_HOLDING_ITEM: DeletingHolding
+
+  - name: HoldingDetailView
+    description: "The user has clicked on the body of a holding and is navigating to its detailed view."
     exitAction:
       action: NAVIGATE_TO
-      target: VIEW_HOLDING_DETAIL (see Section 4.2.2.2)
+      target: VIEW_HOLDING_DETAIL
+
+  - name: AddingHolding
+    description: "The user has clicked 'Add Holding' and is now in the holding creation subflow."
+    subflow:
+      # See section 4.1.1.2 for flow definition
+      flowId: FLOW_ADD_HOLDING_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: EditingHolding
+    description: "The user has clicked the 'Edit' button on a holding item and is now in the holding update subflow."
+    subflow:
+      # See section 4.1.3.2 for flow definition
+      flowId: FLOW_UPDATE_HOLDING_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: DeletingHolding
+    description: "The user has clicked the 'Delete' button on a holding item and is now in the holding deletion subflow."
+    subflow:
+      # See section 4.1.4.2 for flow definition
+      flowId: FLOW_DELETE_HOLDING_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
 ```
 
 ##### 4.1.2.2. Single Retrieval (Holding Detail View)
-From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. From here, the user can choose to go back to the list or add new lots to the holding.
+From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. The view has two modes: a default "Read-Only Mode" and a "Manage Mode" for editing the holding and its lots.
 
 ###### 4.1.2.2.1. Visual Representation
 ```mermaid
 stateDiagram-v2
-    [*] --> ViewingHoldingDetail
-    ViewingHoldingDetail --> AddingLot : USER_CLICKS_ADD_LOT
-    AddingLot --> ViewingHoldingDetail : onCompletion / onCancel
-    ViewingHoldingDetail --> [*] : USER_CLICKS_BACK
+    [*] --> ReadOnly
+    ReadOnly --> ManageMode : USER_CLICKS_EDIT
+    ReadOnly --> DeletingHolding : USER_CLICKS_DELETE
+    DeletingHolding --> ReadOnly : onCancel
+    DeletingHolding --> [*] : onCompletion (navigates away)
+    ReadOnly --> [*] : USER_CLICKS_BACK
+
+    state "Manage Mode" as ManageMode {
+        [*] --> Idle
+        Idle --> ReadOnly : USER_CLICKS_CANCEL
+        Idle --> SavingChanges : USER_CLICKS_SAVE
+        SavingChanges --> ReadOnly : success
+        SavingChanges --> Idle : failure
+
+        Idle --> AddingLot : USER_CLICKS_ADD_LOT
+        AddingLot --> Idle : onCompletion / onCancel
+
+        Idle --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
+        EditingLot --> Idle : onCompletion / onCancel
+
+        Idle --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
+        DeletingLot --> Idle : onCompletion / onCancel
+    }
 ```
 
 ###### 4.1.2.2.2. State Machine for Holding Detail View
 ```yaml
 flowId: FLOW_VIEW_HOLDING_DETAIL
-initialState: ViewingHoldingDetail
+initialState: ReadOnly
 states:
-  - name: ViewingHoldingDetail
-    description: "The user is viewing detailed information for a single holding, including its list of lots."
+  - name: ReadOnly
+    description: "The user is viewing the holding's details. 'Edit', 'Delete', and 'Back' buttons are visible."
     events:
-      USER_CLICKS_ADD_LOT: AddingLot
+      USER_CLICKS_EDIT: ManageMode
+      USER_CLICKS_DELETE: DeletingHolding
       USER_CLICKS_BACK: (exit flow)
 
-  - name: AddingLot
-    description: "The user has chosen to add a new lot to the current holding."
+  - name: DeletingHolding
+    description: "The user has clicked the top-level 'Delete' button for the entire holding."
     subflow:
+      # See section 4.1.4.2 for flow definition
+      flowId: FLOW_DELETE_HOLDING_MANUAL
+      onCompletion: (exit flow)
+      onCancel: ReadOnly
+
+  - name: ManageMode
+    description: "The user is editing the holding. Its metadata fields are editable, and each lot has 'Edit'/'Delete' buttons. 'Add Lot', 'Save', and 'Cancel' buttons are visible at the holding level."
+    events:
+      USER_CLICKS_SAVE: SavingChanges
+      USER_CLICKS_CANCEL: ReadOnly
+      USER_CLICKS_ADD_LOT: AddingLot
+      USER_CLICKS_EDIT_LOT_ITEM: EditingLot
+      USER_CLICKS_DELETE_LOT_ITEM: DeletingLot
+
+  - name: SavingChanges
+    description: "The system is submitting all changes to the holding's metadata."
+    entryAction:
+      service: "PUT /api/users/me/holdings/{holdingId}"
+      transitions:
+        success: ReadOnly
+        failure: ManageMode # Stays in edit mode, shows error
+
+  - name: AddingLot
+    description: "The user is invoking the subflow to add a new lot to the holding."
+    subflow:
+      # See section 5.1.1.2 for flow definition
       flowId: FLOW_CREATE_LOT_MANUAL
-      onCompletion: ViewingHoldingDetail
-      onCancel: ViewingHoldingDetail
+      onCompletion: ManageMode # Returns to edit mode
+      onCancel: ManageMode
+
+  - name: EditingLot
+    description: "The user is invoking the subflow to edit an existing lot."
+    subflow:
+      # See section 5.1.3.2 for flow definition
+      flowId: FLOW_UPDATE_LOT_MANUAL
+      onCompletion: ManageMode # Returns to edit mode
+      onCancel: ManageMode
+
+  - name: DeletingLot
+    description: "The user is invoking the subflow to delete an existing lot."
+    subflow:
+      # See section 5.1.4.2 for flow definition
+      flowId: FLOW_DELETE_LOT_MANUAL
+      onCompletion: ManageMode # Returns to edit mode
+      onCancel: ManageMode
 ```
 
 #### 4.1.3. Update
