@@ -948,7 +948,66 @@ states:
 ```
 
 #### 4.1.5. Move
--   An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
+An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
+
+##### 4.1.5.1. Visual Representation
+The following diagram visualizes the state machine flow for moving a holding.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> SelectingDestination : USER_CLICKS_MOVE_HOLDING
+    SelectingDestination --> Idle : USER_CLICKS_CANCEL
+    SelectingDestination --> ConfirmingMove : USER_SELECTS_DESTINATION
+    ConfirmingMove --> SelectingDestination : USER_CLICKS_BACK
+    ConfirmingMove --> Submitting : USER_CLICKS_CONFIRM_MOVE
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    APIError --> Idle : USER_DISMISSES_ERROR
+    Success --> [*] : NAVIGATE_TO_NEW_PORTFOLIO
+```
+
+##### 4.1.5.2. State Machine for Moving a Holding
+```yaml
+flowId: FLOW_MOVE_HOLDING_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific holding."
+    events:
+      USER_CLICKS_MOVE_HOLDING: SelectingDestination
+
+  - name: SelectingDestination
+    description: "A modal appears, prompting the user to select a destination portfolio from a list of their other available portfolios."
+    events:
+      USER_SELECTS_DESTINATION: ConfirmingMove
+      USER_CLICKS_CANCEL: Idle
+
+  - name: ConfirmingMove
+    description: "The user is shown a confirmation message, e.g., 'Move {holdingName} to {destinationPortfolioName}?'."
+    events:
+      USER_CLICKS_CONFIRM_MOVE: Submitting
+      USER_CLICKS_BACK: SelectingDestination
+
+  - name: Submitting
+    description: "The system is submitting the move request to the backend."
+    entryAction:
+      service: "POST /api/users/me/holdings/{holdingId}/move"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The holding is successfully moved."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_PORTFOLIO_HOLDINGS (of the destination portfolio)
+
+  - name: APIError
+    description: "The user is shown a generic error message that the holding could not be moved."
+    events:
+      USER_DISMISSES_ERROR: Idle
+```
 
 ### 4.2. Holding Data Model
 
