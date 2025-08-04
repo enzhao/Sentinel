@@ -41,6 +41,11 @@ A state can contain one or more of the following blocks to define its behavior:
     - `action` (String, Required): The type of action to perform (e.g., `NAVIGATE_TO`).
     - `target` (String, Required): The destination of the action (e.g., a `viewId` like `VIEW_PORTFOLIO_HOLDINGS`).
 
+- `subflow` (Object, Optional): Defines a call to another, separate state machine flow. This is used to embed a reusable process (like adding a lot) within a larger flow. The parent flow will pause and wait for the subflow to complete or be cancelled.
+    - `flowId` (String, Required): The `flowId` of the state machine to be invoked.
+    - `onCompletion` (String, Required): The `name` of the state to transition to when the subflow finishes successfully.
+    - `onCancel` (String, Required): The `name` of the state to transition to if the user cancels the subflow.
+
 ## 3. Example: Manual Holding Creation Flow
 
 The following example illustrates how the DSL is used to define the flow for a user manually adding a new holding to their portfolio.

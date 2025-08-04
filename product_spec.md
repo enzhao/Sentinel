@@ -624,10 +624,110 @@ The information in this section is calculated on-the-fly by the backend API and 
 
 The management of holdings follows the standard CRUD (Create, Retrieve, Update, Delete) operations, as well as specialized processes for moving holdings and backfilling data. All operations are authenticated and authorized.
 
-#### 4.2.1. Creation
--   **Manual Creation:** An authenticated user can create a new holding in one of their portfolios. The process is interactive: the user provides an identifier (Ticker, ISIN, or WKN), the backend looks up the instrument, and the user confirms the selection before providing details for the initial purchase lot.
--   **Import from File:** An authenticated user can add multiple holdings and their initial lots at once by uploading a file. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then creates the holdings.
--   **Data Backfill:** When a holding is created for a ticker that is new to the system (either manually or via import), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
+#### 4.2.1. Holding Creation Methods
+
+Holdings can be created in two ways: manually for a single holding, or in bulk via a file import. When a holding is created for a ticker that is new to the system (either manually or via import), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
+
+##### 4.2.1.1. Manual Creation of a Holding
+An authenticated user can add a new holding to their portfolio from the dashboard's holding list view. The process first requires the user to find and select a financial instrument. Once the instrument is selected, the system creates the new holding, which is initially empty. The user is then immediately given the option to add one or more purchase lots to this new holding. A newly created holding can remain empty if the user chooses. After the user indicates they are finished, the view returns to the holding list.
+
+###### 4.2.1.1.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> HoldingListView
+    HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
+    LookupInput --> HoldingListView : USER_CLICKS_CANCEL
+    LookupInput --> SubmittingLookup : USER_SUBMITS_IDENTIFIER
+
+    SubmittingLookup --> ConfirmingHoldingCreation : success
+    SubmittingLookup --> LookupError : failure
+
+    ConfirmingHoldingCreation --> SubmittingHolding : USER_CONFIRMS_CREATION
+    ConfirmingHoldingCreation --> HoldingListView : USER_CLICKS_CANCEL
+
+    SubmittingHolding --> AddingLots : success
+    SubmittingHolding --> APIError : failure
+
+    state AddingLots {
+        direction LR
+        [*] --> Idle
+        Idle --> AddingSingleLot : USER_CLICKS_ADD_LOT
+        AddingSingleLot --> Idle : onCompletion
+        AddingSingleLot --> Idle : onCancel
+    }
+    
+    AddingLots --> HoldingListView : USER_CLICKS_FINISH
+
+    LookupError --> LookupInput : USER_DISMISSES_ERROR
+    APIError --> LookupInput : USER_DISMISSES_ERROR
+```
+
+###### 4.2.1.1.2. State Machine for Manual Holding Creation
+```yaml
+flowId: FLOW_ADD_HOLDING_MANUAL
+initialState: HoldingListView
+states:
+  - name: HoldingListView
+    description: "The user is viewing the list of holdings in their default portfolio."
+    events:
+      USER_CLICKS_ADD_HOLDING: LookupInput
+
+  - name: LookupInput
+    description: "A modal appears prompting the user to enter a Ticker, ISIN, or WKN for the new holding."
+    events:
+      USER_SUBMITS_IDENTIFIER: SubmittingLookup
+      USER_CLICKS_CANCEL: HoldingListView
+
+  - name: SubmittingLookup
+    description: "The system is searching for the financial instrument."
+    entryAction:
+      service: "FinancialInstrumentLookupService.search(identifier)"
+      transitions:
+        success: ConfirmingHoldingCreation
+        failure: LookupError
+
+  - name: ConfirmingHoldingCreation
+    description: "The user is shown the details of the found instrument and asked to confirm its creation."
+    events:
+      USER_CONFIRMS_CREATION: SubmittingHolding
+      USER_CLICKS_CANCEL: HoldingListView
+
+  - name: SubmittingHolding
+    description: "The system is creating the new, empty holding."
+    entryAction:
+      service: "POST /api/users/me/holdings"
+      transitions:
+        success: AddingLots
+        failure: APIError
+
+  - name: AddingLots
+    description: "The user is viewing the newly created holding and can now optionally add one or more purchase lots."
+    events:
+      USER_CLICKS_ADD_LOT: AddingSingleLot
+      USER_CLICKS_FINISH: HoldingListView
+  
+  - name: AddingSingleLot
+    description: "The system is now invoking the lot creation subflow."
+    subflow:
+      flowId: FLOW_CREATE_LOT_MANUAL
+      onCompletion: AddingLots
+      onCancel: AddingLots
+
+  - name: LookupError
+    description: "The user is shown an error message that the instrument could not be found."
+    events:
+      USER_DISMISSES_ERROR: LookupInput
+
+  - name: APIError
+    description: "The user is shown a generic error message that the holding could not be saved."
+    events:
+      USER_DISMISSES_ERROR: LookupInput
+```
+
+##### 4.2.1.2. Holding Creation via File Import
+An authenticated user can add multiple holdings and their initial lots at once by uploading a file. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then creates the holdings.
+
+A state machine for this flow will be defined in a future version of this specification.
 
 #### 4.2.2. Retrieval
 -   **List Retrieval:** An authenticated user can retrieve a list of all holdings for a specific portfolio they own. This provides a summary view of each holding.
