@@ -777,10 +777,12 @@ stateDiagram-v2
         Idle --> AddingHolding : USER_CLICKS_ADD_HOLDING
         Idle --> EditingHolding : USER_CLICKS_EDIT_HOLDING_ITEM
         Idle --> DeletingHolding : USER_CLICKS_DELETE_HOLDING_ITEM
+        Idle --> MovingHolding : USER_CLICKS_MOVE_HOLDING_ITEM
 
         AddingHolding --> Idle : onCompletion / onCancel
         EditingHolding --> Idle : onCompletion / onCancel
         DeletingHolding --> Idle : onCompletion / onCancel
+        MovingHolding --> Idle : onCompletion / onCancel
     }
 ```
 
@@ -796,13 +798,14 @@ states:
       USER_CLICKS_HOLDING_BODY: HoldingDetailView
 
   - name: ManageMode
-    description: "The user has entered manage mode. An 'Add Holding' button is visible, and each holding item shows 'Edit' and 'Delete' buttons. A 'Done' button is visible."
+    description: "The user has entered manage mode. An 'Add Holding' button is visible, and each holding item shows 'Edit', 'Delete', and 'Move' buttons. A 'Done' button is visible."
     events:
       USER_CLICKS_DONE: ReadOnlyMode
       USER_CLICKS_HOLDING_BODY: HoldingDetailView
       USER_CLICKS_ADD_HOLDING: AddingHolding
       USER_CLICKS_EDIT_HOLDING_ITEM: EditingHolding
       USER_CLICKS_DELETE_HOLDING_ITEM: DeletingHolding
+      USER_CLICKS_MOVE_HOLDING_ITEM: MovingHolding
 
   - name: HoldingDetailView
     description: "The user has clicked on the body of a holding and is navigating to its detailed view."
@@ -833,6 +836,14 @@ states:
       flowId: FLOW_DELETE_HOLDING_MANUAL
       onCompletion: ManageMode
       onCancel: ManageMode
+      
+  - name: MovingHolding
+    description: "The user has clicked the 'Move' button on a holding item and is now in the holding move subflow."
+    subflow:
+      # See section 4.1.5.2 for flow definition
+      flowId: FLOW_MOVE_HOLDING_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
 ```
 
 ##### 4.1.2.2. Single Retrieval (Holding Detail View)
@@ -844,8 +855,11 @@ stateDiagram-v2
     [*] --> ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT
     ReadOnly --> DeletingHolding : USER_CLICKS_DELETE
+    ReadOnly --> MovingHolding : USER_CLICKS_MOVE
     DeletingHolding --> ReadOnly : onCancel
     DeletingHolding --> [*] : onCompletion (navigates away)
+    MovingHolding --> ReadOnly : onCancel
+    MovingHolding --> [*] : onCompletion (navigates away)
     ReadOnly --> [*] : USER_CLICKS_BACK
 
     state "Manage Mode" as ManageMode {
@@ -872,10 +886,11 @@ flowId: FLOW_VIEW_HOLDING_DETAIL
 initialState: ReadOnly
 states:
   - name: ReadOnly
-    description: "The user is viewing the holding's details. 'Edit', 'Delete', and 'Back' buttons are visible."
+    description: "The user is viewing the holding's details. 'Edit', 'Delete', 'Move', and 'Back' buttons are visible."
     events:
       USER_CLICKS_EDIT: ManageMode
       USER_CLICKS_DELETE: DeletingHolding
+      USER_CLICKS_MOVE: MovingHolding
       USER_CLICKS_BACK: (exit flow)
 
   - name: DeletingHolding
@@ -883,6 +898,14 @@ states:
     subflow:
       # See section 4.1.4.2 for flow definition
       flowId: FLOW_DELETE_HOLDING_MANUAL
+      onCompletion: (exit flow)
+      onCancel: ReadOnly
+
+  - name: MovingHolding
+    description: "The user has clicked the 'Move' button and is now in the holding move subflow."
+    subflow:
+      # See section 4.1.5.2 for flow definition
+      flowId: FLOW_MOVE_HOLDING_MANUAL
       onCompletion: (exit flow)
       onCancel: ReadOnly
 
