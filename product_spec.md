@@ -183,9 +183,35 @@ stateDiagram-v2
 
 This section details the management of user portfolios. A user can create and manage multiple distinct portfolios (e.g., a "real money" portfolio and a "paper trading" portfolio). Each portfolio contains its own set of holdings, cash reserves, and tax settings, forming the foundation for rule evaluation.
 
-### 3.1. Portfolio and Cash Data Model
+### 3.1. Business Process
 
-#### 3.1.1. Stored Data Models
+The management of portfolios follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated and authorized.
+
+#### 3.1.1. Creation
+
+-   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). The ID of this new portfolio is then stored in the `defaultPortfolioId` field of the user's profile, marking it as their default.
+-   **Additional Portfolios:** The user can create additional portfolios. These are not automatically set as the default.
+-   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio by updating the `defaultPortfolioId` field on their user profile. This portfolio will be the one displayed by default after login.
+
+#### 3.1.2. Retrieval
+
+-   An authenticated user can retrieve a list of all portfolios they own.
+-   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
+
+#### 3.1.3. Update
+
+-   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
+
+#### 3.1.4. Deletion
+
+-   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
+-   If a user deletes their default portfolio:
+    -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
+    -   If more than one portfolio remains, the application will prompt the user to select a new default.
+
+### 3.2. Portfolio and Cash Data Model
+
+#### 3.2.1. Stored Data Models
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
@@ -202,7 +228,7 @@ This section details the management of user portfolios. A user can create and ma
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
-#### 3.1.2. Computed Data Models
+#### 3.2.2. Computed Data Models
 
 The information in this section is calculated on-the-fly by the backend API and embedded into the main data object (`Portfolio`) in the API response. It is not stored in the database.
 
@@ -212,32 +238,6 @@ The information in this section is calculated on-the-fly by the backend API and 
   - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
   - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
   - `gainLossPercentage`: Number (%).
-
-### 3.2. Business Process
-
-The management of portfolios follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated and authorized.
-
-#### 3.2.1. Creation
-
--   **Initial Portfolio:** Upon successful user signup, the Sentinel backend automatically creates a default portfolio for the user (e.g., named "My First Portfolio"). The ID of this new portfolio is then stored in the `defaultPortfolioId` field of the user's profile, marking it as their default.
--   **Additional Portfolios:** The user can create additional portfolios. These are not automatically set as the default.
--   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio by updating the `defaultPortfolioId` field on their user profile. This portfolio will be the one displayed by default after login.
-
-#### 3.2.2. Retrieval
-
--   An authenticated user can retrieve a list of all portfolios they own.
--   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
-
-#### 3.2.3. Update
-
--   An authenticated user can modify any aspect of a specific portfolio they own, including its name, description, default currency, cash reserves, and tax settings.
-
-#### 3.2.4. Deletion
-
--   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
--   If a user deletes their default portfolio:
-    -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
-    -   If more than one portfolio remains, the application will prompt the user to select a new default.
 
 ### 3.3. Portfolio and Cash Rules
 
@@ -654,74 +654,17 @@ sequenceDiagram
 
 This section details the management of individual holdings. A holding represents a specific financial instrument (like a stock or ETF) within a user's portfolio. Each holding can be composed of one or more purchase lots, which are detailed in Chapter 5. Holdings are top-level resources linked to a portfolio.
 
-### 4.1. Holding Data Model
-
-#### 4.1.1. Stored Data Models
-
-- **`Holding` (Firestore Document):**
-  - A new top-level collection (`holdings`) will be created.
-  - The document ID for each holding will be a unique `holdingId`.
-  - `holdingId`: String (Unique UUID, the document ID).
-  - `portfolioId`: String (UUID of the parent portfolio).
-  - `userId`: String (Firebase Auth UID, links the holding to its owner).
-  - `ticker`: String (e.g., "VOO", "QQQ.DE").
-  - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
-  - `WKN`: String (Optional, e.g., "A0YEDG").
-  - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
-  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
-  - `currency`: Enum (`EUR`, `USD`, `GBP`).
-  - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
-  - `createdAt`: ISODateTime.
-  - `modifiedAt`: ISODateTime.
-  - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
-
-- **`MarketData` (Firestore Document):**
-  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
-  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
-  - Each document contains:
-    - `date`: ISODateTime.
-    - `ticker`: String.
-    - `open`: Number (EUR).
-    - `high`: Number (EUR).
-    - `low`: Number (EUR).
-    - `close`: Number (EUR).
-    - `volume`: Integer.
-    - `sma200`: Optional<Number> (200-day simple moving average).
-    - `sma50`: Optional<Number> (50-day simple moving average).
-    - `sma20`: Optional<Number> (20-day simple moving average).
-    - `sma7`: Optional<Number> (7-day simple moving average).
-    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
-    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
-    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
-    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
-    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
-    - `atr14`: Optional<Number> (14-day Average True Range).
-    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
-  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
-
-#### 4.1.2. Computed Data Models
-
-The information in this section is calculated on-the-fly by the backend API and embedded into each `Holding` object in the API response. It is not stored in the database.
-
-- **`ComputedInfoHolding` (Object embedded in `Holding`):**
-  - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
-  - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
-  - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
-  - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
-  - `gainLossPercentage`: Number (%).
-
-### 4.2. Business Process
+### 4.1. Business Process
 
 The management of holdings follows the standard CRUD (Create, Retrieve, Update, Delete) operations, as well as specialized processes for moving holdings and backfilling data. All operations are authenticated and authorized.
 
-#### 4.2.1. Holding Creation Methods
+#### 4.1.1. Holding Creation via Manual Input 
 
-Holdings can be created in two ways: manually for a single holding, or in bulk via a file import. When a holding is created for a ticker that is new to the system (either manually or via import), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
+Holdings can be created in two ways: manually for a single holding, or in bulk via a file import. When a holding is created for a ticker that is new to the system (either manually or via import as descrtibed in (TODO: add section number here)), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
 
-##### 4.2.1.1. Manual Creation of a Holding
 An authenticated user can add a new holding to their portfolio from the dashboard's holding list view. The process first requires the user to find and select a financial instrument. Once the instrument is selected, the system creates the new holding, which is initially empty. The user is then immediately given the option to add one or more purchase lots to this new holding. A newly created holding can remain empty if the user chooses. After the user indicates they are finished, the view returns to the holding list.
 
-###### 4.2.1.1.1. Visual Representation
+##### 4.1.1.1. Visual Representation
 ```mermaid
 stateDiagram-v2
     [*] --> HoldingListView
@@ -750,7 +693,7 @@ stateDiagram-v2
     APIError --> LookupInput : USER_DISMISSES_ERROR
 ```
 
-###### 4.2.1.1.2. State Machine for Manual Holding Creation
+##### 4.1.1.2. State Machine for Manual Holding Creation
 ```yaml
 flowId: FLOW_ADD_HOLDING_MANUAL
 initialState: HoldingListView
@@ -812,19 +755,14 @@ states:
       USER_DISMISSES_ERROR: LookupInput
 ```
 
-##### 4.2.1.2. Holding Creation via File Import
-An authenticated user can add multiple holdings and their initial lots at once by uploading a file. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then creates the holdings.
-
-A state machine for this flow will be defined in a future version of this specification.
-
-#### 4.2.2. Retrieval
+#### 4.1.2. Retrieval
 
 Holdings are retrieved in two contexts: as a list summary within a portfolio, and as a single detailed entity.
 
-##### 4.2.2.1. List Retrieval (Portfolio Holdings View)
+##### 4.1.2.1. List Retrieval (Portfolio Holdings View)
 When a user selects a portfolio (or upon login, when the default portfolio is loaded), the application navigates to the Portfolio Holdings View. This view displays a summary list of all holdings within that portfolio and serves as the primary dashboard.
 
-###### 4.2.2.1.1. Visual Representation
+###### 4.1.2.1.1. Visual Representation
 ```mermaid
 stateDiagram-v2
     [*] --> ShowingHoldingList
@@ -832,7 +770,7 @@ stateDiagram-v2
     ShowingHoldingDetail --> ShowingHoldingList : USER_CLICKS_BACK
 ```
 
-###### 4.2.2.1.2. State Machine for Viewing Holding List
+###### 4.1.2.1.2. State Machine for Viewing Holding List
 ```yaml
 flowId: FLOW_VIEW_HOLDING_LIST
 initialState: ShowingHoldingList
@@ -849,10 +787,10 @@ states:
       target: VIEW_HOLDING_DETAIL (see Section 4.2.2.2)
 ```
 
-##### 4.2.2.2. Single Retrieval (Holding Detail View)
+##### 4.1.2.2. Single Retrieval (Holding Detail View)
 From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. From here, the user can choose to go back to the list or add new lots to the holding.
 
-###### 4.2.2.2.1. Visual Representation
+###### 4.1.2.2.1. Visual Representation
 ```mermaid
 stateDiagram-v2
     [*] --> ViewingHoldingDetail
@@ -861,7 +799,7 @@ stateDiagram-v2
     ViewingHoldingDetail --> [*] : USER_CLICKS_BACK
 ```
 
-###### 4.2.2.2.2. State Machine for Holding Detail View
+###### 4.1.2.2.2. State Machine for Holding Detail View
 ```yaml
 flowId: FLOW_VIEW_HOLDING_DETAIL
 initialState: ViewingHoldingDetail
@@ -880,15 +818,71 @@ states:
       onCancel: ViewingHoldingDetail
 ```
 
-#### 4.2.3. Update
+#### 4.1.3. Update
 -   **Manual Update:** An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding.
 -   **Update via File Import:** An authenticated user can add multiple new purchase lots to an existing holding by uploading a file from their broker. This process is used to update a holding with new transactions. For details on adding, updating, or deleting individual lots manually, see Chapter 5.
 
-#### 4.2.4. Deletion
+#### 4.1.4. Deletion
 -   An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
 
-#### 4.2.5. Move
+#### 4.1.5. Move
 -   An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
+
+### 4.2. Holding Data Model
+
+#### 4.2.1. Stored Data Models
+
+- **`Holding` (Firestore Document):**
+  - A new top-level collection (`holdings`) will be created.
+  - The document ID for each holding will be a unique `holdingId`.
+  - `holdingId`: String (Unique UUID, the document ID).
+  - `portfolioId`: String (UUID of the parent portfolio).
+  - `userId`: String (Firebase Auth UID, links the holding to its owner).
+  - `ticker`: String (e.g., "VOO", "QQQ.DE").
+  - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
+  - `WKN`: String (Optional, e.g., "A0YEDG").
+  - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
+  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
+  - `currency`: Enum (`EUR`, `USD`, `GBP`).
+  - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+  - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
+
+- **`MarketData` (Firestore Document):**
+  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
+  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
+  - Each document contains:
+    - `date`: ISODateTime.
+    - `ticker`: String.
+    - `open`: Number (EUR).
+    - `high`: Number (EUR).
+    - `low`: Number (EUR).
+    - `close`: Number (EUR).
+    - `volume`: Integer.
+    - `sma200`: Optional<Number> (200-day simple moving average).
+    - `sma50`: Optional<Number> (50-day simple moving average).
+    - `sma20`: Optional<Number> (20-day simple moving average).
+    - `sma7`: Optional<Number> (7-day simple moving average).
+    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
+    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
+    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
+    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
+    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
+    - `atr14`: Optional<Number> (14-day Average True Range).
+    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
+  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
+
+#### 4.2.2. Computed Data Models
+
+The information in this section is calculated on-the-fly by the backend API and embedded into each `Holding` object in the API response. It is not stored in the database.
+
+- **`ComputedInfoHolding` (Object embedded in `Holding`):**
+  - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
+  - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+  - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+  - `gainLossPercentage`: Number (%).
 
 ### 4.3. Holding Management Rules
 
@@ -1229,41 +1223,17 @@ sequenceDiagram
 
 This section details the management of individual purchase lots. Lots represent a specific purchase of a quantity of a security at a certain price and date. They always exist as part of a `Holding` (see Chapter 4).
 
-### 5.1. Lot Data Model
-
-#### 5.1.1. Stored Data Models
-
-- **`Lot` (Object within Holding):**
-  - `lotId`: String (Unique UUID generated on creation).
-  - `purchaseDate`: ISODateTime.
-  - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
-  - `createdAt`: ISODateTime.
-  - `modifiedAt`: ISODateTime.
-
-#### 5.1.2. Computed Data Models
-
-The information in this section is calculated on-the-fly by the backend API and embedded into each `Lot` object in the API response. It is not stored in the database.
-
-- **`ComputedInfoLot` (Object embedded in `Lot`):**
-  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-
-### 5.2. Business Process
+### 5.1. Business Process
 
 The management of lots follows the standard CRUD (Create, Retrieve, Update, Delete) operations. All operations are authenticated, authorized, and performed in the context of a parent holding.
 
-#### 5.2.1. Lot Creation Methods
+#### 5.1.1. Lot Creation Methods
 
-Lots can be created in two ways: manually for a single transaction, or in bulk via a file import.
+Lots can be created in two ways: manually for a single transaction, or in bulk via the unified file import process described in **Section 3.3.5, Rule P_5000**.
 
-##### 5.2.1.1. Manual Creation of a Single Lot
 An authenticated user can add a single new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding. The user interaction for this process is defined by the state machine below.
 
-###### 5.2.1.1.1. Visual Representation
+##### 5.1.1.1. Visual Representation
 The following diagram visualizes the state machine flow for manually creating a lot.
 
 ```mermaid
@@ -1281,7 +1251,7 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-###### 5.2.1.1.2. State Machine for Manual Lot Creation
+##### 5.1.1.2. State Machine for Manual Lot Creation
 ```yaml
 flowId: FLOW_CREATE_LOT_MANUAL
 initialState: Idle
@@ -1330,18 +1300,11 @@ states:
       USER_DISMISSES_ERROR: FormInput
 ```
 
-##### 5.2.1.2. Creation of Lots via File Import
-An authenticated user can add multiple new lots to an *existing holding* by uploading a file (e.g., a CSV from their broker). This process is designed for updating a holding with new transactions. The backend uses an AI service to parse the file, presents the structured data to the user for review and confirmation, and then adds the new lots to the specified holding.
-
-> **Note:** This process is for adding lots to an *existing* holding. For creating *new holdings* and their initial lots from a file, see the process described in **Section 4.2.1, Rule H_1200**.
-
-A state machine for this flow will be defined in a future version of this specification.
-
-#### 5.2.2. Retrieval
+#### 5.1.2. Retrieval
 
 Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object. When a user requests the details of a single holding, the response includes a full list of all purchase lots. The client-side application then manages the display of this data, allowing the user to view a summary list and drill down into specific lot details without further API calls.
 
-##### 5.2.2.1. Visual Representation
+##### 5.1.2.1. Visual Representation
 The following diagram visualizes the state machine flow for viewing lot details.
 
 ```mermaid
@@ -1351,7 +1314,7 @@ stateDiagram-v2
     ShowingLotDetail --> ViewingHolding : USER_DISMISSES_DETAIL_VIEW
 ```
 
-##### 5.2.2.2. State Machine for Viewing Lot Details
+##### 5.1.2.2. State Machine for Viewing Lot Details
 ```yaml
 flowId: FLOW_VIEW_LOT_DETAIL
 initialState: ViewingHolding
@@ -1367,11 +1330,11 @@ states:
       USER_DISMISSES_DETAIL_VIEW: ViewingHolding
 ```
 
-#### 5.2.3. Manual Update of a Single Lot
+#### 5.1.3. Manual Update of a Single Lot
 
 An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`. This is a manual-only operation performed through the user interface; updating lots via file import is not supported.
 
-##### 5.2.3.1. Visual Representation
+##### 5.1.3.1. Visual Representation
 The following diagram visualizes the state machine flow for manually updating a lot.
 
 ```mermaid
@@ -1389,7 +1352,7 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-##### 5.2.3.2. State Machine for Manual Lot Update
+##### 5.1.3.2. State Machine for Manual Lot Update
 ```yaml
 flowId: FLOW_UPDATE_LOT_MANUAL
 initialState: Idle
@@ -1438,10 +1401,10 @@ states:
       USER_DISMISSES_ERROR: Editing
 ```
 
-#### 5.2.4. Deletion
+#### 5.1.4. Deletion
 An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero. The holding persists with a quantity of zero, allowing new lots to be added to it in the future; the system does not prompt the user to delete the empty holding.
 
-##### 5.2.4.1. Visual Representation
+##### 5.1.4.1. Visual Representation
 The following diagram visualizes the state machine flow for manually deleting a lot.
 
 ```mermaid
@@ -1456,7 +1419,7 @@ stateDiagram-v2
     Success --> [*] : REFRESH_VIEW
 ```
 
-##### 5.2.4.2. State Machine for Manual Lot Deletion
+##### 5.1.4.2. State Machine for Manual Lot Deletion
 ```yaml
 flowId: FLOW_DELETE_LOT_MANUAL
 initialState: Idle
@@ -1491,6 +1454,29 @@ states:
     events:
       USER_DISMISSES_ERROR: Idle
 ```
+
+### 5.2. Lot Data Model
+
+#### 5.2.1. Stored Data Models
+
+- **`Lot` (Object within Holding):**
+  - `lotId`: String (Unique UUID generated on creation).
+  - `purchaseDate`: ISODateTime.
+  - `quantity`: Number (of shares, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+
+#### 5.2.2. Computed Data Models
+
+The information in this section is calculated on-the-fly by the backend API and embedded into each `Lot` object in the API response. It is not stored in the database.
+
+- **`ComputedInfoLot` (Object embedded in `Lot`):**
+  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
 
 ### 5.3. Lot Management Rules
 
