@@ -648,12 +648,10 @@ stateDiagram-v2
     SubmittingHolding --> AddingLots : success
     SubmittingHolding --> APIError : failure
 
-    state AddingLots {
-        direction LR
-        [*] --> Idle
-        Idle --> AddingSingleLot : USER_CLICKS_ADD_LOT
-        AddingSingleLot --> Idle : onCompletion
-        AddingSingleLot --> Idle : onCancel
+    state "Adding Lots" as AddingLots {
+        [*] --> ReadyToAdd
+        ReadyToAdd --> InvokingLotCreation : USER_CLICKS_ADD_LOT (see Section 5.2.1.1.2)
+        InvokingLotCreation --> ReadyToAdd : onCompletion / onCancel
     }
     
     AddingLots --> HoldingListView : USER_CLICKS_FINISH
@@ -707,7 +705,7 @@ states:
       USER_CLICKS_FINISH: HoldingListView
   
   - name: AddingSingleLot
-    description: "The system is now invoking the lot creation subflow."
+    description: "The system is now invoking the lot creation subflow, specified in section 5.2.1.1."
     subflow:
       flowId: FLOW_CREATE_LOT_MANUAL
       onCompletion: AddingLots
