@@ -289,8 +289,144 @@ states:
 
 #### 3.1.2. Retrieval
 
--   An authenticated user can retrieve a list of all portfolios they own.
--   An authenticated user can retrieve the detailed contents of a single, specific portfolio. The backend first fetches the `Portfolio` document, then queries the top-level `holdings` collection for all holdings where the `portfolioId` matches. The combined data is then enriched with calculated performance metrics from the `marketData` cache.
+Portfolios are retrieved and displayed in two main contexts: a summary list on the main dashboard, and a detailed view for a single portfolio.
+
+##### 3.1.2.1. List Retrieval (Dashboard View)
+Upon login, the user is presented with the Dashboard View, which lists all their portfolios. This view serves as the primary navigation hub for portfolio management. It has a "Read-Only Mode" for general viewing and a "Manage Mode" that enables CRUD operations on the portfolio list.
+
+###### 3.1.2.1.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> ReadOnlyMode
+    ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
+    ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
+
+    ReadOnlyMode --> PortfolioDetailView : USER_CLICKS_PORTFOLIO_ITEM
+    ManageMode --> PortfolioDetailView : USER_CLICKS_PORTFOLIO_ITEM
+
+    state "Manage Mode" as ManageMode {
+        [*] --> Idle
+        Idle --> AddingPortfolio : USER_CLICKS_ADD_PORTFOLIO
+        AddingPortfolio --> Idle : onCompletion / onCancel
+
+        Idle --> EditingPortfolio : USER_CLICKS_EDIT_ITEM
+        EditingPortfolio --> Idle : onCompletion / onCancel
+
+        Idle --> DeletingPortfolio : USER_CLICKS_DELETE_ITEM
+        DeletingPortfolio --> Idle : onCompletion / onCancel
+    }
+```
+
+###### 3.1.2.1.2. State Machine for Portfolio List View
+```yaml
+flowId: FLOW_VIEW_PORTFOLIO_LIST
+initialState: ReadOnlyMode
+states:
+  - name: ReadOnlyMode
+    description: "The user is viewing a read-only list of their portfolios. A 'Manage' button is visible."
+    events:
+      USER_CLICKS_MANAGE: ManageMode
+      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
+
+  - name: ManageMode
+    description: "The user has entered manage mode. An 'Add Portfolio' button is visible, and each portfolio item shows 'Edit' and 'Delete' buttons."
+    events:
+      USER_CLICKS_DONE: ReadOnlyMode
+      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
+      USER_CLICKS_ADD_PORTFOLIO: AddingPortfolio
+      USER_CLICKS_EDIT_ITEM: EditingPortfolio
+      USER_CLICKS_DELETE_ITEM: DeletingPortfolio
+
+  - name: PortfolioDetailView
+    description: "The user has clicked on a portfolio and is navigating to its detailed view."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_PORTFOLIO_DETAIL
+
+  - name: AddingPortfolio
+    description: "The user is invoking the portfolio creation subflow."
+    subflow:
+      flowId: FLOW_CREATE_PORTFOLIO_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: EditingPortfolio
+    description: "The user is invoking the portfolio update subflow."
+    subflow:
+      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+
+  - name: DeletingPortfolio
+    description: "The user is invoking the portfolio deletion subflow."
+    subflow:
+      flowId: FLOW_DELETE_PORTFOLIO_MANUAL
+      onCompletion: ManageMode
+      onCancel: ManageMode
+```
+
+##### 3.1.2.2. Single Retrieval (Portfolio Details View)
+From the dashboard, a user can select a single portfolio to navigate to the Portfolio Details View. This view displays the portfolio's metadata and the list of its holdings. From here, the user can manage the portfolio's details, its holdings, or set it as their default portfolio.
+
+###### 3.1.2.2.1. Visual Representation
+```mermaid
+stateDiagram-v2
+    [*] --> ReadOnly
+    ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
+    ManageMode --> ReadOnly : onCompletion / onCancel
+
+    ReadOnly --> DeletingPortfolio : USER_CLICKS_DELETE
+    DeletingPortfolio --> ReadOnly : onCancel
+    DeletingPortfolio --> [*] : onCompletion
+
+    ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
+    SettingAsDefault --> ReadOnly : success / failure
+
+    note right of ReadOnly
+      The embedded Holdings List is
+      activated by the parent view's state.
+    end note
+```
+
+###### 3.1.2.2.2. State Machine for Portfolio Detail View
+```yaml
+flowId: FLOW_VIEW_PORTFOLIO_DETAIL
+initialState: ReadOnly
+states:
+  - name: ReadOnly
+    description: "The user is viewing the portfolio's details. 'Manage', 'Delete', and 'Set as Default' buttons are visible."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDING_LIST"
+        targetState: "ReadOnlyMode"
+    events:
+      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
+      USER_CLICKS_DELETE: DeletingPortfolio
+      USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
+
+  - name: ManageMode
+    description: "The user has entered manage mode for the portfolio."
+    subflow:
+      # See section 3.1.3.2 for flow definition
+      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
+      onCompletion: ReadOnly
+      onCancel: ReadOnly
+
+  - name: DeletingPortfolio
+    description: "The user has clicked the 'Delete' button for the portfolio."
+    subflow:
+      # See section 3.1.4.2 for flow definition
+      flowId: FLOW_DELETE_PORTFOLIO_MANUAL
+      onCompletion: (exit flow) # Navigates away from the now-deleted portfolio
+      onCancel: ReadOnly
+
+  - name: SettingAsDefault
+    description: "The system is submitting a request to set this portfolio as the user's default."
+    entryAction:
+      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
+      transitions:
+        success: ReadOnly # Returns to ReadOnly, UI should show a success indicator
+        failure: ReadOnly # Returns to ReadOnly, UI should show an error message
+```
 
 #### 3.1.3. Update
 
@@ -376,14 +512,187 @@ states:
 
 #### 3.1.4. Deletion
 
--   An authenticated user can delete an entire portfolio. When a portfolio is deleted, all of its associated `Holding` documents must also be deleted.
--   If a user deletes their default portfolio:
-    -   If only one portfolio remains after the deletion, it is automatically designated as the new default.
-    -   If more than one portfolio remains, the application will prompt the user to select a new default.
+An authenticated user can delete an entire portfolio. This is a destructive action that also removes all associated holdings and rules. If the deleted portfolio was the user's designated default, the application will prompt the user to select a new default from their remaining portfolios, unless only one remains, in which case it will be set as the default automatically.
+
+##### 3.1.4.1. Visual Representation
+The following diagram visualizes the state machine flow for manually deleting a portfolio, including the conditional logic for handling a default portfolio.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> ConfirmingDelete : USER_CLICKS_DELETE_PORTFOLIO
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
+
+    Submitting --> SuccessRefresh : success_refresh
+    Submitting --> SelectingNewDefault : success_prompt_new_default
+    Submitting --> APIError : failure
+
+    state "User must select a new default" as SelectingNewDefault {
+        [*] --> AwaitingSelection
+        AwaitingSelection --> SubmittingNewDefault : USER_SELECTS_NEW_DEFAULT
+    }
+
+    SubmittingNewDefault --> SuccessRefresh : success
+    SubmittingNewDefault --> APIError : failure
+
+    APIError --> Idle : USER_DISMISSES_ERROR
+    SuccessRefresh --> [*] : (exit flow)
+```
+
+##### 3.1.4.2. State Machine for Manual Portfolio Deletion
+```yaml
+flowId: FLOW_DELETE_PORTFOLIO_MANUAL
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is viewing the details of a specific portfolio or the list of portfolios."
+    events:
+      USER_CLICKS_DELETE_PORTFOLIO: ConfirmingDelete
+
+  - name: ConfirmingDelete
+    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected portfolio."
+    events:
+      USER_CLICKS_CONFIRM_DELETE: Submitting
+      USER_CLICKS_CANCEL_DELETE: Idle
+
+  - name: Submitting
+    description: "The system is submitting the delete request to the backend."
+    entryAction:
+      service: "DELETE /api/users/me/portfolios/{portfolioId}"
+      transitions:
+        success_refresh: SuccessRefresh
+        success_prompt_new_default: SelectingNewDefault
+        failure: APIError
+
+  - name: SelectingNewDefault
+    description: "The user is prompted to select a new default portfolio from a list of their remaining portfolios."
+    events:
+      USER_SELECTS_NEW_DEFAULT: SubmittingNewDefault
+
+  - name: SubmittingNewDefault
+    description: "The system is submitting the user's choice for the new default portfolio."
+    entryAction:
+      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
+      transitions:
+        success: SuccessRefresh
+        failure: APIError # Or could return to SelectingNewDefault with an error
+
+  - name: SuccessRefresh
+    description: "The operation was successful. The view will now be refreshed."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_DASHBOARD
+
+  - name: APIError
+    description: "The user is shown a generic error message that the operation could not be completed."
+    events:
+      USER_DISMISSES_ERROR: Idle
+```
 
 #### 3.1.5. Unified Transaction Import
 
-Refer to section 3.3.5. 
+This feature allows an authenticated user to upload a file (e.g., a CSV from their broker) to bulk-import transactions into a specific portfolio. The system uses an AI-powered service to parse the file, then intelligently annotates each discovered transaction as either a `CREATE` (for a new holding) or an `UPDATE` (for an existing holding). The user is then presented with this annotated list for review and correction before confirming the import.
+
+##### 3.1.5.1. Visual Representation
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> SelectingFile : USER_CLICKS_IMPORT
+    SelectingFile --> Idle : USER_CANCELS
+    SelectingFile --> ValidatingFile : USER_SELECTS_FILE
+
+    ValidatingFile --> Uploading : valid
+    ValidatingFile --> FileError : invalid
+
+    Uploading --> ReviewingChanges : success
+    Uploading --> ParsingError : parsing_failed
+    Uploading --> APIError : failure
+
+    ReviewingChanges --> SubmittingConfirmation : USER_CLICKS_CONFIRM
+    ReviewingChanges --> Idle : USER_CLICKS_CANCEL
+
+    SubmittingConfirmation --> Success : success
+    SubmittingConfirmation --> ReviewingChanges : validation_failed
+    SubmittingConfirmation --> APIError : failure
+
+    FileError --> Idle : USER_DISMISSES_ERROR
+    ParsingError --> Idle : USER_DISMISSES_ERROR
+    APIError --> Idle : USER_DISMISSES_ERROR
+    Success --> [*] : (exit flow)
+```
+
+##### 3.1.5.2. State Machine for Unified Transaction Import
+
+```yaml
+flowId: FLOW_IMPORT_TRANSACTIONS
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is in a view where they can initiate a transaction import for a portfolio."
+    events:
+      USER_CLICKS_IMPORT: SelectingFile
+
+  - name: SelectingFile
+    description: "The user is prompted by the system to select a transaction file from their local device."
+    events:
+      USER_SELECTS_FILE: ValidatingFile
+      USER_CANCELS: Idle
+
+  - name: ValidatingFile
+    description: "The system performs client-side validation on the selected file (e.g., checking file type and size)."
+    entryAction:
+      service: "FileValidationService.validate(file)"
+      transitions:
+        valid: Uploading
+        invalid: FileError
+
+  - name: Uploading
+    description: "The file is being uploaded to the backend, which then parses and annotates the transactions. The UI shows a loading indicator."
+    entryAction:
+      service: "POST /api/users/me/portfolios/{portfolioId}/transactions/import"
+      transitions:
+        success: ReviewingChanges
+        parsing_failed: ParsingError
+        failure: APIError
+
+  - name: ReviewingChanges
+    description: "The user is shown the parsed and annotated list of transactions. They can review, correct, and approve the changes."
+    events:
+      USER_CLICKS_CONFIRM: SubmittingConfirmation
+      USER_CLICKS_CANCEL: Idle
+
+  - name: SubmittingConfirmation
+    description: "The system is submitting the user-reviewed and confirmed transaction data to the backend."
+    entryAction:
+      service: "POST /api/users/me/portfolios/{portfolioId}/transactions/import/confirm"
+      transitions:
+        success: Success
+        validation_failed: ReviewingChanges # Returns to review with error messages
+        failure: APIError
+
+  - name: Success
+    description: "The import was successful and the portfolio has been updated."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_PORTFOLIO_HOLDINGS
+
+  - name: FileError
+    description: "The user is shown an error message indicating the selected file is invalid."
+    events:
+      USER_DISMISSES_ERROR: Idle
+
+  - name: ParsingError
+    description: "The user is shown an error message indicating the file could not be automatically parsed."
+    events:
+      USER_DISMISSES_ERROR: Idle
+
+  - name: APIError
+    description: "The user is shown a generic error message that the operation could not be completed."
+    events:
+      USER_DISMISSES_ERROR: Idle
+``` 
 
 ### 3.2. Portfolio and Cash Data Model
 
