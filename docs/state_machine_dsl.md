@@ -15,6 +15,7 @@ Each flow is defined by a root object containing a `flowId`, an `initialState`, 
 ### 2.1. Top-Level Keywords
 
 - `flowId` (String, Required): A unique identifier for the entire user flow (e.g., `FLOW_CREATE_LOT_MANUAL`).
+- `requiresAuth` (Boolean, Required): If `true`, the user must be authenticated to initiate and execute this flow. If `false`, it is a public flow (e.g., `FLOW_LOGIN`).
 - `initialState` (String, Required): The name of the state where the flow begins. This must match the `name` of one of the defined states.
 - `states` (Array, Required): A list of all possible state objects within the flow.
 
@@ -101,6 +102,7 @@ stateDiagram-v2
 
 ```yaml
 flowId: FLOW_ADD_HOLDING_MANUAL
+requiresAuth: true
 initialState: HoldingListView
 states:
   - name: HoldingListView

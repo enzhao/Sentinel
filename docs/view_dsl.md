@@ -41,6 +41,7 @@ Each view is defined by a root object with a unique `viewId`.
 
 - `viewId` (String, Required): A unique identifier for the view, following the `VIEW_XXXX` convention (e.g., `VIEW_2000`, `VIEW_PORTFOLIO_DETAIL`).
 - `title` (String, Required): The user-facing title of the view, often used in the AppBar or as the page title.
+- `requiresAuth` (Boolean, Required): If `true`, the user must be authenticated to access this view. If `false`, it is a public view (e.g., Login, Signup).
 - `description` (String, Required): A human-readable explanation of the view's purpose.
 - `data` (Array, Optional): A list of data objects the view requires to render. Each object has:
     - `name` (String): The variable name for the data (e.g., "portfolio").
@@ -84,6 +85,7 @@ The following example illustrates how the DSL is used to define the main dashboa
 ```yaml
 viewId: VIEW_2000
 title: "Holding Overview"
+requiresAuth: true
 description: "The main dashboard view, displaying a summary of the user's default portfolio and a list of their holdings."
 
 data:
