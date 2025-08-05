@@ -180,6 +180,19 @@ stateDiagram-v2
     Unauthenticated --> Authenticated : Login Success
     Authenticated --> Unauthenticated : User clicks 'Logout'
 ```
+
+### 2.2. User Interaction Flows
+
+This section provides the detailed state machine definitions for all user journeys in the application, using the Flow DSL defined in `docs/state_machine_dsl.md`. Each flow describes how the user navigates between different views to accomplish a task.
+
+*(This section will be populated with flow definitions.)*
+
+### 2.3. View Specifications
+
+This section provides a complete catalog of all the views and modals in the application. Each view is defined using the View DSL (see `docs/view_dsl.md`), which specifies its layout, components, data requirements, and the events it can dispatch.
+
+*(This section will be populated with view definitions.)*
+
 ---
 
 ## 3. Portfolio and Cash Management
