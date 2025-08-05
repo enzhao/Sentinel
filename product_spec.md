@@ -31,20 +31,23 @@ The specification is organized as follows:
 - **Chapter 2: Frontend UI and User Interaction**: Describes the application's user interface, page flows, and interaction scenarios.
 - **Chapter 3: Portfolio and Cash Management**: Details the management of user portfolios and cash reserves.
 - **Chapter 4: Holding Management**: Details the management of individual holdings and their purchase lots within a portfolio.
-- **Chapter 5: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
-- **Chapter 6: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
-- **Chapter 7: User Authentication and Authorization**: Covers user identity and access control.
-- **Chapter 8: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
+- **Chapter 5: Lot Management**: Details the management of individual purchase lots within a holding.
+- **Chapter 6: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
+- **Chapter 7: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
+- **Chapter 8: User Authentication and Authorization**: Covers user identity and access control.
+- **Chapter 9: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
 
-Each section includes:
-1. **Data Model and Business Process**:
-   - Data schemas for the entity/process.
-   - A high-level description of the process, with examples and sequence diagrams.
-2. **Business Rules**:
-   - Detailed operational logic with unique Rule IDs (e.g., P_1000 for portfolio, H_1000 for holdings, R_1000 for rules).
-   - Success (Informational, I_XXXX), Warning (E_XXXX), and Error conditions (E_E_XXXX).
-   - Tables listing conditions, checkpoints, outcomes, and message keys.
-   - Messages with placeholders (e.g., `{amount}`) for clarity.
+Each functional chapter (3-8) is structured to provide a multi-layered view of the system, from high-level process to detailed implementation logic:
+
+1.  **Business Process (e.g., Section 3.1)**: Describes the "how" from a user's perspective for each major operation (e.g., Create, Update).
+    *   **Visual Representation**: A Mermaid state diagram illustrating the user flow.
+    *   **State Machine**: A formal definition of the flow using the project's DSL, detailing every state, user event, and system action.
+2.  **Data Model (e.g., Section 3.2)**: Defines the data structures for the chapter's entities.
+    *   **Stored Data Models**: The schema of the data as it is persisted in the database.
+    *   **Computed Data Models**: On-the-fly calculated data that is added to API responses but not stored.
+3.  **Business Rules (e.g., Section 3.3)**: Details the specific backend logic, constraints, and outcomes for each operation.
+    *   **Sequence Diagram**: A Mermaid diagram showing the interaction between system components (Frontend, Backend, Database).
+    *   **Sub-Rules Table**: A granular breakdown of conditions, checkpoints, and outcomes, each with a unique Rule ID (e.g., `P_I_1001`) and corresponding user-facing message key.
 
 ---
 
@@ -709,7 +712,7 @@ states:
     - `warChestAmount`: Number (in `defaultCurrency`, portion for opportunistic buying).
   - `taxSettings`: Object containing:
     - `capitalGainTaxRate`: Number (percentage, e.g., 26.4).
-    - `taxFreeAllowance`: Number (EUR, e.g., 1000).
+    - `taxFreeAllowance`: Number (in the portfolio's `defaultCurrency`, e.g., 1000).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
@@ -1646,7 +1649,15 @@ states:
   - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
-  - `lots`: Array of `Lot` objects. See Chapter 5 for the `Lot` data model and management details.
+  - `lots`: Array of `Lot` objects. The `Lot` data model is defined below. See Chapter 5 for lot management details.
+
+- **`Lot` (Object within Holding):**
+  - `lotId`: String (Unique UUID generated on creation).
+  - `purchaseDate`: ISODateTime.
+  - `quantity`: Number (of shares, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
 
 - **`MarketData` (Firestore Document):**
   - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
@@ -1683,21 +1694,32 @@ The information in this section is calculated on-the-fly by the backend API and 
   - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
   - `gainLossPercentage`: Number (%).
 
+- **`ComputedInfoLot` (Object embedded in `Lot`):**
+  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+
 ### 4.3. Holding Management Rules
 
 This section will detail the specific rules for creating, updating, and deleting holdings.
 
-#### 4.3.1. H_1000: Holding Creation (Manual, Interactive)
+#### 4.3.1. Holding Creation (Manual, Interactive)
 
-- **Sequence Diagram for Interactive Holding Creation**
+The manual creation of a holding is a two-step process that directly maps to the `FLOW_ADD_HOLDING_MANUAL` state machine:
+1.  **Instrument Lookup (`H_1000`)**: The user searches for a financial instrument.
+2.  **Holding Creation (`H_1200`)**: After the instrument is confirmed, the system creates the empty holding.
+
+##### 4.3.1.1. H_1000: Financial Instrument Lookup
+
+- **Sequence Diagram for Instrument Lookup**
 
 ```mermaid
 sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
     participant Lookup as Financial Instrument<br>Lookup Service
-    participant DB as Database
-    participant Backfill as Backfill Service
 
     User->>Sentinel: 1. POST /api/users/me/holdings/lookup<br> { identifier: "AAPL" }
     activate Sentinel
@@ -1710,50 +1732,76 @@ sequenceDiagram
         Sentinel-->>User: 4a. Return single instrument details<br> (Ticker, ISIN, WKN)
     else Multiple Instruments Found
         Sentinel-->>User: 4b. Return list of instruments for selection
-        User->>Sentinel: 5. POST /api/users/me/holdings<br> { portfolioId, selectedInstrument, lotDetails }
+    else Instrument Not Found
+        Sentinel-->>User: 4c. Return HTTP 404 Not Found
     end
-
-    Sentinel->>Sentinel: 6. Validate all data
-    Sentinel->>DB: 7. Create Holding document in 'holdings' collection
-    activate DB
-    DB-->>Sentinel: 8. Confirm Creation
-    deactivate DB
-    
-    alt Ticker is new
-        Sentinel->>Backfill: 9. Trigger backfill for new ticker (async)
-    end
-
-    Sentinel-->>User: 10. HTTP 201 Created
     deactivate Sentinel
 ```
 
-- **Description**: Manually adds a new holding via an interactive, multi-step process. The user first provides an identifier (Ticker, ISIN, or WKN). The backend searches for the instrument. If multiple matches are found (e.g., for a given ISIN), the user is prompted to select the desired ticker/exchange. Once the instrument is finalized, the user provides the `portfolioId` and details for at least one initial purchase lot to complete the creation.
-- **Success Response**: A new `Holding` document is created in the top-level `holdings` collection.
+- **Description**: The first step in manually adding a holding. The user provides an identifier (Ticker, ISIN, or WKN), and the backend searches for a matching financial instrument. This corresponds to the `SubmittingLookup` state in the flow.
+- **Success Response**: A single instrument or a list of instruments is returned for the user to confirm.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| H_I_1001 | Lookup succeeds (unique) | A single, unique instrument is found for the provided identifier. | Response Sentinel to User | The instrument's details (Ticker, ISIN, WKN) are returned to the user to proceed with adding lot details. | H_I_1001 |
+| H_I_1001 | Lookup succeeds (unique) | A single, unique instrument is found for the provided identifier. | Response Sentinel to User | The instrument's details are returned to the user for confirmation. | H_I_1001 |
 | H_I_1002 | Lookup succeeds (multiple) | Multiple instruments are found for the provided identifier. | Response Sentinel to User | A list of possible instruments is returned to the user for selection. | H_I_1002 |
-| H_I_1003 | Creation succeeds | After instrument selection (if necessary), all provided lot and holding data is valid. | Response Sentinel to User | A new `Holding` document is created. If the ticker is new to the system, the backfill process (H_5000) is triggered asynchronously. | H_I_1003 |
-| H_I_1004 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
-| H_E_1101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1101 |
-| H_E_1102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1102 |
-| H_E_1103 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1103 |
-| H_E_1104 | Invalid lot data | The initial `quantity` or `purchasePrice` are not positive numbers, or `purchaseDate` is an invalid format or in the future. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1104 |
-| H_E_1105 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values in the final creation step. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1105 |
-| H_E_1106 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | H_E_1106 |
+| H_E_1051 | User unauthorized | User is not authenticated. | Request User to Sentinel | Lookup rejected with HTTP 401 Unauthorized. | H_E_1051 |
+| H_E_1052 | Instrument not found | No instrument can be found for the provided identifier. | Sentinel to Lookup Service | An error is returned to the user. | H_E_1052 |
 
 **Messages**:
-- **H_I_1001**: "Instrument found. Please provide purchase details."
+- **H_I_1001**: "Instrument found. Please confirm to create the holding."
 - **H_I_1002**: "Multiple instruments found. Please select one to continue."
-- **H_I_1003**: "Holding added successfully to portfolio {portfolioId}."
-- **H_E_1101**: "User is not authorized to modify portfolio {portfolioId}."
-- **H_E_1102**: "Portfolio with ID {portfolioId} not found."
-- **H_E_1103**: "No instrument could be found for the identifier '{identifier}'."
-- **H_E_1104**: "Lot data is invalid. Ensure quantity and price are positive and the date is valid."
-- **H_E_1105**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
-- **H_E_1106**: "A valid Idempotency-Key header is required for this operation."
+- **H_E_1051**: "User is not authenticated."
+- **H_E_1052**: "No instrument could be found for the identifier '{identifier}'."
+
+##### 4.3.1.2. H_1200: Holding Creation
+
+- **Sequence Diagram for Holding Creation**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+    participant Backfill as Backfill Service
+
+    Note over User, Sentinel: User has confirmed the instrument to add.
+    User->>Sentinel: 1. POST /api/users/me/holdings<br> { portfolioId, confirmedInstrument }
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Validate Request Data
+    Sentinel->>DB: 3. Create Holding document in 'holdings' collection
+    activate DB
+    DB-->>Sentinel: 4. Confirm Creation
+    deactivate DB
+    
+    alt Ticker is new to the system
+        Sentinel->>Backfill: 5. Trigger backfill for new ticker (async)
+    end
+
+    Sentinel-->>User: 6. HTTP 201 Created (returns new holding)
+    deactivate Sentinel
+```
+
+- **Description**: After a financial instrument has been looked up and confirmed by the user, the frontend sends a request to create the actual holding. This rule covers the creation of an empty holding shell, ready for lots to be added. This corresponds to the `SubmittingHolding` state in the flow.
+- **Success Response**: A new, empty `Holding` document is created in the top-level `holdings` collection.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_1201 | Creation succeeds | All provided holding data is valid and the user is authorized. | Response Sentinel to User | A new `Holding` document is created. If the ticker is new to the system, the backfill process (H_5000) is triggered asynchronously. | H_I_1201 |
+| H_I_1202 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
+| H_E_1301 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Creation rejected with HTTP 403 Forbidden. | H_E_1301 |
+| H_E_1302 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Creation rejected with HTTP 404 Not Found. | H_E_1302 |
+| H_E_1303 | Invalid holding data | `currency`, `securityType`, or `assetClass` are not valid enum values in the final creation step. | Request User to Sentinel | Creation rejected with HTTP 400 Bad Request. | H_E_1303 |
+| H_E_1304 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | H_E_1304 |
+
+**Messages**:
+- **H_I_1201**: "Holding added successfully to portfolio {portfolioId}."
+- **H_E_1301**: "User is not authorized to modify portfolio {portfolioId}."
+- **H_E_1302**: "Portfolio with ID {portfolioId} not found."
+- **H_E_1303**: "Holding data is invalid. Please provide a valid currency, security type, and asset class."
+- **H_E_1304**: "A valid Idempotency-Key header is required for this operation."
 
 #### 4.3.2. H_1200: Holding Creation (Import from File)
 
@@ -2303,26 +2351,7 @@ states:
 
 ### 5.2. Lot Data Model
 
-#### 5.2.1. Stored Data Models
-
-- **`Lot` (Object within Holding):**
-  - `lotId`: String (Unique UUID generated on creation).
-  - `purchaseDate`: ISODateTime.
-  - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
-  - `createdAt`: ISODateTime.
-  - `modifiedAt`: ISODateTime.
-
-#### 5.2.2. Computed Data Models
-
-The information in this section is calculated on-the-fly by the backend API and embedded into each `Lot` object in the API response. It is not stored in the database.
-
-- **`ComputedInfoLot` (Object embedded in `Lot`):**
-  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+> **Note:** The `Lot` data model is defined in **Section 4.2.1** and **Section 4.2.2** alongside the `Holding` data model to which it belongs.
 
 ### 5.3. Lot Management Rules
 
