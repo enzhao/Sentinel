@@ -185,13 +185,21 @@ stateDiagram-v2
 
 This section provides the detailed state machine definitions for all user journeys in the application, using the Flow DSL defined in `docs/state_machine_dsl.md`. Each flow describes how the user navigates between different views to accomplish a task.
 
-*(This section will be populated with flow definitions.)*
+The complete and definitive specifications for all user interaction flows are located in the following file:
+
+- `docs/specs/ui_flows_spec.yaml`
+
+Each flow in the document is identified by a unique `flowId`, which can be referenced from the business process descriptions in this document.
 
 ### 2.3. View Specifications
 
 This section provides a complete catalog of all the views and modals in the application. Each view is defined using the View DSL (see `docs/view_dsl.md`), which specifies its layout, components, data requirements, and the events it can dispatch.
 
-*(This section will be populated with view definitions.)*
+The complete and definitive specifications for all views are located in the following file:
+
+- `docs/specs/views_spec.yaml`
+
+Each view in the document is identified by a unique `viewId`, which is referenced by the state machine flows to explicitly link a state to the view it renders.
 
 ---
 
@@ -217,7 +225,12 @@ Portfolio creation can be initiated in two ways: automatically upon user signup,
 
 -   **User-Selectable Default:** If a user has multiple portfolios, they can designate one as their "default" portfolio by updating the `defaultPortfolioId` field on their user profile. This portfolio will be the one displayed by default after login.
 
-##### 3.1.1.1. Visual Representation
+##### 3.1.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for manually creating a portfolio.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_CREATE_PORTFOLIO_MANUAL`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> DashboardView
@@ -241,68 +254,6 @@ stateDiagram-v2
     Success --> DashboardView : (exit flow)
 ```
 
-##### 3.1.1.2. State Machine for Manual Portfolio Creation
-```yaml
-flowId: FLOW_CREATE_PORTFOLIO_MANUAL
-initialState: DashboardView
-states:
-  - name: DashboardView
-    description: "The user is on the main dashboard, viewing their list of portfolios."
-    events:
-      USER_CLICKS_ADD_PORTFOLIO: CreatePortfolioView
-
-  - name: CreatePortfolioView
-    description: "The user is on the 'Create a Portfolio' view, with input fields for portfolio details and an 'Add Holding' button."
-    initialState: EditingPortfolio
-    states:
-      - name: EditingPortfolio
-        description: "The user is filling out the form for the new portfolio."
-        events:
-          USER_CLICKS_ADD_HOLDING: AddingHolding
-          USER_CLICKS_SAVE: ValidateForm
-          USER_CLICKS_CANCEL: DashboardView
-      
-      - name: AddingHolding
-        description: "The user has clicked 'Add Holding' and is now in the holding creation subflow."
-        subflow:
-          # See section 4.1.1.2 for flow definition
-          flowId: FLOW_ADD_HOLDING_MANUAL
-          onCompletion: EditingPortfolio
-          onCancel: EditingPortfolio
-
-  - name: ValidateForm
-    description: "The system is performing client-side validation on the form inputs."
-    entryAction:
-      service: "ValidationService.validate(form)"
-      transitions:
-        valid: Submitting
-        invalid: FormError
-
-  - name: Submitting
-    description: "The system is submitting the new portfolio data to the backend."
-    entryAction:
-      service: "POST /api/users/me/portfolios"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The portfolio was created successfully. The user is returned to the dashboard."
-    exitAction:
-      action: NAVIGATE_TO
-      target: DashboardView
-
-  - name: FormError
-    description: "The user is shown an error message indicating which form fields are invalid."
-    events:
-      USER_DISMISSES_ERROR: CreatePortfolioView
-
-  - name: APIError
-    description: "The user is shown a generic error message that the portfolio could not be saved."
-    events:
-      USER_DISMISSES_ERROR: CreatePortfolioView
-```
-
 #### 3.1.2. Retrieval
 
 Portfolios are retrieved and displayed in two main contexts: a summary list on the main dashboard, and a detailed view for a single portfolio.
@@ -310,7 +261,12 @@ Portfolios are retrieved and displayed in two main contexts: a summary list on t
 ##### 3.1.2.1. List Retrieval (Dashboard View)
 Upon login, the user is presented with the Dashboard View, which lists all their portfolios. This view serves as the primary navigation hub for portfolio management. It has a "Read-Only Mode" for general viewing and a "Manage Mode" that enables CRUD operations on the portfolio list.
 
-###### 3.1.2.1.1. Visual Representation
+###### 3.1.2.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for the portfolio list view, including the transition between read-only and manage modes. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_PORTFOLIO_LIST`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> ReadOnlyMode
@@ -333,58 +289,15 @@ stateDiagram-v2
     }
 ```
 
-###### 3.1.2.1.2. State Machine for Portfolio List View
-```yaml
-flowId: FLOW_VIEW_PORTFOLIO_LIST
-initialState: ReadOnlyMode
-states:
-  - name: ReadOnlyMode
-    description: "The user is viewing a read-only list of their portfolios. A 'Manage' button is visible."
-    events:
-      USER_CLICKS_MANAGE: ManageMode
-      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
-
-  - name: ManageMode
-    description: "The user has entered manage mode. An 'Add Portfolio' button is visible, and each portfolio item shows 'Edit' and 'Delete' buttons."
-    events:
-      USER_CLICKS_DONE: ReadOnlyMode
-      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
-      USER_CLICKS_ADD_PORTFOLIO: AddingPortfolio
-      USER_CLICKS_EDIT_ITEM: EditingPortfolio
-      USER_CLICKS_DELETE_ITEM: DeletingPortfolio
-
-  - name: PortfolioDetailView
-    description: "The user has clicked on a portfolio and is navigating to its detailed view."
-    exitAction:
-      action: NAVIGATE_TO
-      target: VIEW_PORTFOLIO_DETAIL
-
-  - name: AddingPortfolio
-    description: "The user is invoking the portfolio creation subflow."
-    subflow:
-      flowId: FLOW_CREATE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: EditingPortfolio
-    description: "The user is invoking the portfolio update subflow."
-    subflow:
-      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: DeletingPortfolio
-    description: "The user is invoking the portfolio deletion subflow."
-    subflow:
-      flowId: FLOW_DELETE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-```
-
 ##### 3.1.2.2. Single Retrieval (Portfolio Details View)
 From the dashboard, a user can select a single portfolio to navigate to the Portfolio Details View. This view displays the portfolio's metadata and the list of its holdings. From here, the user can manage the portfolio's details, its holdings, or set it as their default portfolio.
 
-###### 3.1.2.2.1. Visual Representation
+###### 3.1.2.2.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for the portfolio detail view. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_PORTFOLIO_DETAIL`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> ReadOnly
@@ -404,46 +317,6 @@ stateDiagram-v2
     end note
 ```
 
-###### 3.1.2.2.2. State Machine for Portfolio Detail View
-```yaml
-flowId: FLOW_VIEW_PORTFOLIO_DETAIL
-initialState: ReadOnly
-states:
-  - name: ReadOnly
-    description: "The user is viewing the portfolio's details. 'Manage', 'Delete', and 'Set as Default' buttons are visible."
-    activates:
-      - flowId: "FLOW_VIEW_HOLDING_LIST"
-        targetState: "ReadOnlyMode"
-    events:
-      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
-      USER_CLICKS_DELETE: DeletingPortfolio
-      USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
-
-  - name: ManageMode
-    description: "The user has entered manage mode for the portfolio."
-    subflow:
-      # See section 3.1.3.2 for flow definition
-      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
-      onCompletion: ReadOnly
-      onCancel: ReadOnly
-
-  - name: DeletingPortfolio
-    description: "The user has clicked the 'Delete' button for the portfolio."
-    subflow:
-      # See section 3.1.4.2 for flow definition
-      flowId: FLOW_DELETE_PORTFOLIO_MANUAL
-      onCompletion: (exit flow) # Navigates away from the now-deleted portfolio
-      onCancel: ReadOnly
-
-  - name: SettingAsDefault
-    description: "The system is submitting a request to set this portfolio as the user's default."
-    entryAction:
-      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
-      transitions:
-        success: ReadOnly # Returns to ReadOnly, UI should show a success indicator
-        failure: ReadOnly # Returns to ReadOnly, UI should show an error message
-```
-
 #### 3.1.3. Update
 
 An authenticated user can modify a specific portfolio they own. This is done from the "Portfolio Details View", which shows the portfolio's atomic fields (name, description, etc.) and the list of holdings it contains.
@@ -456,7 +329,11 @@ The view has two modes: a "Read-Only Mode" and a "Manage Mode".
     2.  The embedded "Holdings List View" simultaneously switches to its own "Manage Mode", as defined in **Section 4.1.2.1**. This makes the "Add Holding", "Edit", "Delete", and "Move" buttons visible for the holdings.
     3.  "Save" and "Cancel" buttons appear for the portfolio. Clicking "Save" will commit any changes to the portfolio's atomic fields, while "Cancel" will discard them and return the view to "Read-Only Mode". Changes made to the holdings list (e.g., adding a new holding) are handled by that component's subflow and are independent of the portfolio's "Save" action.
 
-##### 3.1.3.1. Visual Representation
+##### 3.1.3.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for manually updating a portfolio's details. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_UPDATE_PORTFOLIO_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -479,59 +356,15 @@ stateDiagram-v2
     end note
 ```
 
-##### 3.1.3.2. State Machine for Manual Portfolio Update
-
-```yaml
-flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
-initialState: ReadOnly
-states:
-  - name: ReadOnly
-    description: "The user is viewing the portfolio's details and its list of holdings. A 'Manage Portfolio' button is visible."
-    events:
-      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
-
-  - name: ManageMode
-    description: "The user has entered manage mode. The portfolio's fields are editable. 'Save' and 'Cancel' buttons are visible."
-    activates:
-      - flowId: "FLOW_VIEW_HOLDING_LIST"
-        targetState: "ManageMode"
-    events:
-      USER_CLICKS_SAVE: ValidateForm
-      USER_CLICKS_CANCEL: ReadOnly
-
-  - name: ValidateForm
-    description: "The system is performing client-side validation on the updated form inputs."
-    entryAction:
-      service: "ValidationService.validate(form)"
-      transitions:
-        valid: Submitting
-        invalid: FormError
-
-  - name: Submitting
-    description: "The system is submitting the updated portfolio data (atomic fields only) to the backend."
-    entryAction:
-      service: "PUT /api/users/me/portfolios/{portfolioId}"
-      transitions:
-        success: ReadOnly
-        failure: APIError
-
-  - name: FormError
-    description: "The user is shown an error message indicating which form fields are invalid."
-    events:
-      USER_DISMISSES_ERROR: ManageMode
-
-  - name: APIError
-    description: "The user is shown a generic error message that the portfolio could not be updated."
-    events:
-      USER_DISMISSES_ERROR: ManageMode
-```
-
 #### 3.1.4. Deletion
 
 An authenticated user can delete an entire portfolio. This is a destructive action that also removes all associated holdings and rules. If the deleted portfolio was the user's designated default, the application will prompt the user to select a new default from their remaining portfolios, unless only one remains, in which case it will be set as the default automatically.
 
-##### 3.1.4.1. Visual Representation
-The following diagram visualizes the state machine flow for manually deleting a portfolio, including the conditional logic for handling a default portfolio.
+##### 3.1.4.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for manually deleting a portfolio, including the conditional logic for handling a default portfolio. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_DELETE_PORTFOLIO_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -556,61 +389,15 @@ stateDiagram-v2
     SuccessRefresh --> [*] : (exit flow)
 ```
 
-##### 3.1.4.2. State Machine for Manual Portfolio Deletion
-```yaml
-flowId: FLOW_DELETE_PORTFOLIO_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific portfolio or the list of portfolios."
-    events:
-      USER_CLICKS_DELETE_PORTFOLIO: ConfirmingDelete
-
-  - name: ConfirmingDelete
-    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected portfolio."
-    events:
-      USER_CLICKS_CONFIRM_DELETE: Submitting
-      USER_CLICKS_CANCEL_DELETE: Idle
-
-  - name: Submitting
-    description: "The system is submitting the delete request to the backend."
-    entryAction:
-      service: "DELETE /api/users/me/portfolios/{portfolioId}"
-      transitions:
-        success_refresh: SuccessRefresh
-        success_prompt_new_default: SelectingNewDefault
-        failure: APIError
-
-  - name: SelectingNewDefault
-    description: "The user is prompted to select a new default portfolio from a list of their remaining portfolios."
-    events:
-      USER_SELECTS_NEW_DEFAULT: SubmittingNewDefault
-
-  - name: SubmittingNewDefault
-    description: "The system is submitting the user's choice for the new default portfolio."
-    entryAction:
-      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
-      transitions:
-        success: SuccessRefresh
-        failure: APIError # Or could return to SelectingNewDefault with an error
-
-  - name: SuccessRefresh
-    description: "The operation was successful. The view will now be refreshed."
-    exitAction:
-      action: REFRESH_VIEW
-      target: VIEW_DASHBOARD
-
-  - name: APIError
-    description: "The user is shown a generic error message that the operation could not be completed."
-    events:
-      USER_DISMISSES_ERROR: Idle
-```
-
 #### 3.1.5. Unified Transaction Import
 
 This feature allows an authenticated user to upload a file (e.g., a CSV from their broker) to bulk-import transactions into a specific portfolio. The system uses an AI-powered service to parse the file, then intelligently annotates each discovered transaction as either a `CREATE` (for a new holding) or an `UPDATE` (for an existing holding). The user is then presented with this annotated list for review and correction before confirming the import.
 
-##### 3.1.5.1. Visual Representation
+##### 3.1.5.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the multi-step state machine for the unified transaction import process. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_IMPORT_TRANSACTIONS`**.
 
 ```mermaid
 stateDiagram-v2
@@ -638,77 +425,6 @@ stateDiagram-v2
     APIError --> Idle : USER_DISMISSES_ERROR
     Success --> [*] : (exit flow)
 ```
-
-##### 3.1.5.2. State Machine for Unified Transaction Import
-
-```yaml
-flowId: FLOW_IMPORT_TRANSACTIONS
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is in a view where they can initiate a transaction import for a portfolio."
-    events:
-      USER_CLICKS_IMPORT: SelectingFile
-
-  - name: SelectingFile
-    description: "The user is prompted by the system to select a transaction file from their local device."
-    events:
-      USER_SELECTS_FILE: ValidatingFile
-      USER_CANCELS: Idle
-
-  - name: ValidatingFile
-    description: "The system performs client-side validation on the selected file (e.g., checking file type and size)."
-    entryAction:
-      service: "FileValidationService.validate(file)"
-      transitions:
-        valid: Uploading
-        invalid: FileError
-
-  - name: Uploading
-    description: "The file is being uploaded to the backend, which then parses and annotates the transactions. The UI shows a loading indicator."
-    entryAction:
-      service: "POST /api/users/me/portfolios/{portfolioId}/transactions/import"
-      transitions:
-        success: ReviewingChanges
-        parsing_failed: ParsingError
-        failure: APIError
-
-  - name: ReviewingChanges
-    description: "The user is shown the parsed and annotated list of transactions. They can review, correct, and approve the changes."
-    events:
-      USER_CLICKS_CONFIRM: SubmittingConfirmation
-      USER_CLICKS_CANCEL: Idle
-
-  - name: SubmittingConfirmation
-    description: "The system is submitting the user-reviewed and confirmed transaction data to the backend."
-    entryAction:
-      service: "POST /api/users/me/portfolios/{portfolioId}/transactions/import/confirm"
-      transitions:
-        success: Success
-        validation_failed: ReviewingChanges # Returns to review with error messages
-        failure: APIError
-
-  - name: Success
-    description: "The import was successful and the portfolio has been updated."
-    exitAction:
-      action: REFRESH_VIEW
-      target: VIEW_PORTFOLIO_HOLDINGS
-
-  - name: FileError
-    description: "The user is shown an error message indicating the selected file is invalid."
-    events:
-      USER_DISMISSES_ERROR: Idle
-
-  - name: ParsingError
-    description: "The user is shown an error message indicating the file could not be automatically parsed."
-    events:
-      USER_DISMISSES_ERROR: Idle
-
-  - name: APIError
-    description: "The user is shown a generic error message that the operation could not be completed."
-    events:
-      USER_DISMISSES_ERROR: Idle
-``` 
 
 ### 3.2. Portfolio and Cash Data Model
 
@@ -1161,11 +877,16 @@ The management of holdings follows the standard CRUD (Create, Retrieve, Update, 
 
 #### 4.1.1. Holding Creation via Manual Input 
 
-Holdings can be created in two ways: manually for a single holding, or in bulk via a file import. When a holding is created for a ticker that is new to the system (either manually or via import as descrtibed in (TODO: add section number here)), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
+Holdings can be created in two ways: manually for a single holding, or in bulk via a file import. When a holding is created for a ticker that is new to the system (either manually or via import as described in Section 3.1.5), an asynchronous backfill process is automatically triggered to fetch and cache its historical market data.
 
 An authenticated user can add a new holding to their portfolio from the dashboard's holding list view. The process first requires the user to find and select a financial instrument. Once the instrument is selected, the system creates the new holding, which is initially empty. The user is then immediately given the option to add one or more purchase lots to this new holding. A newly created holding can remain empty if the user chooses. After the user indicates they are finished, the view returns to the holding list.
 
-##### 4.1.1.1. Visual Representation
+##### 4.1.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the multi-step state machine for manually adding a new holding, from instrument lookup to optionally adding lots. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_ADD_HOLDING_MANUAL`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> HoldingListView
@@ -1194,68 +915,6 @@ stateDiagram-v2
     APIError --> LookupInput : USER_DISMISSES_ERROR
 ```
 
-##### 4.1.1.2. State Machine for Manual Holding Creation
-```yaml
-flowId: FLOW_ADD_HOLDING_MANUAL
-initialState: HoldingListView
-states:
-  - name: HoldingListView
-    description: "The user is viewing the list of holdings in their default portfolio."
-    events:
-      USER_CLICKS_ADD_HOLDING: LookupInput
-
-  - name: LookupInput
-    description: "A modal appears prompting the user to enter a Ticker, ISIN, or WKN for the new holding."
-    events:
-      USER_SUBMITS_IDENTIFIER: SubmittingLookup
-      USER_CLICKS_CANCEL: HoldingListView
-
-  - name: SubmittingLookup
-    description: "The system is searching for the financial instrument."
-    entryAction:
-      service: "FinancialInstrumentLookupService.search(identifier)"
-      transitions:
-        success: ConfirmingHoldingCreation
-        failure: LookupError
-
-  - name: ConfirmingHoldingCreation
-    description: "The user is shown the details of the found instrument and asked to confirm its creation."
-    events:
-      USER_CONFIRMS_CREATION: SubmittingHolding
-      USER_CLICKS_CANCEL: HoldingListView
-
-  - name: SubmittingHolding
-    description: "The system is creating the new, empty holding."
-    entryAction:
-      service: "POST /api/users/me/holdings"
-      transitions:
-        success: AddingLots
-        failure: APIError
-
-  - name: AddingLots
-    description: "The user is viewing the newly created holding and can now optionally add one or more purchase lots."
-    events:
-      USER_CLICKS_ADD_LOT: AddingSingleLot
-      USER_CLICKS_FINISH: HoldingListView
-  
-  - name: AddingSingleLot
-    description: "The system is now invoking the lot creation subflow, specified in section 5.2.1.1."
-    subflow:
-      flowId: FLOW_CREATE_LOT_MANUAL
-      onCompletion: AddingLots
-      onCancel: AddingLots
-
-  - name: LookupError
-    description: "The user is shown an error message that the instrument could not be found."
-    events:
-      USER_DISMISSES_ERROR: LookupInput
-
-  - name: APIError
-    description: "The user is shown a generic error message that the holding could not be saved."
-    events:
-      USER_DISMISSES_ERROR: LookupInput
-```
-
 #### 4.1.2. Retrieval
 
 Holdings are retrieved in two contexts: as a list summary within a portfolio, and as a single detailed entity.
@@ -1263,7 +922,12 @@ Holdings are retrieved in two contexts: as a list summary within a portfolio, an
 ##### 4.1.2.1. List Retrieval (Portfolio Holdings View)
 When a user selects a portfolio (or upon login, when the default portfolio is loaded), the application navigates to the Portfolio Holdings View. This view displays a summary list of all holdings within that portfolio and serves as the primary dashboard. The view has two modes: a default "Read-Only Mode" and a "Manage Mode".
 
-###### 4.1.2.1.1. Visual Representation
+###### 4.1.2.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for the holding list view, including the transition between read-only and manage modes. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_HOLDING_LIST`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> ReadOnlyMode
@@ -1287,70 +951,16 @@ stateDiagram-v2
     }
 ```
 
-###### 4.1.2.1.2. State Machine for Viewing Holding List
-```yaml
-flowId: FLOW_VIEW_HOLDING_LIST
-initialState: ReadOnlyMode
-states:
-  - name: ReadOnlyMode
-    description: "The user is viewing a read-only list of holdings. A 'Manage' button is visible."
-    events:
-      USER_CLICKS_MANAGE: ManageMode
-      USER_CLICKS_HOLDING_BODY: HoldingDetailView
-
-  - name: ManageMode
-    description: "The user has entered manage mode. An 'Add Holding' button is visible, and each holding item shows 'Edit', 'Delete', and 'Move' buttons. A 'Done' button is visible."
-    events:
-      USER_CLICKS_DONE: ReadOnlyMode
-      USER_CLICKS_HOLDING_BODY: HoldingDetailView
-      USER_CLICKS_ADD_HOLDING: AddingHolding
-      USER_CLICKS_EDIT_HOLDING_ITEM: EditingHolding
-      USER_CLICKS_DELETE_HOLDING_ITEM: DeletingHolding
-      USER_CLICKS_MOVE_HOLDING_ITEM: MovingHolding
-
-  - name: HoldingDetailView
-    description: "The user has clicked on the body of a holding and is navigating to its detailed view."
-    exitAction:
-      action: NAVIGATE_TO
-      target: VIEW_HOLDING_DETAIL
-
-  - name: AddingHolding
-    description: "The user has clicked 'Add Holding' and is now in the holding creation subflow."
-    subflow:
-      # See section 4.1.1.2 for flow definition
-      flowId: FLOW_ADD_HOLDING_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: EditingHolding
-    description: "The user has clicked the 'Edit' button on a holding item and is now in the holding update subflow."
-    subflow:
-      # See section 4.1.3.2 for flow definition
-      flowId: FLOW_UPDATE_HOLDING_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: DeletingHolding
-    description: "The user has clicked the 'Delete' button on a holding item and is now in the holding deletion subflow."
-    subflow:
-      # See section 4.1.4.2 for flow definition
-      flowId: FLOW_DELETE_HOLDING_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-      
-  - name: MovingHolding
-    description: "The user has clicked the 'Move' button on a holding item and is now in the holding move subflow."
-    subflow:
-      # See section 4.1.5.2 for flow definition
-      flowId: FLOW_MOVE_HOLDING_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-```
-
 ##### 4.1.2.2. Single Retrieval (Holding Detail View)
+
 From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. The view has two modes: a default "Read-Only Mode" and a "Manage Mode" for editing the holding and its lots.
 
-###### 4.1.2.2.1. Visual Representation
+###### 4.1.2.2.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for the holding detail view, which manages the display of a single holding and all of its constituent lots. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_HOLDING_DETAIL`**.
+
 ```mermaid
 stateDiagram-v2
     [*] --> ReadOnly
@@ -1381,83 +991,17 @@ stateDiagram-v2
     }
 ```
 
-###### 4.1.2.2.2. State Machine for Holding Detail View
-```yaml
-flowId: FLOW_VIEW_HOLDING_DETAIL
-initialState: ReadOnly
-states:
-  - name: ReadOnly
-    description: "The user is viewing the holding's details. 'Edit', 'Delete', 'Move', and 'Back' buttons are visible."
-    events:
-      USER_CLICKS_EDIT: ManageMode
-      USER_CLICKS_DELETE: DeletingHolding
-      USER_CLICKS_MOVE: MovingHolding
-      USER_CLICKS_BACK: (exit flow)
-
-  - name: DeletingHolding
-    description: "The user has clicked the top-level 'Delete' button for the entire holding."
-    subflow:
-      # See section 4.1.4.2 for flow definition
-      flowId: FLOW_DELETE_HOLDING_MANUAL
-      onCompletion: (exit flow)
-      onCancel: ReadOnly
-
-  - name: MovingHolding
-    description: "The user has clicked the 'Move' button and is now in the holding move subflow."
-    subflow:
-      # See section 4.1.5.2 for flow definition
-      flowId: FLOW_MOVE_HOLDING_MANUAL
-      onCompletion: (exit flow)
-      onCancel: ReadOnly
-
-  - name: ManageMode
-    description: "The user is editing the holding. Its metadata fields are editable, and each lot has 'Edit'/'Delete' buttons. 'Add Lot', 'Save', and 'Cancel' buttons are visible at the holding level."
-    events:
-      USER_CLICKS_SAVE: SavingChanges
-      USER_CLICKS_CANCEL: ReadOnly
-      USER_CLICKS_ADD_LOT: AddingLot
-      USER_CLICKS_EDIT_LOT_ITEM: EditingLot
-      USER_CLICKS_DELETE_LOT_ITEM: DeletingLot
-
-  - name: SavingChanges
-    description: "The system is submitting all changes to the holding's metadata."
-    entryAction:
-      service: "PUT /api/users/me/holdings/{holdingId}"
-      transitions:
-        success: ReadOnly
-        failure: ManageMode # Stays in edit mode, shows error
-
-  - name: AddingLot
-    description: "The user is invoking the subflow to add a new lot to the holding."
-    subflow:
-      # See section 5.1.1.2 for flow definition
-      flowId: FLOW_CREATE_LOT_MANUAL
-      onCompletion: ManageMode # Returns to edit mode
-      onCancel: ManageMode
-
-  - name: EditingLot
-    description: "The user is invoking the subflow to edit an existing lot."
-    subflow:
-      # See section 5.1.3.2 for flow definition
-      flowId: FLOW_UPDATE_LOT_MANUAL
-      onCompletion: ManageMode # Returns to edit mode
-      onCancel: ManageMode
-
-  - name: DeletingLot
-    description: "The user is invoking the subflow to delete an existing lot."
-    subflow:
-      # See section 5.1.4.2 for flow definition
-      flowId: FLOW_DELETE_LOT_MANUAL
-      onCompletion: ManageMode # Returns to edit mode
-      onCancel: ManageMode
-```
-
 #### 4.1.3. Update
-A holding can be updated in two primary ways: by directly modifying its metadata, or by adding new transactions to it via file import as described in section (TODO: add section number here).
+
+A holding can be updated in two primary ways: by directly modifying its metadata, or by adding new transactions to it via file import as described in section 3.1.5.
 
 Here is the description of the manual update of holding metadata. An authenticated user can modify the metadata of a specific holding they own, such as its `annualCosts`. This operation does not affect the purchase lots within the holding. The user interaction for this process is defined by the state machine below.
 
-##### 4.1.3.1. Visual Representation
+##### 4.1.3.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine for manually updating a holding's metadata. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_UPDATE_HOLDING_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -1474,64 +1018,14 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-###### 4.1.3.2. State Machine for Manual Holding Update
-
-```yaml
-  flowId: FLOW_UPDATE_HOLDING_MANUAL
-  initialState: Idle
-  states:
-     - name: Idle
-      description: "The user is viewing the details of a specific holding."
-      events:
-        USER_CLICKS_EDIT_HOLDING: Editing
-
-     - name: Editing
-      description: "A modal or form appears, pre-filled with the selected holding's metadata (e.g.,
-  annualCosts), ready for editing."
-      events:
-        USER_CLICKS_SAVE: ValidateForm
-        USER_CLICKS_CANCEL: Idle
-
-     - name: ValidateForm
-      description: "The system is performing client-side validation on the updated form inputs."
-      entryAction:
-        service: "ValidationService.validate(form)"
-        transitions:
-          valid: Submitting
-          invalid: FormError
-
-     - name: Submitting
-      description: "The system is submitting the updated holding data to the backend."
-      entryAction:
-        service: "PUT /api/users/me/holdings/{holdingId}"
-        transitions:
-          success: Success
-          failure: APIError
-
-     - name: Success
-      description: "The user is shown a success message confirming the holding was updated."
-      exitAction:
-        action: CLOSE_MODAL_AND_REFRESH_VIEW
-        target: VIEW_HOLDING_DETAIL
-
-     - name: FormError
-      description: "The user is shown an error message indicating which form fields are invalid."
-      events:
-        USER_DISMISSES_ERROR: Editing
-
-     - name: APIError
-      description: "The user is shown a generic error message that the holding could not be
-  updated."
-      events:
-        USER_DISMISSES_ERROR: Editing
-```
-
-
 #### 4.1.4. Deletion
 An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
 
-##### 4.1.4.1. Visual Representation
-The following diagram visualizes the state machine flow for manually deleting a holding.
+##### 4.1.4.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for manually deleting a holding. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_DELETE_HOLDING_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -1545,47 +1039,15 @@ stateDiagram-v2
     Success --> [*] : REFRESH_VIEW
 ```
 
-##### 4.1.4.2. State Machine for Manual Holding Deletion
-```yaml
-flowId: FLOW_DELETE_HOLDING_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific holding or the list of holdings."
-    events:
-      USER_CLICKS_DELETE_HOLDING: ConfirmingDelete
-
-  - name: ConfirmingDelete
-    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected holding."
-    events:
-      USER_CLICKS_CONFIRM_DELETE: Submitting
-      USER_CLICKS_CANCEL_DELETE: Idle
-
-  - name: Submitting
-    description: "The system is submitting the delete request to the backend."
-    entryAction:
-      service: "DELETE /api/users/me/holdings/{holdingId}"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The holding is successfully deleted from the backend."
-    exitAction:
-      action: REFRESH_VIEW
-      target: VIEW_PORTFOLIO_HOLDINGS
-
-  - name: APIError
-    description: "The user is shown a generic error message that the holding could not be deleted."
-    events:
-      USER_DISMISSES_ERROR: Idle
-```
-
 #### 4.1.5. Move
+
 An authenticated user can move a holding from one of their portfolios to another. This action transfers the holding itself, along with all its associated lots and rules, to the destination portfolio.
 
-##### 4.1.5.1. Visual Representation
-The following diagram visualizes the state machine flow for moving a holding.
+##### 4.1.5.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for moving a holding. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_MOVE_HOLDING_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -1599,48 +1061,6 @@ stateDiagram-v2
     Submitting --> APIError : failure
     APIError --> Idle : USER_DISMISSES_ERROR
     Success --> [*] : NAVIGATE_TO_NEW_PORTFOLIO
-```
-
-##### 4.1.5.2. State Machine for Moving a Holding
-```yaml
-flowId: FLOW_MOVE_HOLDING_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific holding."
-    events:
-      USER_CLICKS_MOVE_HOLDING: SelectingDestination
-
-  - name: SelectingDestination
-    description: "A modal appears, prompting the user to select a destination portfolio from a list of their other available portfolios."
-    events:
-      USER_SELECTS_DESTINATION: ConfirmingMove
-      USER_CLICKS_CANCEL: Idle
-
-  - name: ConfirmingMove
-    description: "The user is shown a confirmation message, e.g., 'Move {holdingName} to {destinationPortfolioName}?'."
-    events:
-      USER_CLICKS_CONFIRM_MOVE: Submitting
-      USER_CLICKS_BACK: SelectingDestination
-
-  - name: Submitting
-    description: "The system is submitting the move request to the backend."
-    entryAction:
-      service: "POST /api/users/me/holdings/{holdingId}/move"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The holding is successfully moved."
-    exitAction:
-      action: NAVIGATE_TO
-      target: VIEW_PORTFOLIO_HOLDINGS (of the destination portfolio)
-
-  - name: APIError
-    description: "The user is shown a generic error message that the holding could not be moved."
-    events:
-      USER_DISMISSES_ERROR: Idle
 ```
 
 ### 4.2. Holding Data Model
@@ -2093,8 +1513,11 @@ Lots can be created in two ways: manually for a single transaction, or in bulk v
 
 An authenticated user can add a single new purchase lot to one of their existing holdings. This is used to record additional purchases of a security they already own, thereby increasing the total quantity of the holding. The user interaction for this process is defined by the state machine below.
 
-##### 5.1.1.1. Visual Representation
-The following diagram visualizes the state machine flow for manually creating a lot.
+##### 5.1.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for manually creating a lot. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_CREATE_LOT_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -2111,64 +1534,17 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-##### 5.1.1.2. State Machine for Manual Lot Creation
-```yaml
-flowId: FLOW_CREATE_LOT_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific holding."
-    events:
-      USER_CLICKS_ADD_LOT: FormInput
-
-  - name: FormInput
-    description: "A modal or form appears, prompting the user to enter the new lot's details (purchase date, quantity, price)."
-    events:
-      USER_CLICKS_SAVE: ValidateForm
-      USER_CLICKS_CANCEL: Idle
-
-  - name: ValidateForm
-    description: "The system is performing client-side validation on the form inputs."
-    entryAction:
-      service: "ValidationService.validate(form)"
-      transitions:
-        valid: Submitting
-        invalid: FormError
-
-  - name: Submitting
-    description: "The system is submitting the new lot data to the backend."
-    entryAction:
-      service: "POST /api/users/me/holdings/{holdingId}/lots"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The user is shown a success message confirming the lot was added."
-    exitAction:
-      action: CLOSE_MODAL_AND_REFRESH_VIEW
-      target: VIEW_HOLDING_DETAIL
-
-  - name: FormError
-    description: "The user is shown an error message indicating which form fields are invalid."
-    events:
-      USER_DISMISSES_ERROR: FormInput
-
-  - name: APIError
-    description: "The user is shown a generic error message that the lot could not be saved."
-    events:
-      USER_DISMISSES_ERROR: FormInput
-```
-
 #### 5.1.2. Retrieval and Management
 
 Lots are not retrieved as independent entities. Instead, they are retrieved as part of their parent `Holding` object when the user navigates to the Holding Detail View. The user interaction for viewing and managing the list of lots is defined entirely within the state machine for the parent holding's detail view, which provides a unified interface for managing a holding and its constituent lots.
 
 The flow begins when a user is viewing the details of a holding. In the default read-only mode, they see a simple list of lots. By entering the holding's "Manage Mode", they gain access to controls for adding a new lot, or editing and deleting existing lots in the list.
 
-##### 5.1.2.1. Visual Representation
+##### 5.1.2.1. User Journey Spec and Visual Representation
 
-The following diagram illustrates the user flow for managing a list of lots within the context of the parent Holding Detail View.
+The following diagram illustrates the user flow for managing a list of lots within the context of the parent Holding Detail View. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_MANAGE_LOTS_LIST`**.
 
 ```mermaid
 stateDiagram-v2
@@ -2190,59 +1566,15 @@ stateDiagram-v2
     }
 ```
 
-##### 5.1.2.2. State Machine for Lot List Management
-
-The following state machine describes the process from the perspective of managing the lots list. Note that this flow is a conceptual subset of the complete `FLOW_VIEW_HOLDING_DETAIL` state machine defined in Section 4.1.2.2.2.
-
-```yaml
-flowId: FLOW_MANAGE_LOTS_LIST
-initialState: ReadOnly
-states:
-  - name: ReadOnly
-    description: "The user is viewing the holding's details, which includes a read-only list of its lots. An 'Edit' button for the holding is visible."
-    events:
-      USER_CLICKS_EDIT_HOLDING: ManageMode
-
-  - name: ManageMode
-    description: "The user is in the holding's manage mode. An 'Add Lot' button is visible, and each lot in the list now has 'Edit' and 'Delete' buttons."
-    events:
-      USER_CLICKS_SAVE_HOLDING: ReadOnly
-      USER_CLICKS_CANCEL_HOLDING: ReadOnly
-      USER_CLICKS_ADD_LOT: AddingLot
-      USER_CLICKS_EDIT_LOT_ITEM: EditingLot
-      USER_CLICKS_DELETE_LOT_ITEM: DeletingLot
-
-  - name: AddingLot
-    description: "The user has clicked 'Add Lot' and is now in the lot creation subflow."
-    subflow:
-      # See section 5.1.1.2 for flow definition
-      flowId: FLOW_CREATE_LOT_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: EditingLot
-    description: "The user has clicked the 'Edit' button on a lot item and is now in the lot update subflow."
-    subflow:
-      # See section 5.1.3.2 for flow definition
-      flowId: FLOW_UPDATE_LOT_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-
-  - name: DeletingLot
-    description: "The user has clicked the 'Delete' button on a lot item and is now in the lot deletion subflow."
-    subflow:
-      # See section 5.1.4.2 for flow definition
-      flowId: FLOW_DELETE_LOT_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
-```
-
 #### 5.1.3. Manual Update of a Single Lot
 
 An authenticated user can modify the details of a specific purchase lot they own, such as correcting the `purchasePrice`, `quantity`, or `purchaseDate`. This is a manual-only operation performed through the user interface; updating lots via file import is not supported.
 
-##### 5.1.3.1. Visual Representation
-The following diagram visualizes the state machine flow for manually updating a lot.
+##### 5.1.3.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the state machine flow for manually updating a lot. 
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_UPDATE_LOT_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -2259,60 +1591,15 @@ stateDiagram-v2
     Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
-##### 5.1.3.2. State Machine for Manual Lot Update
-```yaml
-flowId: FLOW_UPDATE_LOT_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific holding, including its list of lots."
-    events:
-      USER_CLICKS_EDIT_LOT: Editing
-
-  - name: Editing
-    description: "A modal or form appears, pre-filled with the selected lot's details, ready for editing."
-    events:
-      USER_CLICKS_SAVE: ValidateForm
-      USER_CLICKS_CANCEL: Idle
-
-  - name: ValidateForm
-    description: "The system is performing client-side validation on the updated form inputs."
-    entryAction:
-      service: "ValidationService.validate(form)"
-      transitions:
-        valid: Submitting
-        invalid: FormError
-
-  - name: Submitting
-    description: "The system is submitting the updated lot data to the backend."
-    entryAction:
-      service: "PUT /api/users/me/holdings/{holdingId}/lots/{lotId}"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The user is shown a success message confirming the lot was updated."
-    exitAction:
-      action: CLOSE_MODAL_AND_REFRESH_VIEW
-      target: VIEW_HOLDING_DETAIL
-
-  - name: FormError
-    description: "The user is shown an error message indicating which form fields are invalid."
-    events:
-      USER_DISMISSES_ERROR: Editing
-
-  - name: APIError
-    description: "The user is shown a generic error message that the lot could not be updated."
-    events:
-      USER_DISMISSES_ERROR: Editing
-```
-
 #### 5.1.4. Deletion
+
 An authenticated user can delete a specific purchase lot from a holding. This is typically done to correct an error. If the deleted lot is the last one in a holding, the parent holding will remain but will have a quantity of zero. The holding persists with a quantity of zero, allowing new lots to be added to it in the future; the system does not prompt the user to delete the empty holding.
 
-##### 5.1.4.1. Visual Representation
+##### 5.1.4.1. User Journey Spec and Visual Representation
+
 The following diagram visualizes the state machine flow for manually deleting a lot.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_DELETE_LOT_MANUAL`**.
 
 ```mermaid
 stateDiagram-v2
@@ -2324,42 +1611,6 @@ stateDiagram-v2
     Submitting --> APIError : failure
     APIError --> Idle : USER_DISMISSES_ERROR
     Success --> [*] : REFRESH_VIEW
-```
-
-##### 5.1.4.2. State Machine for Manual Lot Deletion
-```yaml
-flowId: FLOW_DELETE_LOT_MANUAL
-initialState: Idle
-states:
-  - name: Idle
-    description: "The user is viewing the details of a specific holding, including its list of lots."
-    events:
-      USER_CLICKS_DELETE_LOT: ConfirmingDelete
-
-  - name: ConfirmingDelete
-    description: "A modal or confirmation dialog appears, asking the user to confirm the deletion of the selected lot."
-    events:
-      USER_CLICKS_CONFIRM_DELETE: Submitting
-      USER_CLICKS_CANCEL_DELETE: Idle
-
-  - name: Submitting
-    description: "The system is submitting the delete request to the backend."
-    entryAction:
-      service: "DELETE /api/users/me/holdings/{holdingId}/lots/{lotId}"
-      transitions:
-        success: Success
-        failure: APIError
-
-  - name: Success
-    description: "The lot is successfully deleted from the backend."
-    exitAction:
-      action: REFRESH_VIEW
-      target: VIEW_HOLDING_DETAIL
-
-  - name: APIError
-    description: "The user is shown a generic error message that the lot could not be deleted."
-    events:
-      USER_DISMISSES_ERROR: Idle
 ```
 
 ### 5.2. Lot Data Model

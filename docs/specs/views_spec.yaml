@@ -1,0 +1,732 @@
+# This is the main dashboard view after a user logs in. It serves as the
+# primary navigation hub for managing all of their portfolios.
+viewId: VIEW_DASHBOARD
+title: "My Portfolios"
+requiresAuth: true
+description: "The main dashboard, displaying a list of all user portfolios."
+
+data:
+  - name: "portfolios"
+    type: "Array<Portfolio>"
+    description: "A list of all portfolios owned by the user."
+  - name: "currentMode"
+    type: "String" # e.g., 'ReadOnlyMode' or 'ManageMode'
+    description: "The current state of the view, controlled by the state machine."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "AppBar"
+          props:
+            title: "My Portfolios"
+      body:
+        # We include the reusable list of portfolios.
+        - type: "VIEW_PORTFOLIOS_LIST"
+          bindings:
+            portfolios: "portfolios"
+            mode: "currentMode"
+      fab:
+        - type: "FloatingActionButton"
+          shownIf: "currentMode == 'ManageMode'"
+          props:
+            icon: "add"
+          events:
+            onClick:
+              name: "USER_CLICKS_ADD_PORTFOLIO"
+---
+# This is the self-contained view for displaying a list of portfolios.
+viewId: VIEW_PORTFOLIOS_LIST
+requiresAuth: true
+description: "A reusable view component that displays a list of portfolios."
+
+data:
+  - name: "portfolios"
+    type: "Array<Portfolio>"
+    description: "The array of portfolio objects to be displayed."
+  - name: "mode"
+    type: "String"
+    description: "The display mode, e.g., 'ReadOnlyMode' or 'ManageMode'."
+
+components:
+  - type: "PortfolioList"
+    bindings:
+      mode: "mode"
+    item:
+      forEach: "portfolio in portfolios"
+      component:
+        type: "PortfolioListItem"
+        bindings:
+          name: "portfolio.name"
+          description: "portfolio.description"
+          currentValue: "portfolio.computed.currentValue"
+          mode: "mode"
+        events:
+          onTap:
+            name: "USER_SELECTS_PORTFOLIO"
+            payload:
+              portfolioId: "portfolio.portfolioId"
+          onEdit:
+            name: "USER_CLICKS_EDIT_PORTFOLIO_ITEM"
+            payload:
+              portfolioId: "portfolio.portfolioId"
+          onDelete:
+            name: "USER_CLICKS_DELETE_PORTFOLIO_ITEM"
+            payload:
+              portfolioId: "portfolio.portfolioId"
+---
+# This is the "Portfolio Detail" view, displayed when a user selects
+# a single portfolio from the dashboard. Its primary job is to display the
+# list of holdings within that specific portfolio.
+viewId: VIEW_PORTFOLIO_DETAIL
+title: "Portfolio Detail"
+requiresAuth: true
+description: "The detail view for a single portfolio, displaying its list of holdings."
+
+data:
+  - name: "portfolio"
+    type: "Portfolio"
+    description: "The selected portfolio, including its summary list of holdings."
+  - name: "currentMode"
+    type: "String" # e.g., 'ReadOnlyMode' or 'ManageMode'
+    description: "The current state of the view, controlled by the state machine."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "AppBar"
+          bindings:
+            title: "portfolio.name"
+          leadingAction:
+            icon: "arrow_back"
+            event: "USER_CLICKS_BACK" # Allows navigation back to the dashboard
+      body:
+        - type: "VIEW_HOLDINGS_LIST"
+          bindings:
+            holdings: "portfolio.holdings"
+            mode: "currentMode"
+      fab:
+        - type: "FloatingActionButton"
+          props:
+            icon: "edit"
+          events:
+            # Puts the holding list into 'ManageMode'
+            onClick:
+              name: "USER_CLICKS_MANAGE_HOLDINGS"
+---
+# This is the unified form for both creating and editing a portfolio.
+viewId: VIEW_PORTFOLIO_FORM
+title: "Manage Portfolio"
+requiresAuth: true
+description: "A form for creating or editing a portfolio's details, cash reserves, and tax settings."
+
+data:
+  - name: "portfolio"
+    type: "Portfolio"
+    description: "The portfolio being edited. For new portfolios, this is a template object."
+
+components:
+  - type: "StandardFormLayout"
+    bindings:
+      title: "portfolio.portfolioId ? 'Edit Portfolio' : 'Create Portfolio'"
+    slots:
+      body:
+        - type: "TextField"
+          props:
+            label: "Portfolio Name"
+          bindings:
+            value: "portfolio.name"
+        - type: "TextField"
+          props:
+            label: "Description"
+          bindings:
+            value: "portfolio.description"
+        - type: "SelectField"
+          props:
+            label: "Default Currency"
+            items: "['EUR', 'USD', 'GBP']"
+          bindings:
+            value: "portfolio.defaultCurrency"
+        - type: "TextField"
+          props:
+            label: "Total Cash Reserve"
+            type: "number"
+          bindings:
+            value: "portfolio.cashReserve.totalAmount"
+        - type: "TextField"
+          props:
+            label: "War Chest Amount"
+            type: "number"
+            helperText: "Portion of cash for opportunistic buying."
+          bindings:
+            value: "portfolio.cashReserve.warChestAmount"
+        - type: "TextField"
+          props:
+            label: "Capital Gain Tax Rate (%)"
+            type: "number"
+          bindings:
+            value: "portfolio.taxSettings.capitalGainTaxRate"
+        - type: "TextField"
+          props:
+            label: "Tax-Free Allowance"
+            type: "number"
+          bindings:
+            value: "portfolio.taxSettings.taxFreeAllowance"
+
+      actions:
+        - type: "Button"
+          props:
+            label: "Cancel"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_CANCEL"
+        - type: "Button"
+          props:
+            label: "Save Portfolio"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_CLICKS_SAVE"
+---
+# A simple confirmation dialog for the destructive delete action.
+viewId: VIEW_CONFIRM_DELETE_PORTFOLIO_MODAL
+title: "Confirm Deletion"
+requiresAuth: true
+description: "A modal that asks the user to confirm they want to delete an entire portfolio."
+
+data:
+  - name: "portfolio"
+    type: "Portfolio"
+    description: "The portfolio being targeted for deletion."
+
+components:
+  - type: "ModalLayout"
+    slots:
+      body:
+        - type: "Text"
+          bindings:
+            content: "'Are you sure you want to delete the portfolio \"' + portfolio.name + '\"? This action is irreversible and will remove all of its holdings and rules.'"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL_DELETE"
+            - label: "Confirm"
+              event: "USER_CLICKS_CONFIRM_DELETE"
+---
+# A modal that appears if the user deletes their default portfolio,
+# prompting them to choose a new one from the remainder.
+viewId: VIEW_SELECT_NEW_DEFAULT_MODAL
+title: "Select New Default"
+requiresAuth: true
+description: "A modal prompting the user to select a new default portfolio."
+
+data:
+  - name: "portfolios"
+    type: "Array<Portfolio>"
+    description: "The list of remaining portfolios to choose from."
+
+components:
+  - type: "ModalLayout"
+    slots:
+      header:
+        - type: "Text"
+          props:
+            content: "Your default portfolio was deleted. Please select a new one."
+      body:
+        - type: "SelectList"
+          props:
+            label: "New Default Portfolio"
+          bindings:
+            items: "portfolios"
+            selectedValue: "formState.newDefaultPortfolioId"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Confirm"
+              event: "USER_SELECTS_NEW_DEFAULT"
+---
+# This view defines the multi-step modal for finding and confirming a new
+# financial instrument before it is added as a holding to a portfolio.
+# The visibility of its components is controlled by the state machine
+# (e.g., showing a loading indicator, an error message, or a results list).
+viewId: VIEW_SECURITY_LOOKUP_MODAL
+title: "Add New Holding"
+requiresAuth: true
+description: "A modal for looking up a security by Ticker, ISIN, or WKN, and confirming its addition."
+
+data:
+  # This object manages the state of the lookup process within the view.
+  - name: "lookupState"
+    type: "Object"
+    description: "Contains the search query, loading status, results, and any errors."
+    # Example structure: { query: '', isLoading: false, results: [], error: null, selected: null }
+
+components:
+  - type: "ModalLayout"
+    slots:
+      body:
+        # 1. SEARCH INPUT FIELD
+        - type: "TextField"
+          props:
+            label: "Search by Ticker, ISIN, or WKN"
+            name: "searchQuery"
+          bindings:
+            value: "lookupState.query"
+
+        # 2. DYNAMIC CONTENT AREA (only one of the following will be visible at a time)
+        - type: "LoadingIndicator"
+          shownIf: "lookupState.isLoading"
+
+        - type: "ErrorMessage"
+          shownIf: "lookupState.error"
+          bindings:
+            message: "lookupState.error"
+
+        - type: "InstrumentList"
+          shownIf: "lookupState.results.length > 0 && !lookupState.selected"
+          item:
+            forEach: "instrument in lookupState.results"
+            component:
+              type: "InstrumentListItem"
+              bindings:
+                name: "instrument.name"
+                ticker: "instrument.ticker"
+                exchange: "instrument.exchange"
+              events:
+                onSelect:
+                  name: "USER_SELECTS_INSTRUMENT"
+                  payload:
+                    instrument: "instrument" # Send the whole object
+
+        # 3. CONFIRMATION DETAILS (shown after an instrument is selected)
+        - type: "ConfirmationDetails"
+          shownIf: "lookupState.selected"
+          bindings:
+            name: "lookupState.selected.name"
+            ticker: "lookupState.selected.ticker"
+            isin: "lookupState.selected.isin"
+            currency: "lookupState.selected.currency"
+
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL"
+            - label: "Search"
+              event: "USER_SUBMITS_IDENTIFIER"
+              # This button would be shown only when there's input and no results yet
+              shownIf: "!lookupState.results.length && !lookupState.selected && !lookupState.isLoading"
+            - label: "Confirm Addition"
+              event: "USER_CONFIRMS_CREATION"
+              # This button is shown only after an instrument has been selected
+              shownIf: "lookupState.selected"
+---
+# This is the self-contained view for displaying a list
+# of holdings. It defines its own data requirements, which are fulfilled
+# by its parent view (VIEW_PORTFOLIO_HOLDINGS).
+viewId: VIEW_HOLDINGS_LIST
+requiresAuth: true
+description: "A reusable view component that displays a list of holdings."
+
+data:
+  - name: "holdings"
+    type: "Array<Holding>"
+    description: "The array of holding objects to be displayed."
+  - name: "mode"
+    type: "String"
+    description: "The display mode, e.g., 'ReadOnlyMode' or 'ManageMode'."
+
+components:
+  - type: "HoldingList"
+    bindings:
+      mode: "mode"
+    item:
+      forEach: "holding in holdings"
+      component:
+        type: "HoldingListItem"
+        bindings:
+          ticker: "holding.ticker"
+          currentValue: "holding.computed.currentValue"
+          gainLossPercentage: "holding.computed.gainLossPercentage"
+          mode: "mode"
+        events:
+          onTap:
+            name: "USER_SELECTS_HOLDING"
+            payload:
+              holdingId: "holding.holdingId"
+          onEdit:
+            name: "USER_CLICKS_EDIT_HOLDING_ITEM"
+            payload:
+              holdingId: "holding.holdingId"
+          onDelete:
+            name: "USER_CLICKS_DELETE_HOLDING_ITEM"
+            payload:
+              holdingId: "holding.holdingId"
+          onMove:
+            name: "USER_CLICKS_MOVE_HOLDING_ITEM"
+            payload:
+              holdingId: "holding.holdingId"
+---
+# It includes the
+# VIEW_LOTS_LIST and passes the required data down to it via bindings.
+viewId: VIEW_HOLDING_DETAIL
+title: "Holding Details"
+requiresAuth: true
+description: "A detail view for a specific holding, which also embeds the Lot List component."
+
+data:
+  - name: "holding"
+    type: "Holding"
+    description: "The selected holding to display, including its lots."
+  - name: "currentMode"
+    type: "String"
+    description: "The current state of the view, controlled by the state machine."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "AppBar"
+          bindings:
+            title: "holding.ticker"
+          leadingAction:
+            icon: "arrow_back"
+            event: "USER_CLICKS_BACK"
+      body:
+        - type: "HoldingSummaryCard"
+          bindings:
+            totalCost: "holding.computed.totalCost"
+            currentValue: "holding.computed.currentValue"
+            preTaxGainLoss: "holding.computed.preTaxGainLoss"
+
+        # This is the new, cleaner way to include the Lot List view.
+        - type: "VIEW_LOTS_LIST"
+          bindings:
+            # Pass the required data down to the child view.
+            lots: "holding.lots"
+            mode: "currentMode"
+      fab:
+        - type: "FloatingActionButton"
+          props:
+            icon: "edit"
+          events:
+            onClick:
+              name: "USER_CLICKS_EDIT"
+          actions:
+            - label: "Delete Holding"
+              icon: "delete"
+              event: "USER_CLICKS_DELETE"
+            - label: "Move Holding"
+              icon: "swap_horiz"
+              event: "USER_CLICKS_MOVE"
+
+---
+# This is the unified form for both creating and editing a holding.
+# Creation is a two-step process: lookup then confirm. This form is for the second step.
+viewId: VIEW_HOLDING_FORM
+title: "Manage Holding"
+requiresAuth: true
+description: "A modal form for creating or editing a holding's details."
+
+data:
+  - name: "holding"
+    type: "Holding"
+    description: "The holding being edited. For new holdings, this is pre-filled from the instrument lookup."
+
+components:
+  - type: "ModalFormLayout"
+    bindings:
+      title: "holding.holdingId ? 'Edit Holding' : 'Add New Holding'"
+    slots:
+      body:
+        - type: "TextField"
+          props:
+            label: "Ticker Symbol"
+            readOnly: "true" # Ticker cannot be changed after creation
+          bindings:
+            value: "holding.ticker"
+        - type: "TextField"
+          props:
+            label: "Annual Costs (TER, %)"
+            type: "number"
+          bindings:
+            value: "holding.annualCosts"
+        # Other editable fields like ISIN, WKN could be added here if needed.
+        # For the MVP, only annualCosts is specified as user-editable metadata.
+
+      actions:
+        - type: "Button"
+          props:
+            label: "Cancel"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_CANCEL"
+        - type: "Button"
+          props:
+            label: "Save"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_CLICKS_SAVE"
+---
+# A simple confirmation dialog for the destructive delete action.
+viewId: VIEW_CONFIRM_DELETE_HOLDING_MODAL
+title: "Confirm Deletion"
+requiresAuth: true
+description: "A modal that asks the user to confirm they want to delete a holding."
+
+data:
+  - name: "holding"
+    type: "Holding"
+    description: "The holding being targeted for deletion."
+
+components:
+  - type: "ModalLayout"
+    slots:
+      body:
+        - type: "Text"
+          bindings:
+            content: "'Are you sure you want to delete the holding ' + holding.ticker + '? This will also remove all associated lots and rules.'"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL_DELETE"
+            - label: "Confirm"
+              event: "USER_CLICKS_CONFIRM_DELETE"
+---
+# A modal to select a destination portfolio when moving a holding.
+viewId: VIEW_MOVE_HOLDING_MODAL
+title: "Move Holding"
+requiresAuth: true
+description: "A modal allowing the user to select a new portfolio for their holding."
+
+data:
+  - name: "holding"
+    type: "Holding"
+    description: "The holding being moved."
+  - name: "portfolios"
+    type: "Array<Portfolio>"
+    description: "A list of other available portfolios to move the holding to."
+
+components:
+  - type: "ModalLayout"
+    bindings:
+      title: "'Move ' + holding.ticker"
+    slots:
+      body:
+        - type: "SelectList"
+          props:
+            label: "Destination Portfolio"
+          bindings:
+            items: "portfolios"
+            # This would bind the user's selection to a temporary state variable
+            selectedValue: "formState.destinationPortfolioId"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL_MOVE"
+            - label: "Move"
+              event: "USER_CLICKS_CONFIRM_MOVE"
+---
+# This is the self-contained view for displaying a list
+# of lots. It defines its own data requirements (lots, mode), which are
+# fulfilled by its parent view (VIEW_HOLDING_DETAIL).
+viewId: VIEW_LOTS_LIST
+requiresAuth: true
+description: "A reusable view component that displays a list of purchase lots."
+
+data:
+  # This view declares that it needs 'lots' and a 'mode' to function.
+  - name: "lots"
+    type: "Array<Lot>"
+    description: "The array of lot objects to be displayed."
+  - name: "mode"
+    type: "String"
+    description: "The display mode, e.g., 'ReadOnlyMode' or 'ManageMode'."
+
+components:
+  # The component itself is the list.
+  - type: "LotList"
+    bindings:
+      mode: "mode"
+    item:
+      forEach: "lot in lots"
+      component:
+        type: "LotListItem"
+        bindings:
+          purchaseDate: "lot.purchaseDate"
+          quantity: "lot.quantity"
+          purchasePrice: "lot.purchasePrice"
+          mode: "mode"
+        events:
+          onTap:
+            name: "USER_SELECTS_LOT"
+            payload:
+              lotId: "lot.lotId"
+          onEdit:
+            name: "USER_CLICKS_EDIT_LOT_ITEM"
+            payload:
+              lotId: "lot.lotId"
+          onDelete:
+            name: "USER_CLICKS_DELETE_LOT_ITEM"
+            payload:
+              lotId: "lot.lotId"
+    actions:
+      - type: "Button"
+        shownIf: "mode == 'ManageMode'"
+        props:
+          label: "Add New Lot"
+        events:
+          onClick:
+            name: "USER_CLICKS_ADD_LOT"
+---
+# NEW: This view displays the details of a single lot in a read-only format.
+# It serves as an intermediary screen from which a user can decide to edit,
+# delete, or navigate back to the holding list.
+viewId: VIEW_LOT_DETAIL
+title: "Lot Details"
+requiresAuth: true
+description: "A read-only detail view for a specific purchase lot."
+
+data:
+  - name: "lot"
+    type: "Lot"
+    description: "The selected lot to display."
+  - name: "holdingCurrency"
+    type: "String"
+    description: "The currency of the parent holding."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "AppBar"
+          props:
+            title: "Lot Details"
+          # The 'Back' button is part of the AppBar for navigation
+          leadingAction:
+            icon: "arrow_back"
+            event: "USER_CLICKS_BACK"
+      body:
+        - type: "InfoField"
+          props:
+            label: "Purchase Date"
+          bindings:
+            value: "lot.purchaseDate"
+        - type: "InfoField"
+          props:
+            label: "Quantity"
+          bindings:
+            value: "lot.quantity"
+        - type: "InfoField"
+          props:
+            label: "Purchase Price"
+          bindings:
+            value: "lot.purchasePrice"
+            suffix: "holdingCurrency"
+      # This slot contains primary actions for the view
+      fab:
+        - type: "FloatingActionButton"
+          props:
+            icon: "edit"
+          events:
+            onClick:
+              name: "USER_CLICKS_EDIT"
+          # Secondary actions can be defined for a speed-dial menu
+          actions:
+            - label: "Delete Lot"
+              icon: "delete"
+              event: "USER_CLICKS_DELETE"
+---
+# REVISED: This is the unified form for both creating and editing a lot,
+# as per your request. It dynamically changes its title and pre-fills
+# data based on the presence of a lot.lotId.
+viewId: VIEW_LOT_FORM
+title: "Manage Lot"
+requiresAuth: true
+description: "A modal form for creating or editing a purchase lot's details."
+
+data:
+  - name: "lot"
+    type: "Lot"
+    description: "The lot being edited. For new lots, this will be a template object."
+  - name: "holdingCurrency"
+    type: "String"
+    description: "The currency of the parent holding (e.g., USD, EUR)."
+
+components:
+  - type: "ModalFormLayout"
+    bindings:
+      # Dynamic title based on whether a lotId exists
+      title: "lot.lotId ? 'Edit Lot' : 'Add New Lot'"
+    slots:
+      body:
+        - type: "DatePicker"
+          props:
+            label: "Purchase Date"
+          bindings:
+            value: "lot.purchaseDate"
+        - type: "TextField"
+          props:
+            label: "Quantity"
+            type: "number"
+          bindings:
+            value: "lot.quantity"
+        - type: "TextField"
+          props:
+            label: "Purchase Price"
+            type: "number"
+          bindings:
+            value: "lot.purchasePrice"
+            suffix: "holdingCurrency"
+
+      actions:
+        - type: "Button"
+          props:
+            label: "Cancel"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_CANCEL"
+        - type: "Button"
+          props:
+            label: "Save"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_CLICKS_SAVE"
+---
+# This view defines the simple confirmation dialog that appears when a user
+# attempts to delete a lot, ensuring they don't remove data by accident.
+viewId: VIEW_CONFIRM_DELETE_LOT_MODAL
+title: "Confirm Deletion"
+requiresAuth: true
+description: "A modal that asks the user to confirm they want to delete a lot."
+
+data:
+  - name: "lot"
+    type: "Lot"
+    description: "The lot being targeted for deletion, to display its details in the message."
+
+components:
+  - type: "ModalLayout"
+    slots:
+      body:
+        - type: "Text"
+          bindings:
+            content: "'Are you sure you want to delete the lot purchased on ' + lot.purchaseDate + '?'"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL_DELETE"
+            - label: "Confirm"
+              event: "USER_CLICKS_CONFIRM_DELETE"
+---
+

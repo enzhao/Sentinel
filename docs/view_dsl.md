@@ -53,10 +53,10 @@ Each view is defined by a root object with a unique `viewId`.
 
 Each object in the `components` array represents a single UI element.
 
-- `type` (String, Required): The type of the component (e.g., `StandardLayout`, `AppBar`, `Button`, `HoldingList`).
+- `type` (String, Required): The type of the component. This can be the name of a **primitive component** (e.g., `Button`, `TextField`) or the **`viewId` of another view** to include it compositionally. See the "View Composition" section for details.
 - `shownIf` (String, Optional): A declarative condition, based on the view's `data`, that determines if the component is rendered. (e.g., `"portfolio.holdings.length > 0"`).
 - `props` (Object, Optional): A key-value map of static properties passed to the component (e.g., `title: "My Portfolio"`).
-- `bindings` (Object, Optional): A key-value map that declaratively binds data from the `data` block to the component's properties (e.g., `totalValue: "portfolio.computed.currentValue"`).
+- `bindings` (Object, Optional): A key-value map that declaratively binds data from the `data` block to the component's properties (e.g., `totalValue: "portfolio.computed.currentValue"`). This is also used to pass data to child views.
 - `item` (Object, Optional): Used for list components. It describes how to render each item in a collection.
     - `forEach` (String, Required): Defines the loop variable and the data source (e.g., `"holding in portfolio.holdings"`).
     - `component` (Object, Required): A standard component object definition for the list item.
@@ -78,7 +78,77 @@ To ensure a consistent structure across different views, we use a "Layout Compon
 
 This Layout Component defines named `slots` (like `header`, `body`, and `fab`), and the view places all its content components inside these slots. This approach makes the overall structure of the application explicit, reusable, and easy to understand.
 
-## 5. Example: Holding Overview View
+## 5. View Composition and Reusability
+
+To promote modularity and a DRY (Don't Repeat Yourself) design, the View DSL supports the inclusion of one view within another. This allows complex UIs to be composed from smaller, self-contained, and reusable view components.
+
+### 5.1. The Inclusion Convention
+
+The mechanism for inclusion is simple and declarative:
+> If a component's `type` value matches the `viewId` of another defined view, it is treated as an **inclusion** of that view.
+
+### 5.2. Passing Data to Child Views
+
+A parent view passes data to an included child view using the standard `bindings` keyword. The child view must declare the data it requires in its own `data` block. The parent view's `bindings` then fulfill this data contract.
+
+### 5.3. Example of View Composition
+
+Here, `VIEW_HOLDING_DETAIL` is a parent view that needs to display a list of lots. Instead of defining the list inline, it **includes** the `VIEW_LOTS_LIST`.
+
+**Child View (`VIEW_LOTS_LIST`)**
+
+This view is defined once. It declares that it needs a list of `lots` and a `mode` to function.
+
+```yaml
+viewId: VIEW_LOTS_LIST
+requiresAuth: true
+description: "A reusable view component that displays a list of purchase lots."
+
+data:
+  # This view declares its data dependencies.
+  - name: "lots"
+    type: "Array<Lot>"
+  - name: "mode"
+    type: "String"
+
+components:
+  - type: "LotList"
+    # ... (rest of the list definition)
+``` 
+
+**Parent View (`VIEW_HOLDING_DETAIL`)**
+
+This view includes `VIEW_LOTS_LIST` and uses `bindings` to pass the required data down to it.
+
+```yaml
+viewId: VIEW_HOLDING_DETAIL
+title: "Holding Details"
+requiresAuth: true
+description: "A detail view for a specific holding."
+
+data:
+  - name: "holding"
+    type: "Holding"
+  - name: "currentMode"
+    type: "String"
+
+components:
+  - type: "StandardLayout"
+    slots:
+      body:
+        - type: "HoldingSummaryCard"
+          # ...
+        # Here we include the child view by using its viewId as the type.
+        - type: "VIEW_LOTS_LIST"
+          # We use bindings to pass data from the parent (holding, currentMode)
+          # to the child's declared data requirements (lots, mode).
+          bindings:
+            lots: "holding.lots"
+            mode: "currentMode"
+```
+
+
+## 6. Example: Holding Overview View
 
 The following example illustrates how the DSL is used to define the main dashboard view, using the Layout Component pattern.
 

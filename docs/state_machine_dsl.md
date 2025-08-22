@@ -25,6 +25,7 @@ Each object within the `states` array represents a single state in the machine a
 
 - `name` (String, Required): A unique, machine-friendly name for the state (e.g., `Idle`, `FormInput`, `Submitting`).
 - `description` (String, Required): A human-readable sentence describing what this state represents for the user. It should clarify what the user sees or does in the UI at this stage.
+- `renders` (String, Optional): The `viewId` of the view that this state is responsible for displaying. This creates an explicit, machine-readable link between a state and a view.
 
 A state can contain one or more of the following blocks to define its behavior:
 
@@ -32,22 +33,22 @@ A state can contain one or more of the following blocks to define its behavior:
     - **Key:** The name of the user event in `UPPER_SNAKE_CASE` (e.g., `USER_CLICKS_SAVE`).
     - **Value:** The `name` of the target state to transition to.
 
-- `entryAction` (Object, Optional): Defines an **automated action** that is executed immediately upon entering this state. This is typically used for calling services, APIs, or performing validations.
-    - `service` (String, Required): A description of the service being called (e.g., `"FinancialInstrumentLookupService.search(identifier)"`, `"POST /api/users/me/holdings"`).
+- `entryAction` (Object, Optional): Defines an **automated action** that is executed immediately upon entering this state.
+    - `service` (String, Required): A description of the service being called (e.g., `"POST /api/users/me/holdings"`).
     - `transitions` (Object, Required): Defines the possible outcomes of the `service` call and which state to transition to for each outcome.
         - **Key:** The name of the outcome in `snake_case` (e.g., `success`, `failure`, `invalid`).
         - **Value:** The `name` of the target state.
 
-- `exitAction` (Object, Optional): Defines an action that is executed when leaving this state. This is primarily used for navigation.
-    - `action` (String, Required): The type of action to perform (e.g., `NAVIGATE_TO`).
+- `exitAction` (Object, Optional): Defines an action that is executed when leaving this state.
+    - `action` (String, Required): The type of action to perform (e.g., `Maps_TO`).
     - `target` (String, Required): The destination of the action (e.g., a `viewId` like `VIEW_PORTFOLIO_HOLDINGS`).
 
-- `subflow` (Object, Optional): Defines a call to another, separate state machine flow. This is used to embed a reusable process (like adding a lot) within a larger flow. The parent flow will pause and wait for the subflow to complete or be cancelled.
+- `subflow` (Object, Optional): Defines a call to another, separate state machine flow.
     - `flowId` (String, Required): The `flowId` of the state machine to be invoked.
     - `onCompletion` (String, Required): The `name` of the state to transition to when the subflow finishes successfully.
-    - `onCancel` (String, Required): The `name` of the state to transition to if the user cancels the subflow.
+    - `onCancel` (String, Required): The `name` of the state to if the user cancels the subflow.
 
-- `activates` (Array, Optional): A list of state transitions to trigger in other concurrent flows upon entering this state. This is used to synchronize the state of embedded components that are running in parallel on the same view.
+- `activates` (Array, Optional): A list of state transitions to trigger in other concurrent flows upon entering this state.
     - `flowId` (String, Required): The `flowId` of the concurrent state machine to affect.
     - `targetState` (String, Required): The `name` of the state to transition to in the target flow.
 
@@ -106,17 +107,20 @@ requiresAuth: true
 initialState: HoldingListView
 states:
   - name: HoldingListView
+    renders: VIEW_PORTFOLIO_HOLDINGS # This flow starts on the main holdings list view.
     description: "The user is viewing the list of holdings in their default portfolio."
     events:
       USER_CLICKS_ADD_HOLDING: LookupInput
 
   - name: LookupInput
-    description: "A modal appears prompting the user to enter a Ticker, ISIN, or WKN for the new holding."
+    renders: VIEW_SECURITY_LOOKUP_MODAL # This state brings up the lookup modal.
+    description: "The user is prompted to enter a Ticker, ISIN, or WKN for the new holding."
     events:
       USER_SUBMITS_IDENTIFIER: SubmittingLookup
       USER_CLICKS_CANCEL: HoldingListView
 
   - name: SubmittingLookup
+    renders: VIEW_SECURITY_LOOKUP_MODAL # The lookup modal remains visible, showing a loading state.
     description: "The system is searching for the financial instrument."
     entryAction:
       service: "FinancialInstrumentLookupService.search(identifier)"
@@ -125,12 +129,14 @@ states:
         failure: LookupError
 
   - name: ConfirmingHoldingCreation
+    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show confirmation details.
     description: "The user is shown the details of the found instrument and asked to confirm its creation."
     events:
       USER_CONFIRMS_CREATION: SubmittingHolding
       USER_CLICKS_CANCEL: HoldingListView
 
   - name: SubmittingHolding
+    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal remains visible, showing a loading state.
     description: "The system is creating the new, empty holding."
     entryAction:
       service: "POST /api/users/me/holdings"
@@ -139,24 +145,27 @@ states:
         failure: APIError
 
   - name: AddingLots
+    renders: VIEW_HOLDING_DETAIL # The user is now on the new holding's detail page.
     description: "The user is viewing the newly created holding and can now optionally add one or more purchase lots."
     events:
       USER_CLICKS_ADD_LOT: AddingSingleLot
       USER_CLICKS_FINISH: HoldingListView
-  
+
   - name: AddingSingleLot
-    description: "The system is now invoking the lot creation subflow, specified in section 5.2.1.1."
+    description: "The system is now invoking the lot creation subflow."
     subflow:
       flowId: FLOW_CREATE_LOT_MANUAL
       onCompletion: AddingLots
       onCancel: AddingLots
 
   - name: LookupError
+    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show an error message.
     description: "The user is shown an error message that the instrument could not be found."
     events:
       USER_DISMISSES_ERROR: LookupInput
 
   - name: APIError
+    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show a generic API error.
     description: "The user is shown a generic error message that the holding could not be saved."
     events:
       USER_DISMISSES_ERROR: LookupInput
