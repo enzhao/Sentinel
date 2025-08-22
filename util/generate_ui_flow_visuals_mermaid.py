@@ -10,45 +10,44 @@ def generate_mermaid_from_flow(flow_data: dict) -> str:
         return "# Flow data is empty."
 
     lines = ["stateDiagram-v2"]
+    states = flow_data.get('states', [])
     initial_state = flow_data.get('initialState')
 
-    # --- NEWLY ADDED LINE ---
-    # Add the transition from the start state to the initial state
+    # --- REVISED LOGIC ---
+
+    subflow_states = {s['name'] for s in states if 'subflow' in s}
+
+    def get_target_name(target_state):
+        """Helper to get the correct Mermaid target name."""
+        # --- THIS IS THE FIX ---
+        if target_state == '(exit flow)':
+            return '[*]'
+        return f"{target_state}_subflow" if target_state in subflow_states else target_state
+
     if initial_state:
-        lines.append(f'    [*] --> {initial_state}')
-    # --- END OF NEW LINE ---
-    
-    # Process all states and their transitions
-    for state in flow_data.get('states', []):
+        lines.append(f'    [*] --> {get_target_name(initial_state)}')
+
+    for state in states:
         state_name = state['name']
-        
-        # Process user-triggered events
+
+        if state_name in subflow_states:
+            subflow = state['subflow']
+            lines.append(f'    state "{subflow["flowId"]}" as {state_name}_subflow')
+            lines.append(f'    {state_name}_subflow --> {get_target_name(subflow["onCompletion"])} : onCompletion')
+            lines.append(f'    {state_name}_subflow --> {get_target_name(subflow["onCancel"])} : onCancel')
+
         if 'events' in state:
             for event, target_state in state['events'].items():
-                lines.append(f'    {state_name} --> {target_state} : {event}')
+                lines.append(f'    {state_name} --> {get_target_name(target_state)} : {event}')
 
-        # Process automated entryAction transitions
         if 'entryAction' in state and 'transitions' in state['entryAction']:
             for outcome, target_state in state['entryAction']['transitions'].items():
-                lines.append(f'    {state_name} --> {target_state} : {outcome}')
+                lines.append(f'    {state_name} --> {get_target_name(target_state)} : {outcome}')
         
-        # Process automated exitAction transitions
         if 'exitAction' in state:
             action_name = state['exitAction'].get('action', 'exit')
-            # In Mermaid, [*] represents the end state
             lines.append(f'    {state_name} --> [*] : {action_name}')
-        
-        # Process subflows (optional, for more detail)
-        if 'subflow' in state:
-            subflow_id = state['subflow']['flowId']
-            on_completion = state['subflow']['onCompletion']
-            on_cancel = state['subflow']['onCancel']
-            lines.append(f'    state "{subflow_id}" as {state_name}_subflow')
-            lines.append(f'    {state_name} --> {state_name}_subflow')
-            lines.append(f'    {state_name}_subflow --> {on_completion} : onCompletion')
-            lines.append(f'    {state_name}_subflow --> {on_cancel} : onCancel')
-
-
+            
     return "\n".join(lines)
 
 def main():
@@ -57,7 +56,12 @@ def main():
         description="Generate Mermaid state diagram code from a ui_flows_spec.yaml file."
     )
     parser.add_argument("spec_file", type=Path, help="Path to the ui_flows_spec.yaml file.")
-    parser.add_argument("flow_id", help="The flowId to generate the diagram for.")
+    parser.add_argument(
+        "flow_id", 
+        nargs='?', 
+        default=None, 
+        help="Optional: The flowId to generate a diagram for. If omitted, all flows will be processed and saved to a file."
+    )
     
     args = parser.parse_args()
 
@@ -67,28 +71,45 @@ def main():
 
     try:
         with open(args.spec_file, 'r') as f:
-            # Use load_all since the YAML file uses '---' separators
             all_flows = list(yaml.safe_load_all(f))
     except yaml.YAMLError as e:
         print(f"Error parsing YAML file: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Find the specific flow the user asked for
-    target_flow = None
-    for flow in all_flows:
-        if flow and flow.get('flowId') == args.flow_id:
-            target_flow = flow
-            break
-    
-    if not target_flow:
-        print(f"Error: flowId '{args.flow_id}' not found in the spec file.", file=sys.stderr)
-        sys.exit(1)
+    if args.flow_id:
+        target_flow = next((flow for flow in all_flows if flow and flow.get('flowId') == args.flow_id), None)
+        
+        if not target_flow:
+            print(f"Error: flowId '{args.flow_id}' not found in the spec file.", file=sys.stderr)
+            sys.exit(1)
+            
+        mermaid_code = generate_mermaid_from_flow(target_flow)
+        print("```mermaid")
+        print(mermaid_code)
+        print("```")
+    else:
+        output_path = Path("docs/ui_flow_diagrams.md")
+        markdown_content = [
+            "# UI Flow Diagrams\n\n",
+            "> **Note:** This document is auto-generated by `util/generate_ui_flow_visuals_mermaid.py`. Do not edit it manually.\n"
+        ]
 
-    # Generate and print the Mermaid code
-    mermaid_code = generate_mermaid_from_flow(target_flow)
-    print("```mermaid")
-    print(mermaid_code)
-    print("```")
+        for flow in all_flows:
+            if not flow:
+                continue
+            
+            flow_id = flow.get('flowId', 'Unknown Flow')
+            markdown_content.append(f"## Flow: `{flow_id}`\n")
+            mermaid_code = generate_mermaid_from_flow(flow)
+            markdown_content.append("```mermaid")
+            markdown_content.append(mermaid_code)
+            markdown_content.append("```\n")
+
+        output_path.parent.mkdir(exist_ok=True)
+        with open(output_path, 'w') as f:
+            f.write("\n".join(markdown_content))
+        
+        print(f"✅ Successfully generated diagrams for all flows in '{output_path}'")
 
 if __name__ == "__main__":
     main()

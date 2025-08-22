@@ -27,12 +27,29 @@ The project uses a specification-driven approach for the UI, where formal YAML d
 
 To keep the visual diagrams in `product_spec.md` synchronized with the flow definitions, we use a script to automatically generate MermaidJS code from the `ui_flows_spec.yaml` file. **Never edit the Mermaid diagrams in the product spec manually.**
 
+The script has two modes:
+
+**A) Generate All Diagrams into a File (Recommended)**
+
+To regenerate all diagrams at once, run the script without a `flowId`. This will create or update a single Markdown file containing all the diagrams.
+
 1.  Ensure your utility virtual environment is active (`source util_env/bin/activate`).
 2.  Run the script from the project root:
     ```bash
-    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml <flowId>
+    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml
     ```
-3.  Copy the output and paste it into the corresponding section of `product_spec.md`.
+3.  This will generate the file `docs/ui_flow_diagrams.md`. You can then copy the specific diagram you need and paste it into `product_spec.md`.
+
+**B) Generate a Single Diagram to the Console**
+
+If you only need to quickly visualize a single flow, provide the `flowId` as an argument.
+
+1.  Ensure your utility virtual environment is active.
+2.  Run the script with a `flowId`:
+    ```bash
+    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml FLOW_CREATE_PORTFOLIO_MANUAL
+    ```
+3.  The script will print the Mermaid code for that single flow to your console.
 
 ---
 
@@ -81,7 +98,6 @@ To test the production container locally, run the following commands from the pr
     ```bash
     docker run --rm -p 8000:8000 -e ENV=local -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json sentinel-backend
     ```
-
 ---
 
 ## 4. Cloud and Deployment Notes ☁️
