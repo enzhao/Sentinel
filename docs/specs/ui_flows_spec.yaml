@@ -1,3 +1,85 @@
+# Flow for managing portfolio-level trading rules
+flowId: FLOW_MANAGE_PORTFOLIO_RULES
+requiresAuth: true
+initialState: EditingRules
+states:
+  - name: EditingRules
+    renders: VIEW_RULE_SET_FORM
+    description: "The user is editing the common RuleSet for the portfolio."
+    events:
+      USER_CLICKS_SAVE_RULES: Submitting
+      USER_CLICKS_CANCEL: (exit flow)
+
+  - name: Submitting
+    renders: VIEW_RULE_SET_FORM
+    description: "Submitting the portfolio's RuleSet to the backend."
+    entryAction:
+      service: "POST or PUT /api/users/me/rulesets"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The RuleSet was saved successfully."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_PORTFOLIO_DETAIL
+
+  - name: APIError
+    renders: VIEW_RULE_SET_FORM
+    description: "An error occurred while saving the RuleSet."
+    events:
+      USER_DISMISSES_ERROR: EditingRules
+---
+# Flow for managing holding-level trading rules
+flowId: FLOW_MANAGE_HOLDING_RULES
+requiresAuth: true
+initialState: CheckingForOverride
+states:
+  - name: CheckingForOverride
+    description: "Determining if the holding has specific rules or inherits them."
+    entryAction:
+      service: "GET /api/users/me/holdings/{holdingId}/effective-rules"
+      transitions:
+        has_specific_rules: EditingSpecificRules
+        has_inherited_rules: DisplayingInheritedRules
+        has_no_rules: EditingSpecificRules # Treat as new
+
+  - name: DisplayingInheritedRules
+    renders: VIEW_INHERITED_RULES_INFO
+    description: "Displaying the inherited portfolio rules in a read-only state."
+    events:
+      USER_CLICKS_CREATE_OVERRIDE: EditingSpecificRules
+      USER_CLICKS_BACK: (exit flow)
+
+  - name: EditingSpecificRules
+    renders: VIEW_RULE_SET_FORM
+    description: "The user is creating or editing the specific RuleSet for this holding."
+    events:
+      USER_CLICKS_SAVE_RULES: Submitting
+      USER_CLICKS_CANCEL: (exit flow)
+
+  - name: Submitting
+    renders: VIEW_RULE_SET_FORM
+    description: "Submitting the holding's specific RuleSet to the backend."
+    entryAction:
+      service: "POST or PUT /api/users/me/rulesets"
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The RuleSet was saved successfully."
+    exitAction:
+      action: REFRESH_VIEW
+      target: VIEW_HOLDING_DETAIL
+
+  - name: APIError
+    renders: VIEW_RULE_SET_FORM
+    description: "An error occurred while saving the RuleSet."
+    events:
+      USER_DISMISSES_ERROR: EditingSpecificRules
+---
 flowId: FLOW_CREATE_PORTFOLIO_MANUAL
 requiresAuth: true
 initialState: DashboardView
@@ -63,56 +145,85 @@ states:
     events:
       USER_DISMISSES_ERROR: CreatePortfolioView
 ---
-flowId: FLOW_VIEW_PORTFOLIOS_LIST
+flowId: FLOW_VIEW_PORTFOLIO_DETAIL
 requiresAuth: true
-initialState: ReadOnlyMode
+initialState: ReadOnly
 states:
-  - name: ReadOnlyMode
-    renders: VIEW_DASHBOARD
-    description: "The user is viewing a read-only list of their portfolios."
+  - name: ReadOnly
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user is viewing the portfolio's details in a read-only state."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
+        targetState: "ReadOnlyMode"
     events:
-      USER_CLICKS_MANAGE: ManageMode
-      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
+      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
+      USER_CLICKS_DELETE: DeletingPortfolio
+      USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
+      USER_CLICKS_MANAGE_RULES: ManagingPortfolioRules
+
+  - name: ManagingPortfolioRules 
+    description: "Invoking the subflow to manage portfolio-level rules."
+    subflow:
+      flowId: FLOW_MANAGE_PORTFOLIO_RULES
+      onCompletion: ReadOnly
+      onCancel: ReadOnly
 
   - name: ManageMode
-    renders: VIEW_DASHBOARD
-    description: "The user has entered manage mode for the portfolio list."
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user has entered manage mode. The portfolio's fields are editable."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
+        targetState: "ManageMode"
     events:
-      USER_CLICKS_DONE: ReadOnlyMode
-      USER_CLICKS_PORTFOLIO_ITEM: PortfolioDetailView
-      USER_CLICKS_ADD_PORTFOLIO: AddingPortfolio
-      USER_CLICKS_EDIT_ITEM: EditingPortfolio
-      USER_CLICKS_DELETE_ITEM: DeletingPortfolio
+      USER_CLICKS_SAVE: ValidateForm
+      USER_CLICKS_CANCEL: ReadOnly
 
-  - name: PortfolioDetailView
-    description: "Navigating to the portfolio's detailed view."
-    exitAction:
-      action: NAVIGATE_TO
-      target: VIEW_PORTFOLIO_DETAIL
+  - name: ValidateForm
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Performing client-side validation on the updated form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
 
-  - name: AddingPortfolio
-    renders: VIEW_DASHBOARD
-    description: "Invoking the portfolio creation subflow."
-    subflow:
-      flowId: FLOW_CREATE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
+  - name: Submitting
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Submitting the updated portfolio data to the backend."
+    entryAction:
+      service: "PUT /api/users/me/portfolios/{portfolioId}"
+      transitions:
+        success: ReadOnly
+        failure: APIError
 
-  - name: EditingPortfolio
-    renders: VIEW_DASHBOARD
-    description: "Invoking the portfolio update subflow."
-    subflow:
-      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
+  - name: FormError
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "An error message is shown indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
+
+  - name: APIError
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "A generic error message is shown that the portfolio could not be updated."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
 
   - name: DeletingPortfolio
-    renders: VIEW_DASHBOARD
-    description: "Invoking the portfolio deletion subflow."
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user is invoking the portfolio deletion subflow."
     subflow:
       flowId: FLOW_DELETE_PORTFOLIO_MANUAL
-      onCompletion: ManageMode
-      onCancel: ManageMode
+      onCompletion: (exit flow)
+      onCancel: ReadOnly
+
+  - name: SettingAsDefault
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Submitting a request to set this portfolio as the user's default."
+    entryAction:
+      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
+      transitions:
+        success: ReadOnly
+        failure: ReadOnly
 ---
 flowId: FLOW_VIEW_PORTFOLIO_DETAIL
 requiresAuth: true
@@ -501,6 +612,14 @@ states:
       USER_CLICKS_DELETE: DeletingHolding
       USER_CLICKS_MOVE: MovingHolding
       USER_CLICKS_BACK: (exit flow)
+      USER_CLICKS_MANAGE_RULES: ManagingHoldingRules 
+
+  - name: ManagingHoldingRules 
+    description: "Invoking the subflow to manage holding-level rules."
+    subflow:
+      flowId: FLOW_MANAGE_HOLDING_RULES
+      onCompletion: ReadOnly
+      onCancel: ReadOnly
 
   - name: ManageMode
     renders: VIEW_HOLDING_DETAIL

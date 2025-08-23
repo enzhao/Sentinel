@@ -35,6 +35,115 @@ components:
             onClick:
               name: "USER_CLICKS_ADD_PORTFOLIO"
 ---
+# This is the form UI for editing trading rules for a portfolio or holding.
+viewId: VIEW_RULE_SET_FORM
+title: "Manage Strategy Rules"
+requiresAuth: true
+description: "A unified form for creating and editing a RuleSet for a portfolio or holding."
+
+data:
+  - name: "ruleSet"
+    type: "RuleSet"
+    description: "The RuleSet being edited."
+  - name: "parentName"
+    type: "String"
+    description: "The name of the parent portfolio or holding (e.g., 'My Real Portfolio' or 'VOO')."
+
+components:
+  - type: "ModalFormLayout"
+    bindings:
+      title: "'Strategy for ' + parentName"
+    slots:
+      body:
+        # A component to render the list of rules (buy/sell)
+        - type: "RuleList"
+          item:
+            forEach: "rule in ruleSet.rules"
+            component:
+              type: "RuleEditor"
+              bindings:
+                rule: "rule" # Pass the whole rule object down
+              events:
+                onDeleteRule:
+                  name: "USER_CLICKS_DELETE_RULE"
+                onAddCondition:
+                  name: "USER_CLICKS_ADD_CONDITION"
+        - type: "Button"
+          props:
+            label: "Add Buy Rule"
+          events:
+            onClick:
+              name: "USER_CLICKS_ADD_BUY_RULE"
+        - type: "Button"
+          props:
+            label: "Add Sell Rule"
+          events:
+            onClick:
+              name: "USER_CLICKS_ADD_SELL_RULE"
+
+      actions:
+        - type: "Button"
+          props:
+            label: "Cancel"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_CANCEL"
+        - type: "Button"
+          props:
+            label: "Save Rules"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_CLICKS_SAVE_RULES"
+---
+# This is the UI definition for viewing the trading rules that are inherited
+# from a parent portfolio.
+viewId: VIEW_INHERITED_RULES_INFO
+title: "Inherited Strategy"
+requiresAuth: true
+description: "A read-only view to show that a holding is using its portfolio's rules."
+
+data:
+  - name: "ruleSet"
+    type: "RuleSet"
+    description: "The inherited RuleSet from the parent portfolio."
+  - name: "parentName"
+    type: "String"
+    description: "The name of the parent portfolio."
+
+components:
+  - type: "ModalLayout"
+    bindings:
+      title: "'Inherited Strategy from ' + parentName"
+    slots:
+      body:
+        - type: "Text"
+          props:
+            content: "This holding is currently using the common rules from its portfolio. You can view them below or create a specific rule set to override them."
+        # A component to render the rules in a read-only format
+        - type: "RuleList"
+          props:
+            readOnly: true
+          bindings:
+            rules: "ruleSet.rules"
+
+      actions:
+        - type: "Button"
+          props:
+            label: "Back"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_BACK"
+        - type: "Button"
+          props:
+            label: "Create Override Rules"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_CLICKS_CREATE_OVERRIDE"
+---
 # This is the self-contained view for displaying a list of portfolios.
 viewId: VIEW_PORTFOLIOS_LIST
 requiresAuth: true
@@ -101,6 +210,9 @@ components:
           leadingAction:
             icon: "arrow_back"
             event: "USER_CLICKS_BACK" # Allows navigation back to the dashboard
+          actions: # NEW: Actions added to the AppBar
+            - icon: "rule"
+              event: "USER_CLICKS_MANAGE_RULES"
       body:
         - type: "VIEW_HOLDINGS_LIST"
           bindings:
@@ -119,7 +231,7 @@ components:
 viewId: VIEW_PORTFOLIO_FORM
 title: "Manage Portfolio"
 requiresAuth: true
-description: "A form for creating or editing a portfolio's details, cash reserves, and tax settings."
+description: "A form for creating or editing a portfolio's details and cash reserves."
 
 data:
   - name: "portfolio"
@@ -161,18 +273,6 @@ components:
             helperText: "Portion of cash for opportunistic buying."
           bindings:
             value: "portfolio.cashReserve.warChestAmount"
-        - type: "TextField"
-          props:
-            label: "Capital Gain Tax Rate (%)"
-            type: "number"
-          bindings:
-            value: "portfolio.taxSettings.capitalGainTaxRate"
-        - type: "TextField"
-          props:
-            label: "Tax-Free Allowance"
-            type: "number"
-          bindings:
-            value: "portfolio.taxSettings.taxFreeAllowance"
 
       actions:
         - type: "Button"
@@ -395,6 +495,9 @@ components:
           leadingAction:
             icon: "arrow_back"
             event: "USER_CLICKS_BACK"
+          actions:
+            - icon: "rule"
+              event: "USER_CLICKS_MANAGE_RULES"
       body:
         - type: "HoldingSummaryCard"
           bindings:
@@ -448,14 +551,19 @@ components:
             readOnly: "true" # Ticker cannot be changed after creation
           bindings:
             value: "holding.ticker"
+        - type: "SelectField"
+          props:
+            label: "Asset Class"
+            items: "['EQUITY', 'CRYPTO', 'COMMODITY']" # This list would come from the tax config
+            required: "true"
+          bindings:
+            value: "holding.assetClass"
         - type: "TextField"
           props:
             label: "Annual Costs (TER, %)"
             type: "number"
           bindings:
             value: "holding.annualCosts"
-        # Other editable fields like ISIN, WKN could be added here if needed.
-        # For the MVP, only annualCosts is specified as user-editable metadata.
 
       actions:
         - type: "Button"

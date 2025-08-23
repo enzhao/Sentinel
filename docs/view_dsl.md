@@ -65,9 +65,16 @@ Each object in the `components` array represents a single UI element.
     - **Value:** An object describing the event:
         - `name` (String, Required): The event name in `UPPER_SNAKE_CASE` (e.g., `USER_SELECTS_HOLDING`).
         - `payload` (Object, Optional): A key-value map of data to send with the event (e.g., `holdingId: "holding.holdingId"`).
-- `actions` (Array, Optional): A list of actions, typically for components like a Floating Action Button. Each action object has:
-    - `label` (String, Required): The text for the action.
+- `leadingAction` (Object, Optional): Defines a singular, primary action, typically positioned on the "leading" (left) side of a component. This is distinct from the `actions` array and is most often used in an `AppBar`.
     - `event` (String, Required): The `UPPER_SNAKE_CASE` event name dispatched when the action is triggered.
+    - `label` (String, Optional): The text label for the action.
+    - `icon` (String, Optional): The name of the icon for the action.
+    - **Note**: At least one of `label` or `icon` must be provided.
+- `actions` (Array, Optional): A list of actions, typically for the "trailing" (right) side of an `AppBar` or for a Floating Action Button's speed-dial menu. Each action object is defined as follows:
+    - `event` (String, Required): The `UPPER_SNAKE_CASE` event name dispatched when the action is triggered.
+    - `label` (String, Optional): The text label for the action.
+    - `icon` (String, Optional): The name of the icon for the action.
+    - **Note**: At least one of `label` or `icon` must be provided.
 - `slots` (Object, Optional): Used by "Layout Components" to define named regions where other components are placed.
     - **Key:** The name of the slot (e.g., `header`, `body`, `fab`).
     - **Value:** An array of component objects to be rendered inside that slot.

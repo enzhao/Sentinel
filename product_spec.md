@@ -439,9 +439,7 @@ stateDiagram-v2
   - `cashReserve`: Object containing:
     - `totalAmount`: Number (in `defaultCurrency`).
     - `warChestAmount`: Number (in `defaultCurrency`, portion for opportunistic buying).
-  - `taxSettings`: Object containing:
-    - `capitalGainTaxRate`: Number (percentage, e.g., 26.4).
-    - `taxFreeAllowance`: Number (in the portfolio's `defaultCurrency`, e.g., 1000).
+  - `ruleSetId`: String (Optional, UUID linking to a `RuleSet` document, for trading rules).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
@@ -645,7 +643,7 @@ sequenceDiagram
 | P_E_3101 | User unauthorized | User is not authenticated or the UID from the token does not own the specified portfolio. | Request User to Sentinel | Update rejected with HTTP 403 Forbidden. | P_E_3101 |
 | P_E_3102 | Portfolio not found | The specified `portfolioId` does not exist. | Request User to Sentinel | Update rejected with HTTP 404 Not Found. | P_E_3102 |
 | P_E_3103 | Invalid cash amounts | `totalAmount` or `warChestAmount` are negative, or `warChestAmount` > `totalAmount`. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3103 |
-| P_E_3104 | Invalid portfolio settings | `capitalGainTaxRate` is not between 0-100, `taxFreeAllowance` is negative, portfolio `name` or `description` is invalid, or `defaultCurrency` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
+| P_E_3104 | Invalid portfolio settings | Portfolio `name` or `description` is invalid, or `defaultCurrency` is invalid. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | P_E_3104 |
 | P_E_3105 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | P_E_3105 |
 
 **Messages**:
@@ -653,7 +651,7 @@ sequenceDiagram
 - **P_E_3101**: "User is not authorized to modify portfolio {portfolioId}."
 - **P_E_3102**: "Portfolio with ID {portfolioId} not found."
 - **P_E_3103**: "Cash amounts are invalid. Ensure amounts are non-negative and war chest does not exceed total."
-- **P_E_3104**: "Portfolio name, description, currency, or tax settings are invalid."
+- **P_E_3104**: "Portfolio name, description, or currency are invalid."
 - **P_E_3105**: "A valid Idempotency-Key header is required for this operation."
 
 ##### 3.3.3.2. P_3400: Set Default Portfolio
@@ -1077,12 +1075,13 @@ stateDiagram-v2
   - `ISIN`: String (Optional, e.g., "IE00B5BMR087").
   - `WKN`: String (Optional, e.g., "A0YEDG").
   - `securityType`: Enum (e.g., `STOCK`, `ETF`, `FUND`).
-  - `assetClass`: Enum (e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
+  - `assetClass`: Enum (Required. e.g., `EQUITY`, `CRYPTO`, `COMMODITY`).
   - `currency`: Enum (`EUR`, `USD`, `GBP`).
   - `annualCosts`: Number (Optional, percentage, e.g., 0.07 for a 0.07% TER).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
   - `lots`: Array of `Lot` objects. The `Lot` data model is defined below. See Chapter 5 for lot management details.
+  - `ruleSetId`: String (Optional, UUID linking to a `RuleSet` document, for trading rules).
 
 - **`Lot` (Object within Holding):**
   - `lotId`: String (Unique UUID generated on creation).
@@ -1131,7 +1130,7 @@ The information in this section is calculated on-the-fly by the backend API and 
   - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
   - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
   - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `capitalGainTax`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `capitalGainTax`: Number. Calculated based on the tax rules defined in the system's tax configuration for the parent holding's `assetClass`. The calculation may depend on conditions such as the holding duration of the lot.
   - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
 
 ### 4.3. Holding Management Rules
@@ -1834,130 +1833,411 @@ sequenceDiagram
 
 ## 6. Strategy Rule Management
 
-This section details the management of buy and sell rules that encode the user’s investment strategy for a specific holding.
+This chapter details the management of user-defined investment strategies. Sentinel implements a powerful hierarchical system where users can define a "common" set of rules at the portfolio level, which are automatically inherited by all holdings within it. Users can then override these common rules by creating a specific, fine-grained rule set for any individual holding.
 
-### 6.1. Rule Data Model and Business Process
+### 6.1. Business Process
 
-**Associated Data Models**:
-- `Rule` (Firestore sub-collection under a Holding):
-  - `ruleId`: Unique UUID.
-  - `holdingId`: UUID linking to the parent holding.
-  - `ruleType`: Enum (`BUY`, `SELL`).
-  - `conditions`: Array of `Condition` objects.
-  - `status`: Enum (`ENABLED`, `PAUSED`).
-  - `createdAt`, `modifiedAt`: ISODateTime.
-- `Condition`:
-  - `conditionId`: Unique UUID.
-  - `type`: Enum (`DRAWDOWN`, `SMA`, `VWMA`, `RSI`, `VIX`, `PROFIT_TARGET`, `TRAILING_DRAWDOWN`, `AFTER_TAX_PROFIT`, `MACD`).
-  - `parameters`: Object (e.g., `{percentage: 15}` for DRAWDOWN, `{period: 200, operator: 'cross_below'}` for SMA).
-- `Alert` (generated, see Section 7):
-  - `alertId`: Unique UUID.
-  - `ruleId`: UUID linking to rule.
-  - `holdingId`: UUID linking to the holding.
-  - `triggeredAt`: ISODateTime.
-  - `marketData`: Object with relevant data (e.g., current price, RSI).
-  - `taxInfo`: Object (for SELL rules, includes preTaxProfit, capitalGainTax, afterTaxProfit).
+The management of strategy rules is centered around the concept of a `RuleSet`, which is a container for one or more individual rules. A `RuleSet` can be attached to either a Portfolio or a Holding.
 
-**Supported Conditions**:
-- **BUY**:
-  - `DRAWDOWN`: Index/ticker falls X% from 52-week high.
-  - `SMA`: Price crosses below a simple moving average (e.g., SMA200).
-  - `VWMA`: Price crosses below a volume weighted moving average (e.g., VWMA200).
-  - `RSI`: 14-day RSI < 30.
-  - `VIX`: VIX closes > Y.
-  - `MACD`: MACD line crosses above the signal line.
-- **SELL**:
-  - `PROFIT_TARGET`: Holding gain ≥ X%.
-  - `TRAILING_DRAWDOWN`: Holding falls Y% from peak since purchase.
-  - `RSI`: 14-day RSI > 70.
-  - `SMA`: Price > Z% above a simple moving average (e.g., SMA200).
-  - `VWMA`: Price > Z% above a volume weighted moving average (e.g., VWMA200).
-  - `AFTER_TAX_PROFIT`: After-tax gain ≥ W%.
-  - `MACD`: MACD line crosses below the signal line.
+#### 6.1.1. Managing Portfolio-Level Rules
 
-**Business Process**:
-1. **Creation**: User creates a rule for a specific holding by specifying `ruleType` and `conditions`. The rule is set to `ENABLED`.
-2. **Update**: User modifies a rule's conditions or status (`ENABLED`/`PAUSED`).
-3. **Deletion**: User removes a rule from a holding.
-4. **Retrieval**: User retrieves all rules for a specific holding.
-5. **Validation**: Ensures valid condition parameters and user authorization.
+A user can define a common `RuleSet` for an entire portfolio. This serves as the default strategy for all holdings in that portfolio that do not have their own specific rules.
 
-**Sequence Diagram for Rule Creation**
+##### 6.1.1.1. User Journey Spec and Visual Representation
+
+The following diagram visualizes the flow for creating or editing a portfolio-level `RuleSet`. The user initiates this from the Portfolio Detail view.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_MANAGE_PORTFOLIO_RULES`**.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PortfolioDetailView
+    PortfolioDetailView --> EditingRules : USER_CLICKS_MANAGE_RULES
+    EditingRules --> PortfolioDetailView : USER_CLICKS_CANCEL
+    EditingRules --> Submitting : USER_CLICKS_SAVE_RULES
+    
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+
+    APIError --> EditingRules : USER_DISMISSES_ERROR
+    Success --> PortfolioDetailView : (exit flow and refresh)
+```
+
+#### 6.1.2. Managing Holding-Level Rules (Override)
+
+A user can create a specific RuleSet for an individual holding. If a holding-level RuleSet exists, it completely overrides the portfolio-level RuleSet. This allows for precise exceptions to a general strategy.
+
+#### 6.1.2.1. User Journey Spec and Visual Representation
+
+The flow for managing a holding's rules is smarter. It first checks if the holding has its own rules or is inheriting them.
+
+- If inheriting, it shows the portfolio's rules in a read-only state and gives the user the option to create an override.
+- If an override already exists, it allows the user to edit it directly.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the flowId: `FLOW_MANAGE_HOLDING_RULES`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> HoldingDetailView
+    HoldingDetailView --> CheckingForOverride : USER_CLICKS_MANAGE_RULES
+
+    state "Checking for Override" as CheckingForOverride {
+        [*] --> DisplayingInheritedRules : has_inherited_rules
+        [*] --> EditingSpecificRules : has_specific_rules
+    }
+    
+    state "Displaying Inherited Rules" as DisplayingInheritedRules {
+      description: Shows portfolio rules (read-only)
+      [*] --> EditingSpecificRules : USER_CLICKS_CREATE_OVERRIDE
+      [*] --> HoldingDetailView : USER_CLICKS_BACK
+    }
+
+    state "Editing Specific Rules" as EditingSpecificRules {
+       description: Shows the holding's own rules
+       [*] --> HoldingDetailView : USER_CLICKS_CANCEL
+       [*] --> Submitting : USER_CLICKS_SAVE_RULES
+    }
+
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+
+    APIError --> EditingSpecificRules : USER_DISMISSES_ERROR
+    Success --> HoldingDetailView : (exit flow and refresh)
+```
+
+### 6.2. Rule Set Data Model
+
+To support the rule hierarchy, `RuleSet` will be a new top-level collection, and both the `Portfolio` and `Holding` models will be updated to link to it.
+
+#### 6.2.1. Stored Data Models
+
+-   **`RuleSet` (New Firestore Collection):**
+    -   `ruleSetId`: String (Unique UUID, the document ID).
+    -   `userId`: String (Firebase Auth UID of the owner).
+    -   `parentId`: String (The `portfolioId` or `holdingId` this ruleset belongs to).
+    -   `parentType`: Enum (`PORTFOLIO`, `HOLDING`).
+    -   `rules`: Array of `Rule` objects.
+    -   `createdAt`: ISODateTime.
+    -   `modifiedAt`: ISODateTime.
+
+-   **`Rule` (Object within `RuleSet`):**
+    -   `ruleId`: String (Unique UUID).
+    -   `ruleType`: Enum (`BUY`, `SELL`).
+    -   `logicalOperator`: Enum (`AND`, `OR`, default: `AND`). Determines how the conditions are combined.
+    -   `conditions`: Array of `Condition` objects.
+    -   `status`: Enum (`ENABLED`, `PAUSED`).
+
+-   **`Condition` (Object within `Rule`):**
+    -   `conditionId`: String (Unique UUID).
+    -   `type`: Enum (e.g., `PRICE_VS_SMA`, `RSI_LEVEL`). See the table below for all types.
+    -   `parameters`: Object (e.g., `{ "period": 200, "operator": "cross_below" }`).
+
+#### 6.2.2. Supported Conditions
+
+This section details all supported rule conditions, categorized by their primary use case (BUY or SELL). Conditions that can be used for both will appear in each list with a description tailored to that context.
+
+##### 6.2.2.1. BUY Conditions
+
+These conditions are used to create rules that trigger a "Buy" notification.
+
+- **`DRAWDOWN_FROM_HIGH`**
+    - **Description**: Triggers when the price drops by a certain percentage from its 52-week high. This is a common "buy the dip" condition for value-oriented strategies.
+    - **Parameters**:
+        - `percentage`: Number (e.g., `20` for a 20% drop).
+
+- **`RSI_LEVEL`**
+    - **Description**: Triggers when the Relative Strength Index (RSI) moves into an oversold state, suggesting the asset may be temporarily undervalued and due for a rebound.
+    - **Parameters**:
+        - `period`: Integer (e.g., `14` for the standard 14-day RSI).
+        - `operator`: Enum (`below`).
+        - `threshold`: Integer (e.g., `30` for the standard oversold threshold).
+
+- **`PRICE_VS_SMA`**
+    - **Description**: Triggers when the price crosses below a Simple Moving Average. This can be used to identify potential entry points after a pullback in an established uptrend (e.g., crossing below the SMA50).
+    - **Parameters**:
+        - `period`: Integer (e.g., `50` or `200`).
+        - `operator`: Enum (`cross_below`).
+
+- **`PRICE_VS_VWMA`**
+    - **Description**: Triggers when the price crosses below a Volume-Weighted Moving Average, which gives more weight to high-volume price action.
+    - **Parameters**:
+        - `period`: Integer (e.g., `50` or `200`).
+        - `operator`: Enum (`cross_below`).
+
+- **`MACD_CROSSOVER`**
+    - **Description**: Triggers when the MACD line crosses above its signal line. This is a classic bullish signal indicating a potential start of an upward trend.
+    - **Parameters**:
+        - `operator`: Enum (`cross_above`).
+
+- **`VIX_LEVEL`**
+    - **Description**: Triggers when the VIX (market volatility index) closes above a certain level, indicating high market fear. This can be used as a contrarian indicator to buy when others are fearful.
+    - **Parameters**:
+        - `operator`: Enum (`above`).
+        - `threshold`: Integer (e.g., `30`).
+
+##### 6.2.2.2. SELL Conditions
+
+These conditions are used to create rules that trigger a "Sell" notification for risk management or profit-taking.
+
+- **`PROFIT_TARGET`**
+    - **Description**: Triggers when the holding's pre-tax gain reaches a specified target percentage, allowing a user to systematically lock in profits.
+    - **Parameters**:
+        - `percentage`: Number (e.g., `50` for a 50% gain).
+
+- **`STOP_LOSS`**
+    - **Description**: Triggers when the holding's pre-tax loss reaches a specified percentage from its purchase price. This is a fundamental risk management tool.
+    - **Parameters**:
+        - `percentage`: Number (e.g., `10` for a 10% loss).
+
+- **`TRAILING_STOP_LOSS`**
+    - **Description**: Triggers when the holding's price drops by a specified percentage from its highest price since the time of purchase. This helps protect gains while still allowing profits to run.
+    - **Parameters**:
+        - `percentage`: Number (e.g., `15` for a 15% trailing drawdown).
+
+- **`RSI_LEVEL`**
+    - **Description**: Triggers when the Relative Strength Index (RSI) moves into an overbought state, suggesting the asset may be overvalued and due for a correction.
+    - **Parameters**:
+        - `period`: Integer (e.g., `14`).
+        - `operator`: Enum (`above`).
+        - `threshold`: Integer (e.g., `70` for the standard overbought threshold).
+
+- **`PRICE_VS_SMA`**
+    - **Description**: Triggers when the price crosses above a Simple Moving Average. This can be used to identify potential over-extension from a trend, signaling a time to take profits.
+    - **Parameters**:
+        - `period`: Integer (e.g., `50` or `200`).
+        - `operator`: Enum (`cross_above`).
+
+- **`PRICE_VS_VWMA`**
+    - **Description**: Triggers when the price crosses above a Volume-Weighted Moving Average, suggesting potential over-extension.
+    - **Parameters**:
+        - `period`: Integer (e.g., `50` or `200`).
+        - `operator`: Enum (`cross_above`).
+
+- **`MACD_CROSSOVER`**
+    - **Description**: Triggers when the MACD line crosses below its signal line. This is a classic bearish signal indicating a potential start of a downward trend.
+    - **Parameters**:
+        - `operator`: Enum (`cross_below`).
+
+### 6.3. Rule Set Management Rules
+
+This section details the business logic for creating, retrieving, updating, and deleting `RuleSet` documents.
+
+#### 6.3.1. R_1000: Rule Set Creation
+
+- **Description**: Creates a new `RuleSet` and links it to a parent Portfolio or Holding.
+- **Sequence Diagram for Rule Set Creation**
 
 ```mermaid
 sequenceDiagram
     participant User as User (Frontend)
     participant Sentinel as Sentinel Backend
     participant DB as Database
-    User->>Sentinel: POST /api/users/me/holdings/{holdingId}/rules <br> {ruleType, conditions}
+
+    User->>Sentinel: POST /api/users/me/rulesets<br>(ruleSetData with parentId, parentType)
     activate Sentinel
     Sentinel->>Sentinel: Validate Request (Auth, Conditions)
-    Sentinel->>DB: Create Rule document in sub-collection of Holding
+    Sentinel->>DB: 1. Create RuleSet document
     activate DB
-    DB-->>Sentinel: Confirm Creation
+    DB-->>Sentinel: Confirm Creation (returns new ruleSetId)
     deactivate DB
-    Sentinel-->>User: HTTP 201 (Rule Details)
+    
+    Sentinel->>DB: 2. Update parent (Portfolio/Holding) with ruleSetId
+    activate DB
+    DB-->>Sentinel: Confirm Update
+    deactivate DB
+
+    Sentinel-->>User: HTTP 201 Created (New RuleSet)
+    deactivate Sentinel
+``` 
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| R_I_1001 | Creation succeeds | User authorized for parent, valid data. | Response Sentinel to User | `RuleSet` created and linked. | R_I_1001 |
+| R_I_1002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful creation request. | Request User to Sentinel | The response from the original successful request is returned; no new item is created. | N/A |
+| R_E_1101 | Unauthorized parent | User does not own the `parentId`. | Request User to Sentinel | Creation rejected. | R_E_1101 |
+| R_E_1102 | Invalid conditions | Unknown condition type or bad parameters. | Request User to Sentinel | Creation rejected. | R_E_1102 |
+| R_E_1103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Creation rejected. | R_E_1103 |
+
+**Messages**:
+- **R_I_1001**: "Rule Set created successfully."
+- **R_E_1101**: "User is not authorized to create a rule set for this item."
+- **R_E_1102**: "Rule conditions are invalid."
+- **R_E_1103**: "A valid Idempotency-Key header is required for this operation."
+
+#### 6.3.2. R_2000: Effective Rule Set Retrieval
+
+- **Description**: Retrieves the "effective" `RuleSet` for a given holding by first checking for a holding-specific override, then falling back to the parent portfolio's `RuleSet`.
+- **Sequence Diagram for Effective Rule Set Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: GET /api/users/me/holdings/{holdingId}/effective-rules
+    activate Sentinel
+    Sentinel->>DB: 1. Fetch Holding document
+    activate DB
+    DB-->>Sentinel: Return Holding
+    deactivate DB
+
+    alt Holding has ruleSetId
+        Sentinel->>DB: 2a. Fetch RuleSet by holding.ruleSetId
+        activate DB
+        DB-->>Sentinel: Return RuleSet
+        deactivate DB
+        Sentinel-->>User: Return RuleSet (marked as 'specific')
+    else Holding has NO ruleSetId
+        Sentinel->>DB: 2b. Fetch parent Portfolio document
+        activate DB
+        DB-->>Sentinel: Return Portfolio
+        deactivate DB
+        
+        alt Portfolio has ruleSetId
+            Sentinel->>DB: 3a. Fetch RuleSet by portfolio.ruleSetId
+            activate DB
+            DB-->>Sentinel: Return RuleSet
+            deactivate DB
+            Sentinel-->>User: Return RuleSet (marked as 'inherited')
+        else Portfolio has NO ruleSetId
+            Sentinel-->>User: Return Empty/Null
+        end
+    end
+    deactivate Sentinel
+``` 
+- **Success Response:** Returns a `RuleSet` object along with metadata indicating its source (`specific` or `inherited`).
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| R_I_2001 | Retrieval succeeds (specific) | User is authorized, holding exists and has its own `ruleSetId`. | Response Sentinel to User | The holding's specific `RuleSet` is returned. | R_I_2001 |
+| R_I_2002 | Retrieval succeeds (inherited) | User is authorized, holding exists, has no `ruleSetId`, but parent portfolio does. | Response Sentinel to User | The parent portfolio's `RuleSet` is returned. | R_I_2002 |
+| R_I_2003 | Retrieval succeeds (no rules) | User is authorized, holding exists, but neither it nor its parent has a `ruleSetId`. | Response Sentinel to User | An empty response is returned, indicating no rules apply. | R_I_2003 |
+| R_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested holding. | Request User to Sentinel | Retrieval rejected with HTTP 403 Forbidden. | R_E_2101 |
+| R_E_2102 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | R_E_2102 |
+
+**Messages**:
+- **R_I_2001**: "Specific rules for holding {holdingId} retrieved successfully."
+- **R_I_2002**: "Inherited rules for holding {holdingId} retrieved successfully."
+- **R_I_2003**: "No applicable strategy rules were found for holding {holdingId}."
+- **R_E_2101**: "User is not authorized to access rules for holding {holdingId}."
+- **R_E_2102**: "Holding with ID {holdingId} not found."
+
+#### 6.3.3. R_3000: Rule Set Update
+- **Description**: Updates the contents of an existing `RuleSet`. The user must be the owner of the `RuleSet` to perform this action.
+- **Endpoint**: `PUT /api/users/me/rulesets/{ruleSetId}`
+- **Sequence Diagram for Rule Set Update**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. PUT /api/users/me/rulesets/{ruleSetId}<br>(updatedData, ID Token, Idempotency-Key)
+    activate Sentinel
+
+    Sentinel->>Sentinel: 2. Verify ID Token & Get UID
+    Sentinel->>DB: 3. Fetch RuleSet from DB to verify ownership
+    activate DB
+    DB-->>Sentinel: 4. Return RuleSet Document (contains userId)
+    deactivate DB
+
+    Sentinel->>Sentinel: 5. Authorize User (UID matches RuleSet's userId)
+    Sentinel->>Sentinel: 6. Validate incoming updatedData
+
+    alt Authorization & Validation OK
+        Sentinel->>DB: 7. Update RuleSet Document in DB
+        activate DB
+        DB-->>Sentinel: 8. Confirm Update Success
+        deactivate DB
+        Sentinel-->>User: 9. Return HTTP 200 OK (Success)
+    else Authorization Fails or RuleSet Not Found
+        Sentinel-->>User: Return HTTP 403 / 404 Error
+    else Validation Fails
+        Sentinel-->>User: Return HTTP 400 Error
+    end
+
     deactivate Sentinel
 ```
 
-**Example**:
-- A user has a holding of "QQQ.DE". They create a BUY rule for it with `conditions: [{type: "DRAWDOWN", parameters: {percentage: 15}}, {type: "RSI", parameters: {threshold: 30}}]`.
-- The rule is created and linked to the "QQQ.DE" holding.
-- If the conditions are met, an alert is triggered (see Chapter 7).
-
-### 6.2. Rule Management Rules
-
-#### 6.2.1. R_1000: Rule Creation
-
-- **Description**: Creates a new buy or sell rule for a specific holding.
-- **Success Response**: Rule created with `ENABLED` status.
+- **Success Response**: The `RuleSet` document is updated in Firestore, and the updated object is returned.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| R_I_1001 | Rule creation succeeds | Valid data, user authorized for the holding. | Response Sentinel to User | Rule created. | R_I_1001 |
-| R_I_1002 | Idempotency key valid | `Idempotency-Key` provided, valid UUID. | Request User to Sentinel | Request proceeds. | N/A |
-| R_E_1101 | User unauthorized | User not authenticated or not owner of the holding. | Request User to Sentinel | Creation rejected. | R_E_1101 |
-| R_E_1102 | Invalid conditions | Unknown condition type or invalid parameters. | Request User to Sentinel | Creation rejected. | R_E_1102 |
-| R_E_1103 | Holding not found | `holdingId` invalid. | Sentinel internal | Creation rejected. | R_E_1103 |
+| R_I_3001 | Update succeeds | User is authorized, `ruleSetId` exists, and incoming data is valid. | Response Sentinel to User | The specified `RuleSet` is updated. | R_I_3001 |
+| R_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
+| R_E_3101 | User unauthorized | User is not the owner of the specified `ruleSetId`. | Request User to Sentinel | Update rejected with HTTP 403 Forbidden. | R_E_3101 |
+| R_E_3102 | Rule Set not found | The specified `ruleSetId` does not exist. | Sentinel internal | Update rejected with HTTP 404 Not Found. | R_E_3102 |
+| R_E_3103 | Invalid conditions | The provided `conditions` array contains an unknown type or invalid parameters. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | R_E_3103 |
+| R_E_3104 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | R_E_3104 |
 
 **Messages**:
-- **R_I_1001**: "Rule {ruleId} created successfully for holding {holdingId}."
-- **R_E_1101**: "User is not authorized to create a rule for this holding."
-- **R_E_1102**: "Conditions invalid: Unknown type or invalid parameters."
-- **R_E_1103**: "Holding {holdingId} not found."
+- **R_I_3001**: "Rule Set updated successfully."
+- **R_E_3101**: "User is not authorized to modify this Rule Set."
+- **R_E_3102**: "Rule Set with ID {ruleSetId} not found."
+- **R_E_3103**: "The provided rule conditions are invalid."
+- **R_E_3104**: "A valid Idempotency-Key header is required for this operation."
 
-#### 6.2.2. R_2000: Rule Update
+#### 6.3.4. R_4000: Rule Set Deletion
 
-- **Description**: Modifies an existing rule’s conditions or status. The endpoint is `/api/users/me/holdings/{holdingId}/rules/{ruleId}`.
-- **Success Response**: Rule updated.
+- **Description**: Deletes a `RuleSet` and unlinks it from its parent Portfolio or Holding by clearing the `ruleSetId` field on the parent document.
+- **Endpoint**: `DELETE /api/users/me/rulesets/{ruleSetId}`
+- **Sequence Diagram for Rule Set Deletion**
+
+``` mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. DELETE /api/users/me/rulesets/{ruleSetId}<br>(ID Token, Idempotency-Key)
+    activate Sentinel
+
+    Sentinel->>Sentinel: 2. Verify ID Token & Get UID
+    Sentinel->>DB: 3. Fetch RuleSet to verify ownership & get parentId
+    activate DB
+    DB-->>Sentinel: 4. Return RuleSet Document
+    deactivate DB
+
+    Sentinel->>Sentinel: 5. Authorize User
+
+    alt Authorization OK & RuleSet Found
+        Note over Sentinel, DB: Begin Transaction
+        Sentinel->>DB: 6a. Delete RuleSet Document
+        activate DB
+        Sentinel->>DB: 6b. Update Parent Document (remove ruleSetId link)
+        DB-->>Sentinel: 7. Confirm Transaction Success
+        deactivate DB
+        Sentinel-->>User: 8. Return HTTP 204 No Content (Success)
+    else Authorization Fails or RuleSet Not Found
+        Sentinel-->>User: Return HTTP 403 / 404 Error
+    end
+
+    deactivate Sentinel
+```
+
+- **Success Response**: The `RuleSet` document is deleted from Firestore, and the parent document is updated.
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| R_I_2001 | Update succeeds | Valid data, user authorized. | Response Sentinel to User | Rule updated. | R_I_2001 |
-| R_E_2101 | User unauthorized | User not authorized. | Request User to Sentinel | Update rejected. | R_E_2101 |
-| R_E_2102 | Rule not found | `ruleId` invalid. | Sentinel internal | Update rejected. | R_E_2102 |
+| R_I_4001 | Deletion succeeds | User is authorized and the `ruleSetId` exists. | Response Sentinel to User | The `RuleSet` is deleted and unlinked from its parent. | R_I_4001 |
+| R_I_4002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful deletion request. | Request User to Sentinel | The response from the original successful request is returned; no new deletion is performed. | N/A |
+| R_E_4101 | User unauthorized | User is not the owner of the specified `ruleSetId`. | Request User to Sentinel | Deletion rejected with HTTP 403 Forbidden. | R_E_4101 |
+| R_E_4102 | Rule Set not found | The specified `ruleSetId` does not exist. | Sentinel internal | Deletion rejected with HTTP 404 Not Found. | R_E_4102 |
+| R_E_4103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Deletion rejected. | R_E_4103 |
 
 **Messages**:
-- **R_I_2001**: "Rule {ruleId} updated successfully."
-- **R_E_2101**: "User is not authorized to update rule {ruleId}."
-- **R_E_2102**: "Rule {ruleId} not found."
-
-#### 6.2.3. R_3000: Rule Retrieval
-
-- **Description**: Retrieves rule(s) for a specific holding. The endpoint is `/api/users/me/holdings/{holdingId}/rules`.
-- **Success Response**: Rule(s) returned.
-- **Sub-Rules**:
-
-| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
-|:---|:---|:---|:---|:---|:---|
-| R_I_3001 | Retrieval succeeds | Rules exist, user authorized. | Response Sentinel to User | Rules returned. | R_I_3001 |
-| R_E_3101 | User unauthorized | User not authorized. | Request User to Sentinel | Retrieval rejected. | R_E_3101 |
-
-**Messages**:
-- **R_I_3001**: "Rules retrieved successfully for holding {holdingId}."
-- **R_E_3101**: "User is not authorized to retrieve rules for this holding."
+- **R_I_4001**: "Rule Set was successfully deleted."
+- **R_E_4101**: "User is not authorized to delete this Rule Set."
+- **R_E_4102**: "Rule Set with ID {ruleSetId} not found."
+- **R_E_4103**: "A valid Idempotency-Key header is required for this operation."
 
 ## 7. Market Monitoring and Notification
 
@@ -2319,7 +2599,42 @@ sequenceDiagram
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-### 9.3. Non-Functional Requirements
+### 9.3. Tax Configuration
+
+To provide accurate, asset-specific tax calculations without requiring user input, Sentinel uses a static, application-level configuration file. This file defines the tax rules for each supported asset class. The backend loads this configuration on startup and uses it to apply the correct tax logic during all relevant computations.
+
+For the MVP, this will be a YAML file stored in the backend service's codebase.
+
+#### 9.3.1. Configuration Structure
+
+The configuration is a map where each key is a valid `assetClass` (e.g., `EQUITY`, `CRYPTO`). The value for each key is a list of one or more tax rules, which are evaluated in order. The first rule whose condition is met will be applied.
+
+Each rule object contains the following fields:
+
+- `description` (String, Required): A human-readable explanation of the rule.
+- `taxRate` (Number, Required): The capital gains tax rate to be applied, as a percentage (e.g., 26.4).
+- `condition` (String, Optional): A machine-readable condition that determines if the rule applies. If omitted, the rule is always applied.
+  - The condition is a simple string expression, e.g., `holdingDurationDays > 365`. The backend is responsible for parsing this and evaluating it against the lot's data.
+
+#### 9.3.2. Example Configuration (`tax_config.yaml`)
+
+```yaml
+EQUITY:
+  - description: "Standard capital gains tax for equities."
+    taxRate: 26.375
+
+CRYPTO:
+  - description: "Cryptocurrencies held for more than one year are tax-free."
+    taxRate: 0
+    condition: "holdingDurationDays > 365"
+  - description: "Cryptocurrencies held for one year or less are subject to standard capital gains tax."
+    taxRate: 26.375
+
+COMMODITY:
+  - description: "Standard capital gains tax for commodities."
+    taxRate: 26.375
+
+### 9.4. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
