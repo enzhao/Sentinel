@@ -252,7 +252,7 @@ components:
 # financial instrument before it is added as a holding to a portfolio.
 # The visibility of its components is controlled by the state machine
 # (e.g., showing a loading indicator, an error message, or a results list).
-viewId: VIEW_SECURITY_LOOKUP_MODAL
+viewId: VIEW_INSTRUMENT_LOOKUP_MODAL
 title: "Add New Holding"
 requiresAuth: true
 description: "A modal for looking up a security by Ticker, ISIN, or WKN, and confirming its addition."

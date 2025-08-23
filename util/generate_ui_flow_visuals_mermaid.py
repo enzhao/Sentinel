@@ -3,50 +3,80 @@ import argparse
 import sys
 from pathlib import Path
 
-def generate_mermaid_from_flow(flow_data: dict) -> str:
+def generate_mermaid_from_flow(flow_data: dict, all_flows_data: list) -> str:
     """Generates Mermaid state diagram syntax from a single flow definition."""
     
     if not flow_data:
         return "# Flow data is empty."
 
+    flow_state_to_view_map = {}
+    for f in all_flows_data:
+        if not f: continue
+        flow_id = f.get('flowId')
+        if flow_id:
+            flow_state_to_view_map[flow_id] = {}
+            for s in f.get('states', []):
+                if 'renders' in s:
+                    flow_state_to_view_map[flow_id][s['name']] = s['renders']
+
     lines = ["stateDiagram-v2"]
     states = flow_data.get('states', [])
     initial_state = flow_data.get('initialState')
+    current_flow_id = flow_data.get('flowId')
 
-    # --- REVISED LOGIC ---
+    def get_state_label(state_name, flow_id, is_initial=False):
+        view = flow_state_to_view_map.get(flow_id, {}).get(state_name)
+        if view and is_initial:
+            # --- THIS IS THE CHANGE: Updated the emoji ---
+            return f'{state_name} 👨🏻‍💻 ({view})'
+        return state_name
 
     subflow_states = {s['name'] for s in states if 'subflow' in s}
 
     def get_target_name(target_state):
-        """Helper to get the correct Mermaid target name."""
-        # --- THIS IS THE FIX ---
         if target_state == '(exit flow)':
             return '[*]'
         return f"{target_state}_subflow" if target_state in subflow_states else target_state
 
     if initial_state:
-        lines.append(f'    [*] --> {get_target_name(initial_state)}')
-
+        initial_label = get_state_label(initial_state, current_flow_id, is_initial=True)
+        lines.append(f'    state "{initial_label}" as {initial_state}')
+        lines.append(f'    [*] --> {initial_state}')
+    
     for state in states:
         state_name = state['name']
+        from_label = state_name
 
         if state_name in subflow_states:
             subflow = state['subflow']
-            lines.append(f'    state "{subflow["flowId"]}" as {state_name}_subflow')
+            target_flow_id = subflow['flowId']
+            target_flow = next((f for f in all_flows_data if f and f.get('flowId') == target_flow_id), {})
+            target_initial_state = target_flow.get('initialState')
+            target_view = flow_state_to_view_map.get(target_flow_id, {}).get(target_initial_state, '')
+            
+            label = f'{target_flow_id} ➡️ ({target_view})' if target_view else target_flow_id
+
+            lines.append(f'    state "{label}" as {state_name}_subflow')
             lines.append(f'    {state_name}_subflow --> {get_target_name(subflow["onCompletion"])} : onCompletion')
             lines.append(f'    {state_name}_subflow --> {get_target_name(subflow["onCancel"])} : onCancel')
 
         if 'events' in state:
             for event, target_state in state['events'].items():
-                lines.append(f'    {state_name} --> {get_target_name(target_state)} : {event}')
+                lines.append(f'    {from_label} --> {get_target_name(target_state)} : {event}')
 
         if 'entryAction' in state and 'transitions' in state['entryAction']:
             for outcome, target_state in state['entryAction']['transitions'].items():
-                lines.append(f'    {state_name} --> {get_target_name(target_state)} : {outcome}')
+                lines.append(f'    {from_label} --> {get_target_name(target_state)} : {outcome}')
         
         if 'exitAction' in state:
-            action_name = state['exitAction'].get('action', 'exit')
-            lines.append(f'    {state_name} --> [*] : {action_name}')
+            action = state['exitAction'].get('action', 'exit')
+            target = state['exitAction'].get('target')
+            label = f"{action} {target}" if target else action
+            
+            if action == 'NAVIGATE_TO':
+                label = f"➡️ {label}"
+
+            lines.append(f'    {from_label} --> [*] : {label}')
             
     return "\n".join(lines)
 
@@ -71,19 +101,19 @@ def main():
 
     try:
         with open(args.spec_file, 'r') as f:
-            all_flows = list(yaml.safe_load_all(f))
+            all_flows = [flow for flow in yaml.safe_load_all(f) if flow]
     except yaml.YAMLError as e:
         print(f"Error parsing YAML file: {e}", file=sys.stderr)
         sys.exit(1)
 
     if args.flow_id:
-        target_flow = next((flow for flow in all_flows if flow and flow.get('flowId') == args.flow_id), None)
+        target_flow = next((flow for flow in all_flows if flow.get('flowId') == args.flow_id), None)
         
         if not target_flow:
             print(f"Error: flowId '{args.flow_id}' not found in the spec file.", file=sys.stderr)
             sys.exit(1)
             
-        mermaid_code = generate_mermaid_from_flow(target_flow)
+        mermaid_code = generate_mermaid_from_flow(target_flow, all_flows)
         print("```mermaid")
         print(mermaid_code)
         print("```")
@@ -95,12 +125,9 @@ def main():
         ]
 
         for flow in all_flows:
-            if not flow:
-                continue
-            
             flow_id = flow.get('flowId', 'Unknown Flow')
             markdown_content.append(f"## Flow: `{flow_id}`\n")
-            mermaid_code = generate_mermaid_from_flow(flow)
+            mermaid_code = generate_mermaid_from_flow(flow, all_flows)
             markdown_content.append("```mermaid")
             markdown_content.append(mermaid_code)
             markdown_content.append("```\n")
@@ -113,5 +140,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
     

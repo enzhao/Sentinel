@@ -7,21 +7,23 @@
 
 ```mermaid
 stateDiagram-v2
+    state "DashboardView 👨🏻‍💻 (VIEW_DASHBOARD)" as DashboardView
     [*] --> DashboardView
     DashboardView --> CreatePortfolioView : USER_CLICKS_ADD_PORTFOLIO
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : NAVIGATE_TO
+    Success --> [*] : ➡️ NAVIGATE_TO VIEW_DASHBOARD
     FormError --> CreatePortfolioView : USER_DISMISSES_ERROR
     APIError --> CreatePortfolioView : USER_DISMISSES_ERROR
 ```
 
-## Flow: `FLOW_VIEW_PORTFOLIO_LIST`
+## Flow: `FLOW_VIEW_PORTFOLIOS_LIST`
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnlyMode 👨🏻‍💻 (VIEW_DASHBOARD)" as ReadOnlyMode
     [*] --> ReadOnlyMode
     ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
     ReadOnlyMode --> PortfolioDetailView : USER_CLICKS_PORTFOLIO_ITEM
@@ -30,11 +32,11 @@ stateDiagram-v2
     ManageMode --> AddingPortfolio_subflow : USER_CLICKS_ADD_PORTFOLIO
     ManageMode --> EditingPortfolio_subflow : USER_CLICKS_EDIT_ITEM
     ManageMode --> DeletingPortfolio_subflow : USER_CLICKS_DELETE_ITEM
-    PortfolioDetailView --> [*] : NAVIGATE_TO
-    state "FLOW_CREATE_PORTFOLIO_MANUAL" as AddingPortfolio_subflow
+    PortfolioDetailView --> [*] : ➡️ NAVIGATE_TO VIEW_PORTFOLIO_DETAIL
+    state "FLOW_CREATE_PORTFOLIO_MANUAL ➡️ (VIEW_DASHBOARD)" as AddingPortfolio_subflow
     AddingPortfolio_subflow --> ManageMode : onCompletion
     AddingPortfolio_subflow --> ManageMode : onCancel
-    state "FLOW_UPDATE_PORTFOLIO_MANUAL" as EditingPortfolio_subflow
+    state "FLOW_UPDATE_PORTFOLIO_MANUAL ➡️ (VIEW_PORTFOLIO_DETAIL)" as EditingPortfolio_subflow
     EditingPortfolio_subflow --> ManageMode : onCompletion
     EditingPortfolio_subflow --> ManageMode : onCancel
     state "FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow
@@ -46,13 +48,19 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnly 👨🏻‍💻 (VIEW_PORTFOLIO_DETAIL)" as ReadOnly
     [*] --> ReadOnly
-    ReadOnly --> ManageMode_subflow : USER_CLICKS_MANAGE_PORTFOLIO
+    ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
     ReadOnly --> DeletingPortfolio_subflow : USER_CLICKS_DELETE
     ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
-    state "FLOW_UPDATE_PORTFOLIO_MANUAL" as ManageMode_subflow
-    ManageMode_subflow --> ReadOnly : onCompletion
-    ManageMode_subflow --> ReadOnly : onCancel
+    ManageMode --> ValidateForm : USER_CLICKS_SAVE
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
+    Submitting --> ReadOnly : success
+    Submitting --> APIError : failure
+    FormError --> ManageMode : USER_DISMISSES_ERROR
+    APIError --> ManageMode : USER_DISMISSES_ERROR
     state "FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow
     DeletingPortfolio_subflow --> [*] : onCompletion
     DeletingPortfolio_subflow --> ReadOnly : onCancel
@@ -64,6 +72,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnly 👨🏻‍💻 (VIEW_PORTFOLIO_DETAIL)" as ReadOnly
     [*] --> ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
     ManageMode --> ValidateForm : USER_CLICKS_SAVE
@@ -80,6 +89,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_PORTFOLIO
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
@@ -90,7 +100,7 @@ stateDiagram-v2
     SelectingNewDefault --> SubmittingNewDefault : USER_SELECTS_NEW_DEFAULT
     SubmittingNewDefault --> SuccessRefresh : success
     SubmittingNewDefault --> APIError : failure
-    SuccessRefresh --> [*] : REFRESH_VIEW
+    SuccessRefresh --> [*] : REFRESH_VIEW VIEW_DASHBOARD
     APIError --> Idle : USER_DISMISSES_ERROR
 ```
 
@@ -98,6 +108,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle 👨🏻‍💻 (VIEW_PORTFOLIO_DETAIL)" as Idle
     [*] --> Idle
     Idle --> SelectingFile : USER_CLICKS_IMPORT
     SelectingFile --> ValidatingFile : USER_SELECTS_FILE
@@ -112,7 +123,7 @@ stateDiagram-v2
     SubmittingConfirmation --> Success : success
     SubmittingConfirmation --> ReviewingChanges : validation_failed
     SubmittingConfirmation --> APIError : failure
-    Success --> [*] : REFRESH_VIEW
+    Success --> [*] : REFRESH_VIEW VIEW_PORTFOLIO_DETAIL
     FileError --> Idle : USER_DISMISSES_ERROR
     ParsingError --> Idle : USER_DISMISSES_ERROR
     APIError --> Idle : USER_DISMISSES_ERROR
@@ -122,6 +133,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "HoldingListView 👨🏻‍💻 (VIEW_PORTFOLIO_DETAIL)" as HoldingListView
     [*] --> HoldingListView
     HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
     LookupInput --> SubmittingLookup : USER_SUBMITS_IDENTIFIER
@@ -141,10 +153,11 @@ stateDiagram-v2
     APIError --> LookupInput : USER_DISMISSES_ERROR
 ```
 
-## Flow: `FLOW_VIEW_HOLDING_LIST`
+## Flow: `FLOW_VIEW_HOLDINGS_LIST`
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnlyMode 👨🏻‍💻 (VIEW_HOLDINGS_LIST)" as ReadOnlyMode
     [*] --> ReadOnlyMode
     ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
     ReadOnlyMode --> HoldingDetailView : USER_CLICKS_HOLDING_BODY
@@ -154,8 +167,8 @@ stateDiagram-v2
     ManageMode --> EditingHolding_subflow : USER_CLICKS_EDIT_HOLDING_ITEM
     ManageMode --> DeletingHolding_subflow : USER_CLICKS_DELETE_HOLDING_ITEM
     ManageMode --> MovingHolding_subflow : USER_CLICKS_MOVE_HOLDING_ITEM
-    HoldingDetailView --> [*] : NAVIGATE_TO
-    state "FLOW_ADD_HOLDING_MANUAL" as AddingHolding_subflow
+    HoldingDetailView --> [*] : ➡️ NAVIGATE_TO VIEW_HOLDING_DETAIL
+    state "FLOW_ADD_HOLDING_MANUAL ➡️ (VIEW_PORTFOLIO_DETAIL)" as AddingHolding_subflow
     AddingHolding_subflow --> ManageMode : onCompletion
     AddingHolding_subflow --> ManageMode : onCancel
     state "FLOW_UPDATE_HOLDING_MANUAL" as EditingHolding_subflow
@@ -173,6 +186,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnly 👨🏻‍💻 (VIEW_HOLDING_DETAIL)" as ReadOnly
     [*] --> ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT
     ReadOnly --> DeletingHolding_subflow : USER_CLICKS_DELETE
@@ -206,6 +220,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> Editing : USER_CLICKS_EDIT_HOLDING
     Editing --> ValidateForm : USER_CLICKS_SAVE
@@ -214,7 +229,7 @@ stateDiagram-v2
     ValidateForm --> FormError : invalid
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL
     FormError --> Editing : USER_DISMISSES_ERROR
     APIError --> Editing : USER_DISMISSES_ERROR
 ```
@@ -223,13 +238,14 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_HOLDING
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
     ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : REFRESH_VIEW
+    Success --> [*] : REFRESH_VIEW VIEW_PORTFOLIO_DETAIL
     APIError --> Idle : USER_DISMISSES_ERROR
 ```
 
@@ -237,6 +253,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> SelectingDestination : USER_CLICKS_MOVE_HOLDING
     SelectingDestination --> ConfirmingMove : USER_SELECTS_DESTINATION
@@ -245,7 +262,7 @@ stateDiagram-v2
     ConfirmingMove --> SelectingDestination : USER_CLICKS_BACK
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : NAVIGATE_TO
+    Success --> [*] : ➡️ NAVIGATE_TO VIEW_PORTFOLIO_DETAIL
     APIError --> Idle : USER_DISMISSES_ERROR
 ```
 
@@ -253,6 +270,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> FormInput : USER_CLICKS_ADD_LOT
     FormInput --> ValidateForm : USER_CLICKS_SAVE
@@ -261,15 +279,16 @@ stateDiagram-v2
     ValidateForm --> FormError : invalid
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL
     FormError --> FormInput : USER_DISMISSES_ERROR
     APIError --> FormInput : USER_DISMISSES_ERROR
 ```
 
-## Flow: `FLOW_MANAGE_LOTS_LIST`
+## Flow: `FLOW_VIEW_LOTS_LIST`
 
 ```mermaid
 stateDiagram-v2
+    state "ReadOnly 👨🏻‍💻 (VIEW_LOTS_LIST)" as ReadOnly
     [*] --> ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT_HOLDING
     ManageMode --> ReadOnly : USER_CLICKS_SAVE_HOLDING
@@ -292,6 +311,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> Editing : USER_CLICKS_EDIT_LOT
     Editing --> ValidateForm : USER_CLICKS_SAVE
@@ -300,7 +320,7 @@ stateDiagram-v2
     ValidateForm --> FormError : invalid
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
+    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL
     FormError --> Editing : USER_DISMISSES_ERROR
     APIError --> Editing : USER_DISMISSES_ERROR
 ```
@@ -309,12 +329,13 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    state "Idle" as Idle
     [*] --> Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_LOT
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
     ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
     Submitting --> Success : success
     Submitting --> APIError : failure
-    Success --> [*] : REFRESH_VIEW
+    Success --> [*] : REFRESH_VIEW VIEW_HOLDING_DETAIL
     APIError --> Idle : USER_DISMISSES_ERROR
 ```

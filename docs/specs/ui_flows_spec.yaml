@@ -63,7 +63,7 @@ states:
     events:
       USER_DISMISSES_ERROR: CreatePortfolioView
 ---
-flowId: FLOW_VIEW_PORTFOLIO_LIST
+flowId: FLOW_VIEW_PORTFOLIOS_LIST
 requiresAuth: true
 initialState: ReadOnlyMode
 states:
@@ -91,6 +91,7 @@ states:
       target: VIEW_PORTFOLIO_DETAIL
 
   - name: AddingPortfolio
+    renders: VIEW_DASHBOARD
     description: "Invoking the portfolio creation subflow."
     subflow:
       flowId: FLOW_CREATE_PORTFOLIO_MANUAL
@@ -98,6 +99,7 @@ states:
       onCancel: ManageMode
 
   - name: EditingPortfolio
+    renders: VIEW_DASHBOARD
     description: "Invoking the portfolio update subflow."
     subflow:
       flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
@@ -105,6 +107,7 @@ states:
       onCancel: ManageMode
 
   - name: DeletingPortfolio
+    renders: VIEW_DASHBOARD
     description: "Invoking the portfolio deletion subflow."
     subflow:
       flowId: FLOW_DELETE_PORTFOLIO_MANUAL
@@ -117,9 +120,9 @@ initialState: ReadOnly
 states:
   - name: ReadOnly
     renders: VIEW_PORTFOLIO_DETAIL
-    description: "The user is viewing the portfolio's details."
+    description: "The user is viewing the portfolio's details in a read-only state."
     activates:
-      - flowId: "FLOW_VIEW_HOLDING_LIST"
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
         targetState: "ReadOnlyMode"
     events:
       USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
@@ -127,14 +130,48 @@ states:
       USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
 
   - name: ManageMode
-    description: "The user has entered manage mode for the portfolio."
-    subflow:
-      flowId: FLOW_UPDATE_PORTFOLIO_MANUAL
-      onCompletion: ReadOnly
-      onCancel: ReadOnly
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user has entered manage mode. The portfolio's fields are editable."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
+        targetState: "ManageMode"
+    events:
+      USER_CLICKS_SAVE: ValidateForm
+      USER_CLICKS_CANCEL: ReadOnly
+
+  - name: ValidateForm
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Performing client-side validation on the updated form inputs."
+    entryAction:
+      service: "ValidationService.validate(form)"
+      transitions:
+        valid: Submitting
+        invalid: FormError
+
+  - name: Submitting
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Submitting the updated portfolio data to the backend."
+    entryAction:
+      service: "PUT /api/users/me/portfolios/{portfolioId}"
+      transitions:
+        success: ReadOnly
+        failure: APIError
+
+  - name: FormError
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "An error message is shown indicating which form fields are invalid."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
+
+  - name: APIError
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "A generic error message is shown that the portfolio could not be updated."
+    events:
+      USER_DISMISSES_ERROR: ManageMode
 
   - name: DeletingPortfolio
-    description: "The user has clicked the 'Delete' button for the portfolio."
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user is invoking the portfolio deletion subflow."
     subflow:
       flowId: FLOW_DELETE_PORTFOLIO_MANUAL
       onCompletion: (exit flow)
@@ -163,7 +200,7 @@ states:
     renders: VIEW_PORTFOLIO_DETAIL
     description: "The user has entered manage mode. The portfolio's fields are editable."
     activates:
-      - flowId: "FLOW_VIEW_HOLDING_LIST"
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
         targetState: "ManageMode"
     events:
       USER_CLICKS_SAVE: ValidateForm
@@ -339,14 +376,14 @@ states:
       USER_CLICKS_ADD_HOLDING: LookupInput
 
   - name: LookupInput
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "The user is prompted to enter an identifier for the new holding."
     events:
       USER_SUBMITS_IDENTIFIER: SubmittingLookup
       USER_CLICKS_CANCEL: HoldingListView
 
   - name: SubmittingLookup
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "The system is searching for the financial instrument."
     entryAction:
       service: "FinancialInstrumentLookupService.search(identifier)"
@@ -355,14 +392,14 @@ states:
         failure: LookupError
 
   - name: ConfirmingHoldingCreation
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "The user is shown the details of the found instrument to confirm."
     events:
       USER_CONFIRMS_CREATION: SubmittingHolding
       USER_CLICKS_CANCEL: HoldingListView
 
   - name: SubmittingHolding
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "The system is creating the new, empty holding."
     entryAction:
       service: "POST /api/users/me/holdings"
@@ -385,18 +422,18 @@ states:
       onCancel: AddingLots
 
   - name: LookupError
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "An error is shown that the instrument could not be found."
     events:
       USER_DISMISSES_ERROR: LookupInput
 
   - name: APIError
-    renders: VIEW_SECURITY_LOOKUP_MODAL
+    renders: VIEW_INSTRUMENT_LOOKUP_MODAL
     description: "A generic error is shown that the holding could not be saved."
     events:
       USER_DISMISSES_ERROR: LookupInput
 ---
-flowId: FLOW_VIEW_HOLDING_LIST
+flowId: FLOW_VIEW_HOLDINGS_LIST
 requiresAuth: true
 initialState: ReadOnlyMode
 states:
@@ -469,7 +506,7 @@ states:
     renders: VIEW_HOLDING_DETAIL
     description: "The user is editing the holding and its lots."
     activates:
-      - flowId: "FLOW_MANAGE_LOTS_LIST"
+      - flowId: "FLOW_VIEW_LOTS_LIST"
         targetState: "ManageMode"
     events:
       USER_CLICKS_SAVE: SavingChanges
@@ -488,6 +525,7 @@ states:
         failure: ManageMode
 
   - name: AddingLot
+    renders: VIEW_HOLDING_DETAIL
     description: "Invoking the subflow to add a new lot."
     subflow:
       flowId: FLOW_CREATE_LOT_MANUAL
@@ -495,6 +533,7 @@ states:
       onCancel: ManageMode
 
   - name: EditingLot
+    renders: VIEW_HOLDING_DETAIL
     description: "Invoking the subflow to edit an existing lot."
     subflow:
       flowId: FLOW_UPDATE_LOT_MANUAL
@@ -502,6 +541,7 @@ states:
       onCancel: ManageMode
 
   - name: DeletingLot
+    renders: VIEW_HOLDING_DETAIL
     description: "Invoking the subflow to delete an existing lot."
     subflow:
       flowId: FLOW_DELETE_LOT_MANUAL
@@ -509,6 +549,7 @@ states:
       onCancel: ManageMode
 
   - name: DeletingHolding
+    renders: VIEW_HOLDING_DETAIL
     description: "Invoking the subflow to delete the entire holding."
     subflow:
       flowId: FLOW_DELETE_HOLDING_MANUAL
@@ -516,6 +557,7 @@ states:
       onCancel: ReadOnly
 
   - name: MovingHolding
+    renders: VIEW_HOLDING_DETAIL
     description: "Invoking the subflow to move the holding."
     subflow:
       flowId: FLOW_MOVE_HOLDING_MANUAL
@@ -707,7 +749,7 @@ states:
     events:
       USER_DISMISSES_ERROR: FormInput
 ---
-flowId: FLOW_MANAGE_LOTS_LIST
+flowId: FLOW_VIEW_LOTS_LIST
 requiresAuth: true
 initialState: ReadOnly
 states:

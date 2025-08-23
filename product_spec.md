@@ -265,7 +265,7 @@ Upon login, the user is presented with the Dashboard View, which lists all their
 
 The following diagram visualizes the state machine for the portfolio list view, including the transition between read-only and manage modes. 
 
-The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_PORTFOLIO_LIST`**.
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_PORTFOLIOS_LIST`**.
 
 ```mermaid
 stateDiagram-v2
@@ -352,7 +352,7 @@ stateDiagram-v2
     APIError --> ManageMode : USER_DISMISSES_ERROR
 
     note right of ManageMode
-      activates:<br>FLOW_VIEW_HOLDING_LIST<br>→ ManageMode
+      activates:<br>FLOW_VIEW_HOLDINGS_LIST<br>→ ManageMode
     end note
 ```
 
@@ -926,7 +926,7 @@ When a user selects a portfolio (or upon login, when the default portfolio is lo
 
 The following diagram visualizes the state machine for the holding list view, including the transition between read-only and manage modes. 
 
-The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_HOLDING_LIST`**.
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_HOLDINGS_LIST`**.
 
 ```mermaid
 stateDiagram-v2
@@ -1544,7 +1544,7 @@ The flow begins when a user is viewing the details of a holding. In the default 
 
 The following diagram illustrates the user flow for managing a list of lots within the context of the parent Holding Detail View. 
 
-The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_MANAGE_LOTS_LIST`**.
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_LOTS_LIST`**.
 
 ```mermaid
 stateDiagram-v2
