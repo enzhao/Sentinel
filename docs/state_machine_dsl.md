@@ -62,111 +62,127 @@ It is important to understand the difference between `subflow` and `activates` t
 -   **`activates`**: Use this for **non-blocking, parallel state synchronization**. When a state `activates` a state in another flow, the parent flow **does not pause**. It simply sends a one-way signal to a concurrent, independent state machine to change its state. This is for coordinating different components that are active on the same view at the same time.
     -   **When to use**: Use `activates` when Flow A needs to **tell** Flow B to change its state, but both flows continue to run side-by-side, independently.
 
-## 4. Example: Manual Holding Creation Flow
+## 4. Example: Portfolio Detail Flow
 
-The following example illustrates how the DSL is used to define the flow for a user manually adding a new holding to their portfolio.
+The following example illustrates how the DSL is used to define the flow for viewing and managing a single portfolio. This is a good example because it showcases multiple features of the DSL, including `renders`, `events`, `activates` (to control a child view), and `subflow` (to invoke other processes like deletion or rule management).
 
-### Manual Creation of a Holding
-An authenticated user can add a new holding to their portfolio from the dashboard's holding list view. The process first requires the user to find and select a financial instrument. Once the instrument is selected, the system creates the new holding, which is initially empty. The user is then immediately given the option to add one or more purchase lots to this new holding. A newly created holding can remain empty if the user chooses. After the user indicates they are finished, the view returns to the holding list.
+### 4.1. Visual Representation
 
-#### Visual Representation
+Mermaid Diagram for FLOW_VIEW_PORTFOLIO_DETAIL:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> HoldingListView
-    HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
-    LookupInput --> HoldingListView : USER_CLICKS_CANCEL
-    LookupInput --> SubmittingLookup : USER_SUBMITS_IDENTIFIER
+    [*] --> ReadOnly
 
-    SubmittingLookup --> ConfirmingHoldingCreation : success
-    SubmittingLookup --> LookupError : failure
-
-    ConfirmingHoldingCreation --> SubmittingHolding : USER_CONFIRMS_CREATION
-    ConfirmingHoldingCreation --> HoldingListView : USER_CLICKS_CANCEL
-
-    SubmittingHolding --> AddingLots : success
-    SubmittingHolding --> APIError : failure
-
-    state "Adding Lots" as AddingLots {
-        [*] --> ReadyToAdd
-        ReadyToAdd --> InvokingLotCreation : USER_CLICKS_ADD_LOT (see Section 5.2.1.1.2)
-        InvokingLotCreation --> ReadyToAdd : onCompletion / onCancel
+    state "Viewing" as ReadOnly {
+        description: "User is viewing portfolio details"
     }
-    
-    AddingLots --> HoldingListView : USER_CLICKS_FINISH
 
-    LookupError --> LookupInput : USER_DISMISSES_ERROR
-    APIError --> LookupInput : USER_DISMISSES_ERROR
+    state "Editing" as ManageMode {
+        [*] --> EditingForm
+        EditingForm --> ValidateForm : USER_CLICKS_SAVE
+        ValidateForm --> Submitting : valid
+        ValidateForm --> FormError : invalid
+        Submitting --> ReadOnly : success
+        Submitting --> APIError : failure
+        FormError --> EditingForm : USER_DISMISSES_ERROR
+        APIError --> EditingForm : USER_DISMISSES_ERROR
+    }
+
+    ReadOnly --> ManageMode : USER_CLICKS_EDIT_PORTFOLIO
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
+    
+    ReadOnly --> DeletingPortfolio : USER_CLICKS_DELETE
+    DeletingPortfolio --> ReadOnly : onCancel
+    DeletingPortfolio --> [*] : onCompletion
+
+    ReadOnly --> ManagingPortfolioRules : USER_CLICKS_MANAGE_RULES
+    ManagingPortfolioRules --> ReadOnly : onCompletion / onCancel
+
+    ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
+    SettingAsDefault --> ReadOnly : success / failure
 ```
 
-#### State Machine for Manual Holding Creation
+### 4.2. State Machine Definition
 
 ```yaml
-flowId: FLOW_ADD_HOLDING_MANUAL
+flowId: FLOW_VIEW_PORTFOLIO_DETAIL
 requiresAuth: true
-initialState: HoldingListView
+initialState: ReadOnly
 states:
-  - name: HoldingListView
-    renders: VIEW_PORTFOLIO_HOLDINGS # This flow starts on the main holdings list view.
-    description: "The user is viewing the list of holdings in their default portfolio."
+  - name: ReadOnly
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user is viewing the portfolio's details in a read-only state."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
+        targetState: "ReadOnlyMode"
     events:
-      USER_CLICKS_ADD_HOLDING: LookupInput
+      USER_CLICKS_EDIT_PORTFOLIO: ManageMode
+      USER_CLICKS_DELETE: DeletingPortfolio
+      USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
+      USER_CLICKS_MANAGE_RULES: ManagingPortfolioRules
 
-  - name: LookupInput
-    renders: VIEW_SECURITY_LOOKUP_MODAL # This state brings up the lookup modal.
-    description: "The user is prompted to enter a Ticker, ISIN, or WKN for the new holding."
+  - name: ManagingPortfolioRules 
+    description: "Invoking the subflow to manage portfolio-level rules."
+    subflow:
+      flowId: FLOW_MANAGE_PORTFOLIO_RULES
+      onCompletion: ReadOnly
+      onCancel: ReadOnly
+
+  - name: ManageMode
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user has entered manage mode. The portfolio's fields and its holdings list are editable."
+    activates:
+      - flowId: "FLOW_VIEW_HOLDINGS_LIST"
+        targetState: "ManageMode"
     events:
-      USER_SUBMITS_IDENTIFIER: SubmittingLookup
-      USER_CLICKS_CANCEL: HoldingListView
+      USER_CLICKS_SAVE: ValidateForm
+      USER_CLICKS_CANCEL: ReadOnly
 
-  - name: SubmittingLookup
-    renders: VIEW_SECURITY_LOOKUP_MODAL # The lookup modal remains visible, showing a loading state.
-    description: "The system is searching for the financial instrument."
+  - name: ValidateForm
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Performing client-side validation on the updated form inputs."
     entryAction:
-      service: "FinancialInstrumentLookupService.search(identifier)"
+      service: "ValidationService.validate(form)"
       transitions:
-        success: ConfirmingHoldingCreation
-        failure: LookupError
+        valid: Submitting
+        invalid: FormError
 
-  - name: ConfirmingHoldingCreation
-    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show confirmation details.
-    description: "The user is shown the details of the found instrument and asked to confirm its creation."
-    events:
-      USER_CONFIRMS_CREATION: SubmittingHolding
-      USER_CLICKS_CANCEL: HoldingListView
-
-  - name: SubmittingHolding
-    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal remains visible, showing a loading state.
-    description: "The system is creating the new, empty holding."
+  - name: Submitting
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Submitting the updated portfolio data to the backend."
     entryAction:
-      service: "POST /api/users/me/holdings"
+      service: "PUT /api/users/me/portfolios/{portfolioId}"
       transitions:
-        success: AddingLots
+        success: ReadOnly
         failure: APIError
 
-  - name: AddingLots
-    renders: VIEW_HOLDING_DETAIL # The user is now on the new holding's detail page.
-    description: "The user is viewing the newly created holding and can now optionally add one or more purchase lots."
+  - name: FormError
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "An error message is shown indicating which form fields are invalid."
     events:
-      USER_CLICKS_ADD_LOT: AddingSingleLot
-      USER_CLICKS_FINISH: HoldingListView
-
-  - name: AddingSingleLot
-    description: "The system is now invoking the lot creation subflow."
-    subflow:
-      flowId: FLOW_CREATE_LOT_MANUAL
-      onCompletion: AddingLots
-      onCancel: AddingLots
-
-  - name: LookupError
-    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show an error message.
-    description: "The user is shown an error message that the instrument could not be found."
-    events:
-      USER_DISMISSES_ERROR: LookupInput
+      USER_DISMISSES_ERROR: ManageMode
 
   - name: APIError
-    renders: VIEW_SECURITY_LOOKUP_MODAL # The modal updates to show a generic API error.
-    description: "The user is shown a generic error message that the holding could not be saved."
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "A generic error message is shown that the portfolio could not be updated."
     events:
-      USER_DISMISSES_ERROR: LookupInput
+      USER_DISMISSES_ERROR: ManageMode
+
+  - name: DeletingPortfolio
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "The user is invoking the portfolio deletion subflow."
+    subflow:
+      flowId: FLOW_DELETE_PORTFOLIO_MANUAL
+      onCompletion: (exit flow)
+      onCancel: ReadOnly
+
+  - name: SettingAsDefault
+    renders: VIEW_PORTFOLIO_DETAIL
+    description: "Submitting a request to set this portfolio as the user's default."
+    entryAction:
+      service: "PUT /api/users/me/settings (setting new defaultPortfolioId)"
+      transitions:
+        success: ReadOnly
+        failure: ReadOnly
 ```

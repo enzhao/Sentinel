@@ -1,3 +1,86 @@
+# Flow for a public, unauthenticated user.
+flowId: FLOW_UNAUTHENTICATED_NAV
+requiresAuth: false
+initialState: HomePage
+states:
+  - name: HomePage
+    renders: VIEW_HOME_PAGE
+    description: "The user is viewing the public home page."
+    events:
+      USER_CLICKS_LOGIN: NavigatingToLogin
+
+  - name: NavigatingToLogin
+    description: "The user is being presented with the login form."
+    subflow:
+      flowId: FLOW_LOGIN
+      onCompletion: (exit flow) # Successful login exits this flow and enters the authenticated app state.
+      onCancel: HomePage
+---
+# Flow for the login process.
+flowId: FLOW_LOGIN
+requiresAuth: false
+initialState: FormInput
+states:
+  - name: FormInput
+    renders: VIEW_LOGIN_FORM
+    description: "The user is prompted to enter their email and password."
+    events:
+      USER_SUBMITS_LOGIN: Submitting
+      USER_CLICKS_CANCEL: (exit flow with onCancel)
+
+  - name: Submitting
+    renders: VIEW_LOGIN_FORM
+    description: "The frontend is sending credentials to Firebase Authentication."
+    entryAction:
+      service: "FirebaseAuthentication.signInWithEmailAndPassword()"
+      transitions:
+        success: Success
+        failure: AuthError
+
+  - name: Success
+    description: "Login was successful. The user will be redirected to the dashboard."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_DASHBOARD # Or a state that triggers this navigation.
+
+  - name: AuthError
+    renders: VIEW_LOGIN_FORM
+    description: "An authentication error from Firebase is shown to the user."
+    events:
+      USER_DISMISSES_ERROR: FormInput
+---
+# Flow for logging out an authenticated user.
+flowId: FLOW_LOGOUT
+requiresAuth: true
+initialState: Idle
+states:
+  - name: Idle
+    description: "The user is logged in and can trigger the logout process."
+    events:
+      USER_CLICKS_LOGOUT: ConfirmingLogout
+
+  - name: ConfirmingLogout
+    renders: VIEW_CONFIRM_LOGOUT_MODAL
+    description: "A modal appears asking the user to confirm they want to log out."
+    events:
+      USER_CONFIRMS_LOGOUT: SubmittingLogout
+      USER_CLICKS_CANCEL: Idle
+
+  - name: SubmittingLogout
+    renders: VIEW_CONFIRM_LOGOUT_MODAL
+    description: "The frontend is signing the user out with Firebase."
+    entryAction:
+      service: "FirebaseAuthentication.signOut()"
+      transitions:
+        success: Success
+        failure: Idle # If logout fails, stay logged in.
+
+  - name: Success
+    description: "Logout was successful. The user will be redirected to the home page."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_HOME_PAGE
+---
 # Flow for managing portfolio-level trading rules
 flowId: FLOW_MANAGE_PORTFOLIO_RULES
 requiresAuth: true
@@ -156,7 +239,7 @@ states:
       - flowId: "FLOW_VIEW_HOLDINGS_LIST"
         targetState: "ReadOnlyMode"
     events:
-      USER_CLICKS_MANAGE_PORTFOLIO: ManageMode
+      USER_CLICKS_EDIT: ManageMode
       USER_CLICKS_DELETE: DeletingPortfolio
       USER_CLICKS_SET_AS_DEFAULT: SettingAsDefault
       USER_CLICKS_MANAGE_RULES: ManagingPortfolioRules

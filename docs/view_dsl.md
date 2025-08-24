@@ -39,24 +39,24 @@ Each view is defined by a root object with a unique `viewId`.
 
 ### 3.1. Top-Level Keywords
 
-- `viewId` (String, Required): A unique identifier for the view, following the `VIEW_XXXX` convention (e.g., `VIEW_2000`, `VIEW_PORTFOLIO_DETAIL`).
+- `viewId` (String, Required): A unique identifier for the view, following the `VIEW_XXXX` convention (e.g., `VIEW_DASHBOARD`, `VIEW_PORTFOLIO_DETAIL`).
 - `title` (String, Required): The user-facing title of the view, often used in the AppBar or as the page title.
-- `requiresAuth` (Boolean, Required): If `true`, the user must be authenticated to access this view. If `false`, it is a public view (e.g., Login, Signup).
+- `requiresAuth` (Boolean, Required): If `true`, the user must be authenticated to access this view. If `false`, it is a public view.
 - `description` (String, Required): A human-readable explanation of the view's purpose.
 - `data` (Array, Optional): A list of data objects the view requires to render. Each object has:
     - `name` (String): The variable name for the data (e.g., "portfolio").
     - `type` (String): The data type (e.g., "Portfolio", "Array<Holding>").
     - `description` (String): A description of the data.
-- `components` (Array, Required): A list of UI components that make up the view's layout. Typically, this will be a single "Layout Component".
+- `components` (Array, Required): A list of UI components that make up the view's layout.
 
 ### 3.2. Component Object Keywords
 
 Each object in the `components` array represents a single UI element.
 
-- `type` (String, Required): The type of the component. This can be the name of a **primitive component** (e.g., `Button`, `TextField`) or the **`viewId` of another view** to include it compositionally. See the "View Composition" section for details.
+- `type` (String, Required): The type of the component. This can be the name of a **primitive component** (e.g., `Button`, `TextField`) or the **`viewId` of another view** to include it compositionally.
 - `shownIf` (String, Optional): A declarative condition, based on the view's `data`, that determines if the component is rendered. (e.g., `"portfolio.holdings.length > 0"`).
 - `props` (Object, Optional): A key-value map of static properties passed to the component (e.g., `title: "My Portfolio"`).
-- `bindings` (Object, Optional): A key-value map that declaratively binds data from the `data` block to the component's properties (e.g., `totalValue: "portfolio.computed.currentValue"`). This is also used to pass data to child views.
+- `bindings` (Object, Optional): A key-value map that declaratively binds data from the `data` block to the component's properties (e.g., `totalValue: "portfolio.computed.currentValue"`).
 - `item` (Object, Optional): Used for list components. It describes how to render each item in a collection.
     - `forEach` (String, Required): Defines the loop variable and the data source (e.g., `"holding in portfolio.holdings"`).
     - `component` (Object, Required): A standard component object definition for the list item.
@@ -79,59 +79,31 @@ Each object in the `components` array represents a single UI element.
     - **Key:** The name of the slot (e.g., `header`, `body`, `fab`).
     - **Value:** An array of component objects to be rendered inside that slot.
 
-## 4. The Layout Component Pattern
+## 4. Core Patterns: Composition and Layout
 
-To ensure a consistent structure across different views, we use a "Layout Component" pattern. Instead of listing every component (like AppBars and FABs) in every view, a view's `components` array will typically contain a single, top-level Layout Component (e.g., `StandardLayout`).
+To promote a modular, consistent, and DRY (Don't Repeat Yourself) design, the View DSL relies on two core patterns: View Composition and the Layout Component.
 
-This Layout Component defines named `slots` (like `header`, `body`, and `fab`), and the view places all its content components inside these slots. This approach makes the overall structure of the application explicit, reusable, and easy to understand.
+### 4.1. View Composition and Reusability
 
-## 5. View Composition and Reusability
+The most powerful feature of the DSL is the ability to include one view within another. This allows complex UIs to be composed from smaller, self-contained, and reusable view components.
 
-To promote modularity and a DRY (Don't Repeat Yourself) design, the View DSL supports the inclusion of one view within another. This allows complex UIs to be composed from smaller, self-contained, and reusable view components.
+- **The Inclusion Convention**: If a component's `type` value matches the `viewId` of another defined view, it is treated as an **inclusion** of that view.
+- **Passing Data to Child Views**: A parent view passes data to an included child view using the standard `bindings` keyword. The child view must declare the data it requires in its own `data` block. The parent view's `bindings` then fulfill this data contract.
 
-### 5.1. The Inclusion Convention
+### 4.2. The Layout Component Pattern
 
-The mechanism for inclusion is simple and declarative:
-> If a component's `type` value matches the `viewId` of another defined view, it is treated as an **inclusion** of that view.
+To ensure a consistent structure across different screens, a view's `components` array will typically contain a single, top-level Layout Component (e.g., `StandardLayout`). This component defines named `slots` (like `header`, `body`, and `fab`), and the view places all its content components inside these slots. This approach makes the overall structure of the application explicit and easy to understand.
 
-### 5.2. Passing Data to Child Views
+## 5. Example: Holding Detail View
 
-A parent view passes data to an included child view using the standard `bindings` keyword. The child view must declare the data it requires in its own `data` block. The parent view's `bindings` then fulfill this data contract.
-
-### 5.3. Example of View Composition
-
-Here, `VIEW_HOLDING_DETAIL` is a parent view that needs to display a list of lots. Instead of defining the list inline, it **includes** the `VIEW_LOTS_LIST`.
-
-**Child View (`VIEW_LOTS_LIST`)**
-
-This view is defined once. It declares that it needs a list of `lots` and a `mode` to function.
+The following example for `VIEW_HOLDING_DETAIL` illustrates how all the core patterns of the DSL work together. It uses a `StandardLayout`, composes other views like `VIEW_APP_BAR` and `VIEW_LOTS_LIST`, passes data via `bindings`, and defines a Floating Action Button with a speed-dial menu.
 
 ```yaml
-viewId: VIEW_LOTS_LIST
-requiresAuth: true
-description: "A reusable view component that displays a list of purchase lots."
-
-data:
-  # This view declares its data dependencies.
-  - name: "lots"
-    type: "Array<Lot>"
-  - name: "mode"
-    type: "String"
-
-components:
-  - type: "LotList"
-    # ... (rest of the list definition)
-``` 
-
-**Parent View (`VIEW_HOLDING_DETAIL`)**
-
-This view includes `VIEW_LOTS_LIST` and uses `bindings` to pass the required data down to it.
-
-```yaml
+# A detail view for a specific holding, which also embeds the Lot List component.
 viewId: VIEW_HOLDING_DETAIL
 title: "Holding Details"
 requiresAuth: true
-description: "A detail view for a specific holding."
+description: "A detail view for a specific holding, which also embeds the Lot List component."
 
 data:
   - name: "holding"
@@ -142,80 +114,47 @@ data:
 components:
   - type: "StandardLayout"
     slots:
+      # It includes the reusable AppBar and binds the required data.
+      header:
+        - type: "VIEW_APP_BAR"
+          bindings:
+            title: "holding.ticker"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
+      
+      # The body contains primitive components and another composed view.
       body:
         - type: "HoldingSummaryCard"
-          # ...
-        # Here we include the child view by using its viewId as the type.
+          bindings:
+            totalCost: "holding.computed.totalCost"
+            currentValue: "holding.computed.currentValue"
+            preTaxGainLoss: "holding.computed.preTaxGainLoss"
+
         - type: "VIEW_LOTS_LIST"
-          # We use bindings to pass data from the parent (holding, currentMode)
-          # to the child's declared data requirements (lots, mode).
           bindings:
             lots: "holding.lots"
             mode: "currentMode"
-```
-
-
-## 6. Example: Holding Overview View
-
-The following example illustrates how the DSL is used to define the main dashboard view, using the Layout Component pattern.
-
-```yaml
-viewId: VIEW_2000
-title: "Holding Overview"
-requiresAuth: true
-description: "The main dashboard view, displaying a summary of the user's default portfolio and a list of their holdings."
-
-data:
-  - name: "portfolio"
-    type: "Portfolio"
-    description: "The user's default portfolio, including a summary list of its holdings."
-
-components:
-  - type: "StandardLayout"
-    slots:
-      # The header slot contains the AppBar.
-      header:
-        - type: "AppBar"
-          props:
-            title: "My Portfolio"
-
-      # The body slot contains the main content of the view.
-      body:
-        - type: "PortfolioSummaryCard"
-          shownIf: "portfolio.holdings.length > 0"
-          bindings:
-            totalValue: "portfolio.computed.currentValue"
-            gainLoss: "portfolio.computed.preTaxGainLoss"
-
-        - type: "HoldingList"
-          shownIf: "portfolio.holdings.length > 0"
-          item:
-            forEach: "holding in portfolio.holdings"
-            component:
-              type: "HoldingListItem"
-              bindings:
-                name: "holding.ticker"
-                value: "holding.computed.currentValue"
-              events:
-                onTap:
-                  name: "USER_SELECTS_HOLDING"
-                  payload:
-                    holdingId: "holding.holdingId"
-
-        - type: "EmptyState"
-          shownIf: "portfolio.holdings.length == 0"
-          props:
-            title: "Your portfolio is empty"
-            message: "Add a holding or import a file to get started."
-
-      # The fab slot contains the Floating Action Button.
+      
+      # The FAB uses a speed-dial menu for contextual actions.
       fab:
         - type: "FloatingActionButton"
           props:
-            icon: "add"
+            icon: "more_vert"
           actions:
-            - label: "Add Holding"
-              event: "USER_CLICKS_ADD_HOLDING"
-            - label: "Import File"
-              event: "USER_CLICKS_IMPORT"
+            - icon: "rule"
+              label: "Manage Rules"
+              event: "USER_CLICKS_MANAGE_RULES"
+            - icon: "edit"
+              label: "Edit Holding"
+              event: "USER_CLICKS_EDIT"
+            - icon: "swap_horiz"
+              label: "Move Holding"
+              event: "USER_CLICKS_MOVE"
+            - icon: "delete"
+              label: "Delete Holding"
+              event: "USER_CLICKS_DELETE"
 ```

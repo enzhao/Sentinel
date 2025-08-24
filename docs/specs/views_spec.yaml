@@ -1,5 +1,119 @@
-# This is the main dashboard view after a user logs in. It serves as the
-# primary navigation hub for managing all of their portfolios.
+# This is a reusable, self-contained view for the main application AppBar.
+# It is included by parent views, which pass the required title and actions
+# down to it via data bindings.
+viewId: VIEW_APP_BAR
+requiresAuth: false # The bar itself is public; its actions are controlled by the parent.
+description: "The main application navigation and action bar."
+
+data:
+  - name: "title"
+    type: "String"
+  - name: "leadingAction"
+    type: "Object"
+  - name: "actions"
+    type: "Array<Object>"
+
+components:
+  - type: "AppBar"
+    bindings:
+      title: "title"
+      leadingAction: "leadingAction"
+      actions: "actions"
+---
+# The public-facing home page for unauthenticated users.
+viewId: VIEW_HOME_PAGE
+title: "Sentinel Home"
+requiresAuth: false
+description: "The main entry point for unauthenticated users."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        # AppBar is an included view.
+        - type: "VIEW_APP_BAR"
+          bindings:
+            title: "Sentinel"
+            actions:
+              - label: "Login"
+                event: "USER_CLICKS_LOGIN"
+      body:
+        - type: "HeroSection"
+          props:
+            title: "Automate Your Investment Strategy."
+            subtitle: "Sentinel helps you follow your investment plan with discipline by monitoring the market for you. Define your rules, get notified, and stay in control."
+---
+# A modal form for user login.
+viewId: VIEW_LOGIN_FORM
+title: "Login"
+requiresAuth: false
+description: "A form for users to enter their email and password to authenticate."
+
+data:
+  - name: "formState"
+    type: "Object"
+    description: "{ email: '', password: '', error: null }"
+
+components:
+  - type: "ModalFormLayout"
+    props:
+      title: "Login to Sentinel"
+    slots:
+      body:
+        - type: "TextField"
+          props:
+            label: "Email"
+            type: "email"
+          bindings:
+            value: "formState.email"
+        - type: "TextField"
+          props:
+            label: "Password"
+            type: "password"
+          bindings:
+            value: "formState.password"
+        - type: "ErrorMessage"
+          shownIf: "formState.error"
+          bindings:
+            message: "formState.error"
+      actions:
+        - type: "Button"
+          props:
+            label: "Cancel"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_CANCEL"
+        - type: "Button"
+          props:
+            label: "Login"
+            variant: "contained"
+          events:
+            onClick:
+              name: "USER_SUBMITS_LOGIN"
+---
+# A modal dialog to confirm the user wants to log out.
+viewId: VIEW_CONFIRM_LOGOUT_MODAL
+title: "Confirm Logout"
+requiresAuth: true
+description: "A modal that asks the user to confirm they want to end their session."
+
+components:
+  - type: "ModalLayout"
+    slots:
+      body:
+        - type: "Text"
+          props:
+            content: "Are you sure you want to log out?"
+      footer:
+        - type: "DialogActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL"
+            - label: "Logout"
+              event: "USER_CONFIRMS_LOGOUT"
+---
+# This is the main dashboard view after a user logs in.
 viewId: VIEW_DASHBOARD
 title: "My Portfolios"
 requiresAuth: true
@@ -8,20 +122,21 @@ description: "The main dashboard, displaying a list of all user portfolios."
 data:
   - name: "portfolios"
     type: "Array<Portfolio>"
-    description: "A list of all portfolios owned by the user."
   - name: "currentMode"
-    type: "String" # e.g., 'ReadOnlyMode' or 'ManageMode'
-    description: "The current state of the view, controlled by the state machine."
+    type: "String"
 
 components:
   - type: "StandardLayout"
     slots:
       header:
-        - type: "AppBar"
-          props:
+        # AppBar is an included view.
+        - type: "VIEW_APP_BAR"
+          bindings:
             title: "My Portfolios"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
       body:
-        # We include the reusable list of portfolios.
         - type: "VIEW_PORTFOLIOS_LIST"
           bindings:
             portfolios: "portfolios"
@@ -184,9 +299,7 @@ components:
             payload:
               portfolioId: "portfolio.portfolioId"
 ---
-# This is the "Portfolio Detail" view, displayed when a user selects
-# a single portfolio from the dashboard. Its primary job is to display the
-# list of holdings within that specific portfolio.
+# The detail view for a single portfolio.
 viewId: VIEW_PORTFOLIO_DETAIL
 title: "Portfolio Detail"
 requiresAuth: true
@@ -195,37 +308,40 @@ description: "The detail view for a single portfolio, displaying its list of hol
 data:
   - name: "portfolio"
     type: "Portfolio"
-    description: "The selected portfolio, including its summary list of holdings."
   - name: "currentMode"
-    type: "String" # e.g., 'ReadOnlyMode' or 'ManageMode'
-    description: "The current state of the view, controlled by the state machine."
+    type: "String"
 
 components:
   - type: "StandardLayout"
     slots:
       header:
-        - type: "AppBar"
+        # AppBar is an included view.
+        - type: "VIEW_APP_BAR"
           bindings:
             title: "portfolio.name"
-          leadingAction:
-            icon: "arrow_back"
-            event: "USER_CLICKS_BACK" # Allows navigation back to the dashboard
-          actions: # NEW: Actions added to the AppBar
-            - icon: "rule"
-              event: "USER_CLICKS_MANAGE_RULES"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "VIEW_HOLDINGS_LIST"
           bindings:
             holdings: "portfolio.holdings"
             mode: "currentMode"
       fab:
+        # FAB holds primary actions for the portfolio.
         - type: "FloatingActionButton"
           props:
-            icon: "edit"
-          events:
-            # Puts the holding list into 'ManageMode'
-            onClick:
-              name: "USER_CLICKS_MANAGE_HOLDINGS"
+            icon: "more_vert"
+          actions:
+            - icon: "rule"
+              label: "Manage Rules"
+              event: "USER_CLICKS_MANAGE_RULES"
+            - icon: "edit"
+              label: "Edit Portfolio"
+              event: "USER_CLICKS_EDIT"
 ---
 # This is the unified form for both creating and editing a portfolio.
 viewId: VIEW_PORTFOLIO_FORM
@@ -470,8 +586,7 @@ components:
             payload:
               holdingId: "holding.holdingId"
 ---
-# It includes the
-# VIEW_LOTS_LIST and passes the required data down to it via bindings.
+# The detail view for a specific holding.
 viewId: VIEW_HOLDING_DETAIL
 title: "Holding Details"
 requiresAuth: true
@@ -480,24 +595,23 @@ description: "A detail view for a specific holding, which also embeds the Lot Li
 data:
   - name: "holding"
     type: "Holding"
-    description: "The selected holding to display, including its lots."
   - name: "currentMode"
     type: "String"
-    description: "The current state of the view, controlled by the state machine."
 
 components:
   - type: "StandardLayout"
     slots:
       header:
-        - type: "AppBar"
+        # AppBar is an included view.
+        - type: "VIEW_APP_BAR"
           bindings:
             title: "holding.ticker"
-          leadingAction:
-            icon: "arrow_back"
-            event: "USER_CLICKS_BACK"
-          actions:
-            - icon: "rule"
-              event: "USER_CLICKS_MANAGE_RULES"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "HoldingSummaryCard"
           bindings:
@@ -505,27 +619,28 @@ components:
             currentValue: "holding.computed.currentValue"
             preTaxGainLoss: "holding.computed.preTaxGainLoss"
 
-        # This is the new, cleaner way to include the Lot List view.
         - type: "VIEW_LOTS_LIST"
           bindings:
-            # Pass the required data down to the child view.
             lots: "holding.lots"
             mode: "currentMode"
       fab:
+        # FAB now holds primary actions for the holding.
         - type: "FloatingActionButton"
           props:
-            icon: "edit"
-          events:
-            onClick:
-              name: "USER_CLICKS_EDIT"
+            icon: "more_vert"
           actions:
-            - label: "Delete Holding"
-              icon: "delete"
-              event: "USER_CLICKS_DELETE"
-            - label: "Move Holding"
-              icon: "swap_horiz"
+            - icon: "rule"
+              label: "Manage Rules"
+              event: "USER_CLICKS_MANAGE_RULES"
+            - icon: "edit"
+              label: "Edit Holding"
+              event: "USER_CLICKS_EDIT"
+            - icon: "swap_horiz"
+              label: "Move Holding"
               event: "USER_CLICKS_MOVE"
-
+            - icon: "delete"
+              label: "Delete Holding"
+              event: "USER_CLICKS_DELETE"
 ---
 # This is the unified form for both creating and editing a holding.
 # Creation is a two-step process: lookup then confirm. This form is for the second step.
@@ -694,9 +809,7 @@ components:
           onClick:
             name: "USER_CLICKS_ADD_LOT"
 ---
-# NEW: This view displays the details of a single lot in a read-only format.
-# It serves as an intermediary screen from which a user can decide to edit,
-# delete, or navigate back to the holding list.
+# The detail view for a single lot.
 viewId: VIEW_LOT_DETAIL
 title: "Lot Details"
 requiresAuth: true
@@ -705,22 +818,23 @@ description: "A read-only detail view for a specific purchase lot."
 data:
   - name: "lot"
     type: "Lot"
-    description: "The selected lot to display."
   - name: "holdingCurrency"
     type: "String"
-    description: "The currency of the parent holding."
 
 components:
   - type: "StandardLayout"
     slots:
       header:
-        - type: "AppBar"
-          props:
+        # AppBar is an included view.
+        - type: "VIEW_APP_BAR"
+          bindings:
             title: "Lot Details"
-          # The 'Back' button is part of the AppBar for navigation
-          leadingAction:
-            icon: "arrow_back"
-            event: "USER_CLICKS_BACK"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "InfoField"
           props:
@@ -738,7 +852,6 @@ components:
           bindings:
             value: "lot.purchasePrice"
             suffix: "holdingCurrency"
-      # This slot contains primary actions for the view
       fab:
         - type: "FloatingActionButton"
           props:
@@ -746,13 +859,12 @@ components:
           events:
             onClick:
               name: "USER_CLICKS_EDIT"
-          # Secondary actions can be defined for a speed-dial menu
           actions:
             - label: "Delete Lot"
               icon: "delete"
               event: "USER_CLICKS_DELETE"
 ---
-# REVISED: This is the unified form for both creating and editing a lot,
+# This is the unified form for both creating and editing a lot,
 # as per your request. It dynamically changes its title and pre-fills
 # data based on the presence of a lot.lotId.
 viewId: VIEW_LOT_FORM
