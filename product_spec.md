@@ -2241,120 +2241,310 @@ sequenceDiagram
 
 ## 7. Market Monitoring and Notification
 
-This section details the automated monitoring of market data and generation of notifications when rules are triggered.
+This chapter details the automated backend processes that form the core of Sentinel's intelligence. These systems are responsible for monitoring market data, evaluating user-defined strategies against that data, and generating persistent, historical alerts and user-facing notifications when a strategy's conditions are met. Unlike other chapters, this section describes a non-interactive, scheduled process.
 
-### 7.1. Monitoring and Notification Data Model and Business Process
+### 7.1. Business Process
 
-**Associated Data Models**:
-- `MarketData` (fetched daily):
-  - `ticker`: String.
-  - `closePrice`: EUR.
-  - `highPrice`: EUR (52-week high for DRAWDOWN).
-  - `sma200`: EUR (200-day simple moving average).
-  - `vwma200`: EUR (200-day volume weighted moving average).
-  - `rsi14`: Number (14-day RSI).
-  - `vixClose`: Number (VIX closing value).
-- `Alert`:
-  - `alertId`: Unique UUID.
-  - `ruleId`: UUID.
-  - `holdingId`: UUID.
-  - `triggeredAt`: ISODateTime.
-  - `marketData`: Relevant data at trigger time.
-  - `taxInfo`: For SELL rules, includes lot-specific tax calculations.
-  - `notificationStatus`: Enum (`PENDING`, `SENT`, `FAILED`).
+The monitoring and notification system runs as an automated, daily batch process. The entire sequence is triggered by a scheduler and requires no user interaction.
 
-**Business Process**:
-1. **Monitoring**:
-   - Daily, after European market close, the Monitoring Engine fetches the latest raw price data (OHLCV) for all unique tickers across all user holdings.
-   - The engine then calculates all required technical indicators (SMA, RSI, MACD, etc.).
-   - For each holding with `ENABLED` rules, its rules are evaluated against the newly calculated `MarketData` and the user's portfolio data.
-2. **Alert Generation**:
-   - If all conditions for a rule are met, an `Alert` is created with relevant `marketData` and `taxInfo` (for SELL rules, computed using FIFO).
-   - Alert is queued for notification.
-3. **Notification**:
-   - Notification Service sends alerts via email and/or push notification.
-   - `notificationStatus` updated to `SENT` or `FAILED`.
+1. **Scheduled Trigger**: The process is initiated once per day, after the primary markets (e.g., European and US markets) have closed. This is managed by Google Cloud Scheduler.
 
-**Sequence Diagram for Monitoring and Notification**
+1. **Data Synchronization**: The Monitoring Engine first fetches the latest raw daily price data (Open, High, Low, Close, Volume) for every unique ticker present in user portfolios, as well as for all system-required tickers (e.g., VIX).
+
+1. **Indicator Calculation**: Using the newly fetched raw data, the engine calculates the full suite of required technical indicators (SMA, VWMA, RSI, MACD, etc.) for each ticker. The raw data and the calculated indicators are then saved to the shared `marketData` cache in Firestore.
+
+1. **Strategy Evaluation Loop**: Once the market data is prepared, the engine begins the main evaluation loop. It systematically iterates through every holding that has an active investment strategy.
+
+1. **Effective Rule Retrieval**: For each holding, the engine performs the "effective rule set" lookup as defined in Chapter 6. It first checks for a specific `RuleSet` attached to the holding. If none is found, it falls back to the `RuleSet` of the parent portfolio. If neither exists, the holding is skipped.
+
+1. **Condition Check**: The engine evaluates all `ENABLED` rules within the effective `RuleSet`. It compares the conditions of each rule (e.g., `RSI_LEVEL below 30`) against the prepared data in the `marketData` cache.
+
+1. **Alert Generation & Persistence**: If all conditions for a rule are met (respecting the `logicalOperator`), the engine generates a rich `Alert` document.
+    - For `SELL` alerts, this includes calculating the potential pre-tax and after-tax gains by applying the correct, asset-specific tax rules from the `tax_config.yaml`.
+    - This new `Alert` document is immediately saved to a top-level `alerts` collection in Firestore, creating a permanent historical record.
+
+1. **Notification Delivery**: The creation of a new `Alert` with a `PENDING` status triggers the Notification Service, which sends a formatted message to the user via their preferred channels (e.g., email) and updates the alert's status to `SENT` or `FAILED`.
+
+- **Sequence Diagram for End-to-End Monitoring and Notification Process**
 
 ```mermaid
 sequenceDiagram
     participant Scheduler as Cloud Scheduler
     participant Engine as Monitoring Engine
-    participant DB as Database
     participant API as Market Data API
+    participant DB as Database (Firestore)
     participant Notify as Notification Service
-    Scheduler->>Engine: Trigger Daily Job
+
+    Scheduler->>Engine: 1. Trigger Daily Monitoring Job
     activate Engine
-    Engine->>DB: Query 'holdings' collection for all holdings
-    activate DB
-    DB-->>Engine: Return Holdings and their Rules
-    deactivate DB
-    Engine->>API: Fetch Market Data for all relevant Tickers
-    activate API
-    API-->>Engine: Return Market Data
-    deactivate API
-    Engine->>Engine: Evaluate Rules against Holdings
-    alt Rule Triggered
-        Engine->>DB: Create Alert
+
+    rect rgb(220, 240, 255)
+        Note over Engine, DB: Data Preparation
+        Engine->>API: 2. Fetch latest raw data (OHLCV)
+        activate API
+        API-->>Engine: 3. Return raw data
+        deactivate API
+
+        Engine->>Engine: 4. Calculate technical indicators (SMA, RSI, etc.)
+
+        Engine->>DB: 5. Save enriched data to /marketData cache
         activate DB
-        DB-->>Engine: Confirm Alert Creation
+        DB-->>Engine: 6. Confirm cache updated
         deactivate DB
-        Engine->>Notify: Send Notification
-        activate Notify
-        Notify-->>Engine: Confirm Sent
-        deactivate Notify
     end
+
+    rect rgb(230, 255, 230)
+        Note over Engine, DB: Rule Evaluation
+        Engine->>DB: 7. Get all holdings with active strategies
+        activate DB
+        DB-->>Engine: 8. Return holdings & ruleSetIds
+        deactivate DB
+
+        loop For each holding
+            Engine->>Engine: 9. Get effective RuleSet (override logic)
+            Engine->>Engine: 10. Evaluate rule conditions against cached data
+        end
+    end
+
+    alt "Rule Conditions Met"
+        Engine->>Engine: 11. Generate rich Alert object (with tax info if SELL)
+        
+        Engine->>DB: 12. Persist new Alert document to /alerts
+        activate DB
+        DB-->>Engine: 13. Confirm alert saved
+        deactivate DB
+
+        Engine->>Notify: 14. Send formatted notification
+        activate Notify
+        Notify-->>Engine: 15. Acknowledge sending
+        deactivate Notify
+        
+        Engine->>DB: 16. Update alert status to 'SENT'
+    end
+
     deactivate Engine
 ```
 
-**Example**:
-- A user has a holding of "QQQ.DE" with a rule to BUY when it drops 15% from its peak and RSI < 30.
-- Market Data: "QQQ.DE" 52-week high 400 EUR, close 340 EUR (15% drop), RSI 28.
-- Alert created: `holdingId: "holding-001"`, `marketData: {closePrice: 340, rsi14: 28}`, `notificationStatus: PENDING`.
-- Email sent: “Buy Opportunity: QQQ.DE dropped 15%, RSI 28.”
+### 7.2. Data Models
 
-### 7.2. Monitoring and Notification Rules
+This process introduces a new top-level data collection for storing historical alerts.
 
-#### 7.2.1. M_1000: Rule Evaluation and Alert Generation
+-   **`Alert` (New Firestore Collection):**
+    -   `alertId`: String (Unique UUID, the document ID).
+    -   `userId`: String (Firebase Auth UID of the user who owns the holding).
+    -   `holdingId`: String (UUID of the holding that triggered the alert).
+    -   `ruleSetId`: String (UUID of the `RuleSet` that was triggered).
+    -   `ruleId`: String (UUID of the specific `Rule` within the `RuleSet` that was triggered).
+    -   `triggeredAt`: ISODateTime (Timestamp when the alert was generated).
+    -   `marketDataSnapshot`: Object (A snapshot of the key market data points for the holding's ticker at the time of the trigger, e.g., `{ "closePrice": 150.25, "rsi14": 28.5, "sma200": 165.10 }`).
+    -   `triggeredConditions`: Array of Objects (A list detailing exactly which conditions were met and their values, e.g., `[{ "type": "RSI_LEVEL", "parameters": { "threshold": 30 }, "actualValue": 28.5 }]`).
+    -   `taxInfo`: Object (Optional, only for `SELL` alerts. Contains `{ "preTaxProfit": 1200.50, "capitalGainTax": 316.50, "afterTaxProfit": 884.00, "appliedTaxRate": 26.375 }`).
+    -   `notificationStatus`: Enum (`PENDING`, `SENT`, `FAILED`).
 
-- **Description**: Evaluates rules and generates alerts.
-- **Success Response**: Alerts created for triggered rules.
+### 7.3. Monitoring and Notification Rules
+
+The business rules for this chapter are organized functionally, reflecting the distinct stages of the automated backend process.
+
+#### 7.3.1. M_1000: Daily Market Data Synchronization
+
+- **Description**: This rule governs the daily, automated process of fetching raw market data from the external provider (Alpha Vantage) and enriching it by calculating all necessary technical indicators. This includes data for all tickers found in user portfolios and for all **system-required tickers (as defined in Section 9.2.1)**. The final, enriched data is stored in the `marketData` Firestore collection.
+- **Trigger**: Fired by a Google Cloud Scheduler job once every 24 hours.
+- **Sequence Diagram for Market Data Synchronization**
+
+```mermaid
+sequenceDiagram
+    participant Scheduler as Cloud Scheduler
+    participant Engine as Monitoring Engine
+    participant DB as Database (Firestore)
+    participant API as Market Data API
+
+    Scheduler->>Engine: 1. Trigger Daily Sync Job
+    activate Engine
+
+    Note over Engine, DB: Compile list of all required tickers
+    Engine->>DB: 2. Query for unique tickers from user holdings
+    activate DB
+    DB-->>Engine: 3. Return user tickers
+    deactivate DB
+    Engine->>Engine: 4. Merge with system-required tickers from config
+
+    alt API is available
+        Engine->>API: 5. Request raw OHLCV data for all tickers
+        activate API
+        API-->>Engine: 6. Return data (may be partial)
+        deactivate API
+
+        Engine->>Engine: 7. Calculate all technical indicators (SMA, RSI, etc.)
+        Engine->>DB: 8. Save enriched data to /marketData cache
+        activate DB
+        DB-->>Engine: 9. Confirm data saved
+        deactivate DB
+    else API is unavailable
+        Engine->>Engine: Log system-wide API failure
+    end
+
+    deactivate Engine
+```
+
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| M_I_1001 | Evaluation succeeds | Rules evaluated, alerts generated. | Engine Internal | Alerts queued. | M_I_1001 |
-| M_I_1002 | SELL Tax calculation | For SELL rules, FIFO-based tax info computed. | Engine Internal | `taxInfo` included in alert. | N/A |
-| M_E_1101 | Market data unavailable | API call fails for a ticker. | Engine to API | Rule evaluation for that holding is skipped, error logged. | M_E_1101 |
+| M_I_1001 | Sync succeeds | External API is available and returns valid data for all requested tickers. | Engine Internal | Enriched market data for all tickers is updated in the Firestore cache. | M_I_1001 |
+| M_W_1051 | Partial sync failure | The external API fails to return data for a subset of tickers. | Engine to API | The engine logs the failed tickers, continues processing the successful ones, and proceeds to the evaluation step. | M_W_1051 |
+| M_E_1101 | Total sync failure | The external API is completely unavailable or returns a system-wide error. | Engine to API | The entire daily run is aborted. The error is logged, and an alert is sent to system administrators. | M_E_1101 |
 
 **Messages**:
-- **M_I_1001**: "Daily evaluation completed, {numAlerts} alerts generated."
-- **M_E_1101**: "Market data unavailable for ticker {ticker}, evaluation skipped."
+- **M_I_1001**: (Log) "Daily market data synchronization complete. {count} tickers updated."
+- **M_W_1051**: (Log) "Warning: Could not fetch market data for the following tickers: {failed_tickers}."
+- **M_E_1101**: (Log) "Error: Market data API is unavailable. Daily monitoring run aborted."
 
-#### 7.2.2. M_2000: Notification Delivery
+#### 7.3.2. M_2000: Strategy Rule Evaluation
+- **Description**: This rule governs the core logic of the system. After data synchronization is complete, this process iterates through all relevant holdings, retrieves their effective strategy rules (respecting the portfolio/holding hierarchy), and evaluates them.
+- **Trigger**: Successful completion of the data synchronization process (`M_1000`).
+- **Sequence Diagram for Strategy Rule Evaluation**
 
-- **Description**: Sends alerts to users.
-- **Success Response**: Notifications delivered.
+```mermaid
+sequenceDiagram
+    participant Engine as Monitoring Engine
+    participant DB as Database (Firestore)
+
+    activate Engine
+    Note over Engine: Begins evaluation after data sync is complete.
+
+    loop For each Holding to evaluate
+        Engine->>DB: 1. Get Holding document
+        activate DB
+        DB-->>Engine: 2. Return Holding
+        deactivate DB
+
+        Note over Engine: 3. Find effective RuleSet ID<br/>(check Holding, then fallback to parent Portfolio)
+
+        alt Effective RuleSet exists
+            Engine->>DB: 4. Fetch RuleSet document
+            activate DB
+            DB-->>Engine: 5. Return RuleSet
+            deactivate DB
+
+            Engine->>Engine: 6. Evaluate rule conditions against cached market data
+
+            alt Conditions are met
+                Engine->>Engine: 7. Trigger Alert Generation (M_3000)
+            end
+        else No effective RuleSet
+            Engine->>Engine: Skip holding
+        end
+    end
+
+    deactivate Engine
+```
+
 - **Sub-Rules**:
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| N_I_2001 | Delivery succeeds | Notification sent via email/push. | Notify Service | `notificationStatus: SENT`. | N_I_2001 |
-| N_E_2101 | Delivery fails | Service unavailable or invalid recipient. | Notify Service | `notificationStatus: FAILED`. | N_E_2101 |
+| M_I_2001 | Evaluation run completes | The process successfully iterates through all holdings for all users. | Engine Internal | All applicable rules are evaluated. Any triggered rules will initiate the `M_3000` process. | M_I_2001 |
+| M_I_2002 | Rule triggered | All conditions within a single, enabled rule are met. | Engine Internal | The `M_3000` alert generation process is triggered for this holding and rule. | N/A |
+| M_I_2003 | Holding has no rules | A holding is processed that has no specific or inherited rules. | Engine Internal | The holding is skipped, and the engine moves to the next one. | N/A |
 
 **Messages**:
-- **N_I_2001**: "Notification for alert {alertId} sent successfully."
-- **N_E_2101**: "Notification for alert {alertId} failed: {error_reason}."
+- **M_I_2001**: (Log) "Strategy rule evaluation completed for all users."
+
+#### 7.3.3. M_3000: Alert Generation and Persistence
+
+- **Description**: This rule is triggered whenever a strategy rule's conditions are met. It is responsible for creating a detailed `Alert` document—including a data snapshot, triggering conditions, and tax info—and saving it to the `alerts` collection in Firestore.
+- **Trigger**: A successful evaluation in `M_2000` where a rule's conditions are met.
+- **Sequence Diagram for Alert Generation and Persistence**
+
+```mermaid
+sequenceDiagram
+    participant Engine as Monitoring Engine
+    participant DB as Database (Firestore)
+
+    activate Engine
+    Note over Engine: Triggered by Rule Evaluation (M_2000)
+
+    Engine->>Engine: 1. Assemble Alert object<br/>(snapshot of market data & triggering conditions)
+
+    alt SELL Alert
+        Note over Engine: Calculate asset-specific tax info
+        Engine->>DB: a. Fetch holding lots & assetClass
+        activate DB
+        DB-->>Engine: b. Return data
+        deactivate DB
+        Engine->>Engine: c. Apply rules from tax_config.yaml
+    end
+
+    Engine->>DB: 2. Save new Alert document to /alerts collection
+    activate DB
+    DB-->>Engine: 3. Confirm alert persisted
+    deactivate DB
+    
+    Note over Engine: New alert with 'PENDING' status will trigger N_4000
+    deactivate Engine
+```
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| M_I_3001 | Alert created and persisted | The `Alert` object is successfully created and written to the Firestore `alerts` collection. | Engine to DB | A new, permanent alert record exists in the database with `notificationStatus: PENDING`. | M_I_3001 |
+| M_E_3101 | Database write fails | The engine fails to write the new `Alert` document to Firestore. | Engine to DB | The error is logged. The system will attempt a retry. | M_E_3101 |
+
+**Messages**:
+- **M_I_3001**: (Log) "Alert {alertId} generated and persisted for user {userId} and holding {holdingId}."
+- **M_E_3101**: (Log) "Error: Failed to persist alert for holding {holdingId}. Reason: {db_error}."
+
+#### 7.3.4. M_4000: Notification Delivery
+
+- **Description**: This rule governs the final step of dispatching a notification to the user. It is triggered by a new alert being saved to the database. It formats the alert data into a human-readable message and sends it via the configured notification service (SendGrid).
+- **Trigger**: An `Alert` document is created with `notificationStatus: PENDING`.
+- **Sequence Diagram for Notification Delivery**
+
+```mermaid
+sequenceDiagram
+    participant DB as Database (Firestore)
+    participant Engine as Notification Engine
+    participant Notify as Notification Service (e.g., SendGrid)
+
+    Note over DB, Engine: Triggered by new Alert document with status 'PENDING'
+
+    activate Engine
+    Engine->>DB: 1. Fetch data from Alert document
+    activate DB
+    DB-->>Engine: 2. Return Alert data
+    deactivate DB
+
+    Engine->>Engine: 3. Format human-readable message
+
+    Engine->>Notify: 4. Send formatted notification
+    activate Notify
+
+    alt Notification Sent Successfully
+        Notify-->>Engine: 5a. Acknowledge success
+        Engine->>DB: 6a. Update alert status to 'SENT'
+    else Notification Fails
+        Notify-->>Engine: 5b. Return error
+        Engine->>DB: 6b. Update alert status to 'FAILED'
+    end
+    
+    deactivate Notify
+
+    deactivate Engine
+```
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| M_I_4001 | Notification succeeds | The notification service (e.g., SendGrid) accepts the request and sends the message. | Engine to Notification Service | The `notificationStatus` of the `Alert` document is updated to `SENT`. | M_I_4001 |
+| M_E_4101 | Notification fails | The notification service returns an error (e.g., invalid email, service outage). | Engine to Notification Service | The error is logged. The `notificationStatus` of the `Alert` document is updated to `FAILED`. | M_E_4101 |
+
+**Messages**:
+- **M_I_4001**: (Log) "Notification for alert {alertId} sent successfully to user {userId}."
+- **M_E_4101**: (Log) "Error: Failed to send notification for alert {alertId}. Reason: {service_error}."
 
 ---
-
-### 7.3. System-Required Market Data
-
-#### 7.3.1. M_3000: System Ticker Management
-- **Description**: To support rules based on broad market indicators (e.g., market volatility via the VIX), the system maintains a list of "system-required" proxy tickers. The data for these tickers is treated as essential global context and is not tied to any single user's portfolio. The primary proxy ticker for the MVP is `VIXY` (or a similar VIX-tracking ETF), which serves as the data source for the `VIX` rule condition.
-- **Process**: The daily Monitoring Engine (as described in section 7.1) is responsible for fetching and caching the latest market data for all system-required tickers, in addition to the tickers found in user holdings. If historical data for a system ticker is missing, the engine will backfill it.
-- **Configuration**: The list of system-required tickers will be maintained in the backend configuration to allow for future expansion.
 
 ## 8. User Authentication and Authorization
 
@@ -2599,6 +2789,14 @@ sequenceDiagram
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
+#### 9.2.1. System-Required Tickers
+
+To support rules based on broad market indicators (e.g., market volatility via the VIX), the system maintains a list of "system-required" proxy tickers. The data for these tickers is treated as essential global context and is not tied to any single user's portfolio. The primary proxy ticker for the MVP is `VIXY` (or a similar VIX-tracking ETF), which serves as the data source for the `VIX` rule condition.
+
+**Process**: The daily Monitoring Engine (as described in section 7.1) is responsible for fetching and caching the latest market data for all system-required tickers, in addition to the tickers found in user holdings. If historical data for a system ticker is missing, the engine will backfill it.
+
+**Configuration**: The list of system-required tickers will be maintained in the backend configuration to allow for future expansion.
+
 ### 9.3. Tax Configuration
 
 To provide accurate, asset-specific tax calculations without requiring user input, Sentinel uses a static, application-level configuration file. This file defines the tax rules for each supported asset class. The backend loads this configuration on startup and uses it to apply the correct tax logic during all relevant computations.
@@ -2639,3 +2837,4 @@ COMMODITY:
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
 - **Availability**: 99.9% uptime via GCP.
+
