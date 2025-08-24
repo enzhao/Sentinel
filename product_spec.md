@@ -39,15 +39,16 @@ The specification is organized as follows:
 
 Each functional chapter (3-8) is structured to provide a multi-layered view of the system, from high-level process to detailed implementation logic:
 
-1.  **Business Process (e.g., Section 3.1)**: Describes the "how" from a user's perspective for each major operation (e.g., Create, Update).
-    *   **Visual Representation**: A Mermaid state diagram illustrating the user flow.
-    *   **State Machine**: A formal definition of the flow using the project's DSL, detailing every state, user event, and system action.
-2.  **Data Model (e.g., Section 3.2)**: Defines the data structures for the chapter's entities.
-    *   **Stored Data Models**: The schema of the data as it is persisted in the database.
-    *   **Computed Data Models**: On-the-fly calculated data that is added to API responses but not stored.
-3.  **Business Rules (e.g., Section 3.3)**: Details the specific backend logic, constraints, and outcomes for each operation.
-    *   **Sequence Diagram**: A Mermaid diagram showing the interaction between system components (Frontend, Backend, Database).
-    *   **Sub-Rules Table**: A granular breakdown of conditions, checkpoints, and outcomes, each with a unique Rule ID (e.g., `P_I_1001`) and corresponding user-facing message key.
+1. **Business Process (e.g., Section 3.1)**: Describes the "how" from a user's perspective for each major operation (e.g., Create, Update).
+  - **Visual Representation**: A Mermaid state diagram illustrating the user flow.
+  - **State Machine**: A formal definition of the flow using the project's DSL, detailing every state, user event, and system action.
+2.  **Data Model (e.g., Section 3.2)**: Defines the data structures for the chapter's entities, separating primary data from performance-optimized and time-series data.
+  - **Primary Stored Models**: The schema for core, authoritative data, typically created by direct user input.
+  - **Time-Series Subcollections**: The schema for historical snapshot data (e.g., daily performance), stored in a separate subcollection for scalability.
+  - **Denormalized & Computed Models**: Defines system-calculated data, distinguishing between fields that are pre-calculated and persisted for performance and those that are calculated on-the-fly for each API request.
+3. **Business Rules (e.g., Section 3.3)**: Details the specific backend logic, constraints, and outcomes for each operation.
+  - **Sequence Diagram**: A Mermaid diagram showing the interaction between system components (Frontend, Backend, Database).
+  - **Sub-Rules Table**: A granular breakdown of conditions, checkpoints, and outcomes, each with a unique Rule ID (e.g., `P_I_1001`) and corresponding user-facing message key.
 
 ---
 
@@ -443,7 +444,9 @@ stateDiagram-v2
 
 ### 3.2. Portfolio and Cash Data Model
 
-#### 3.2.1. Stored Data Models
+This section defines the data structures for the Portfolio entity. The model separates the core portfolio metadata from its time-series performance data, which is stored in a dedicated subcollection for scalability and performance.
+
+#### 3.2.1. Primary Stored Models
 
 - **`Portfolio` (Firestore Document):**
   - `portfolioId`: String (Unique UUID, the document ID).
@@ -458,16 +461,26 @@ stateDiagram-v2
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 
-#### 3.2.2. Computed Data Models
+#### 3.2.2. Time-Series Subcollections
 
-The information in this section is calculated on-the-fly by the backend API and embedded into the main data object (`Portfolio`) in the API response. It is not stored in the database.
+- **`dailySnapshots` (Firestore Subcollection):**
+  - A subcollection under each `Portfolio` document, used to store historical performance data.
+  - **Path**: `portfolios/{portfolioId}/dailySnapshots/{YYYY-MM-DD}`.
+  - **Document ID**: The date of the snapshot in `YYYY-MM-DD` format for easy querying.
+  - Each document in this subcollection is a `DailyPortfolioSnapshot` object.
 
-- **`ComputedInfoPortfolio` (Object embedded in `Portfolio`):**
-  - `totalCost`: Number (in the portfolio's `defaultCurrency`).
-  - `currentValue`: Number (in the portfolio's `defaultCurrency`).
-  - `preTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
-  - `afterTaxGainLoss`: Number (in the portfolio's `defaultCurrency`).
+- **`DailyPortfolioSnapshot` (Document in `dailySnapshots` subcollection):**
+  - `date`: ISODateTime.
+  - `totalCost`: Number.
+  - `currentValue`: Number.
+  - `preTaxGainLoss`: Number.
+  - `afterTaxGainLoss`: Number.
   - `gainLossPercentage`: Number (%).
+  - `sma7`: Number (Optional, 7-day simple moving average of `currentValue`).
+  - `sma20`: Number (Optional, 20-day simple moving average of `currentValue`).
+  - `sma50`: Number (Optional, 50-day simple moving average of `currentValue`).
+  - `sma200`: Number (Optional, 200-day simple moving average of `currentValue`).
+
 
 ### 3.3. Portfolio and Cash Rules
 
@@ -1078,7 +1091,9 @@ stateDiagram-v2
 
 ### 4.2. Holding Data Model
 
-#### 4.2.1. Stored Data Models
+This section defines the data structures for the Holding entity. The model separates the core holding metadata from its time-series performance data, which is stored in a dedicated subcollection for scalability and performance.
+
+#### 4.2.1. Primary Stored Models
 
 - **`Holding` (Firestore Document):**
   - A new top-level collection (`holdings`) will be created.
@@ -1098,55 +1113,31 @@ stateDiagram-v2
   - `lots`: Array of `Lot` objects. The `Lot` data model is defined below. See Chapter 5 for lot management details.
   - `ruleSetId`: String (Optional, UUID linking to a `RuleSet` document, for trading rules).
 
-- **`Lot` (Object within Holding):**
-  - `lotId`: String (Unique UUID generated on creation).
-  - `purchaseDate`: ISODateTime.
-  - `quantity`: Number (of shares, positive).
-  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
-  - `createdAt`: ISODateTime.
-  - `modifiedAt`: ISODateTime.
+#### 4.2.2. Time-Series Subcollections
 
-- **`MarketData` (Firestore Document):**
-  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
-  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
-  - Each document contains:
-    - `date`: ISODateTime.
-    - `ticker`: String.
-    - `open`: Number (EUR).
-    - `high`: Number (EUR).
-    - `low`: Number (EUR).
-    - `close`: Number (EUR).
-    - `volume`: Integer.
-    - `sma200`: Optional<Number> (200-day simple moving average).
-    - `sma50`: Optional<Number> (50-day simple moving average).
-    - `sma20`: Optional<Number> (20-day simple moving average).
-    - `sma7`: Optional<Number> (7-day simple moving average).
-    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
-    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
-    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
-    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
-    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
-    - `atr14`: Optional<Number> (14-day Average True Range).
-    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
-  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
+- **`dailySnapshots` (Firestore Subcollection):**
+  - A subcollection under each `Holding` document for storing historical performance and indicator data.
+  - **Path**: `holdings/{holdingId}/dailySnapshots/{YYYY-MM-DD}`.
+  - **Document ID**: The date of the snapshot in `YYYY-MM-DD` format.
+  - Each document is a `DailyHoldingSnapshot` object.
 
-#### 4.2.2. Computed Data Models
-
-The information in this section is calculated on-the-fly by the backend API and embedded into each `Holding` object in the API response. It is not stored in the database.
-
-- **`ComputedInfoHolding` (Object embedded in `Holding`):**
-  - `totalCost`: Number (can be in holding's currency or portfolio's default currency).
-  - `currentValue`: Number (can be in holding's currency or portfolio's default currency).
-  - `preTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
-  - `afterTaxGainLoss`: Number (can be in holding's currency or portfolio's default currency).
+- **`DailyHoldingSnapshot` (Document in `dailySnapshots` subcollection):**
+  - `date`: ISODateTime.
+  - `totalCost`: Number.
+  - `currentValue`: Number.
+  - `preTaxGainLoss`: Number.
+  - `afterTaxGainLoss`: Number.
   - `gainLossPercentage`: Number (%).
-
-- **`ComputedInfoLot` (Object embedded in `Lot`):**
-  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
-  - `capitalGainTax`: Number. Calculated based on the tax rules defined in the system's tax configuration for the parent holding's `assetClass`. The calculation may depend on conditions such as the holding duration of the lot.
-  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `sma7`: Number (Optional).
+  - `sma20`: Number (Optional).
+  - `sma50`: Number (Optional).
+  - `sma200`: Number (Optional).
+  - `vwma7`: Number (Optional).
+  - `vwma20`: Number (Optional).
+  - `vwma50`: Number (Optional).
+  - `vwma200`: Number (Optional).
+  - `rsi14`: Number (Optional).
+  - `macd`: Object (Optional).
 
 ### 4.3. Holding Management Rules
 
@@ -1629,7 +1620,28 @@ stateDiagram-v2
 
 ### 5.2. Lot Data Model
 
-> **Note:** The `Lot` data model is defined in **Section 4.2.1** and **Section 4.2.2** alongside the `Holding` data model to which it belongs.
+This section defines the data structures for the Lot entity.
+
+#### 5.2.1. Primary Stored Models
+
+- **`Lot` (Object within `Holding.lots` array):**
+  - `lotId`: String (Unique UUID generated on creation).
+  - `purchaseDate`: ISODateTime.
+  - `quantity`: Number (of shares, positive).
+  - `purchasePrice`: Number (per share, positive, in the currency of the holding).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+
+#### 5.2.2. On-the-Fly Computed Models
+
+The following data is calculated "on-the-fly" by the API for each request, as its values depend on the absolute latest market price.
+
+- **`ComputedInfoLot` (Object embedded in `Lot`):**
+  - `currentPrice`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `currentValue`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `preTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
+  - `capitalGainTax`: Number. Calculated based on the tax rules defined in the system's tax configuration for the parent holding's `assetClass`. The calculation may depend on conditions such as the holding duration of the lot.
+  - `afterTaxProfit`: Number (can be in holding's currency or portfolio's default currency, depending on view context).
 
 ### 5.3. Lot Management Rules
 
@@ -2270,6 +2282,8 @@ The monitoring and notification system runs as an automated, daily batch process
 
 1. **Indicator Calculation**: Using the newly fetched raw data, the engine calculates the full suite of required technical indicators (SMA, VWMA, RSI, MACD, etc.) for each ticker. The raw data and the calculated indicators are then saved to the shared `marketData` cache in Firestore.
 
+1. **Performance Calculation**: The engine then iterates through all holdings and portfolios. For each, it **calculates a new `DailySnapshot` object containing all performance metrics and technical indicators for that day. It then creates a new document, using the date as the ID, and saves this object** in the appropriate `dailySnapshots` subcollection for that `Holding` or `Portfolio`.
+
 1. **Strategy Evaluation Loop**: Once the market data is prepared, the engine begins the main evaluation loop. It systematically iterates through every holding that has an active investment strategy.
 
 1. **Effective Rule Retrieval**: For each holding, the engine performs the "effective rule set" lookup as defined in Chapter 6. It first checks for a specific `RuleSet` attached to the holding. If none is found, it falls back to the `RuleSet` of the parent portfolio. If neither exists, the holding is skipped.
@@ -2301,22 +2315,19 @@ sequenceDiagram
         activate API
         API-->>Engine: 3. Return raw data
         deactivate API
-
         Engine->>Engine: 4. Calculate technical indicators (SMA, RSI, etc.)
-
         Engine->>DB: 5. Save enriched data to /marketData cache
-        activate DB
-        DB-->>Engine: 6. Confirm cache updated
-        deactivate DB
+    end
+
+    rect rgb(210, 230, 255)
+        Note over Engine, DB: Performance Calculation & Persistence
+        Engine->>Engine: 6. Iterate all portfolios & holdings
+        Engine->>DB: 7. Create new DailySnapshot document in subcollections
     end
 
     rect rgb(230, 255, 230)
         Note over Engine, DB: Rule Evaluation
-        Engine->>DB: 7. Get all holdings with active strategies
-        activate DB
-        DB-->>Engine: 8. Return holdings & ruleSetIds
-        deactivate DB
-
+        Engine->>DB: 8. Get all holdings with active strategies
         loop For each holding
             Engine->>Engine: 9. Get effective RuleSet (override logic)
             Engine->>Engine: 10. Evaluate rule conditions against cached data
@@ -2324,19 +2335,10 @@ sequenceDiagram
     end
 
     alt "Rule Conditions Met"
-        Engine->>Engine: 11. Generate rich Alert object (with tax info if SELL)
-        
+        Engine->>Engine: 11. Generate rich Alert object
         Engine->>DB: 12. Persist new Alert document to /alerts
-        activate DB
-        DB-->>Engine: 13. Confirm alert saved
-        deactivate DB
-
-        Engine->>Notify: 14. Send formatted notification
-        activate Notify
-        Notify-->>Engine: 15. Acknowledge sending
-        deactivate Notify
-        
-        Engine->>DB: 16. Update alert status to 'SENT'
+        Engine->>Notify: 13. Send formatted notification
+        Engine->>DB: 14. Update alert status to 'SENT'
     end
 
     deactivate Engine
@@ -2379,7 +2381,31 @@ stateDiagram-v2
 
 ### 7.2. Data Models
 
-This process introduces a new top-level data collection for storing historical alerts.
+This section defines the schemas for the primary data collections used by the monitoring and notification system.
+
+- **`MarketData` (Firestore Document):**
+  - A separate top-level collection (`marketData`) used as an internal cache for historical price and indicator data. This data is shared by all users.
+  - The structure is `/marketData/{ticker}/daily/{YYYY-MM-DD}`.
+  - Each document contains:
+    - `date`: ISODateTime.
+    - `ticker`: String.
+    - `open`: Number (EUR).
+    - `high`: Number (EUR).
+    - `low`: Number (EUR).
+    - `close`: Number (EUR).
+    - `volume`: Integer.
+    - `sma200`: Optional<Number> (200-day simple moving average).
+    - `sma50`: Optional<Number> (50-day simple moving average).
+    - `sma20`: Optional<Number> (20-day simple moving average).
+    - `sma7`: Optional<Number> (7-day simple moving average).
+    - `vwma200`: Optional<Number> (200-day volume weighted moving average).
+    - `vwma50`: Optional<Number> (50-day volume weighted moving average).
+    - `vwma20`: Optional<Number> (20-day volume weighted moving average).
+    - `vwma7`: Optional<Number> (7-day volume weighted moving average).
+    - `rsi14`: Optional<Number> (14-day Relative Strength Index).
+    - `atr14`: Optional<Number> (14-day Average True Range).
+    - `macd`: Optional<Object> (Moving Average Convergence/Divergence, containing `value`, `signal`, and `histogram` fields).
+  - **Note on Technical Indicators**: All technical indicators (SMA, VWMA, RSI, ATR, MACD, etc.) are calculated internally by the Sentinel backend using the historical price and volume data. Only the raw OHLCV data is fetched from the external provider.
 
 -   **`Alert` (New Firestore Collection):**
     -   `alertId`: String (Unique UUID, the document ID).
@@ -2398,11 +2424,11 @@ This process introduces a new top-level data collection for storing historical a
 
 The business rules for this chapter are organized functionally, reflecting the distinct stages of the automated backend process.
 
-#### 7.3.1. M_1000: Daily Market Data Synchronization
+#### 7.3.1. M_1000: Daily Data Synchronization and Calculation
 
-- **Description**: This rule governs the daily, automated process of fetching raw market data from the external provider (Alpha Vantage) and enriching it by calculating all necessary technical indicators. This includes data for all tickers found in user portfolios and for all **system-required tickers (as defined in Section 9.2.1)**. The final, enriched data is stored in the `marketData` Firestore collection.
+- **Description**: This rule governs the daily, automated process that prepares all necessary data for rule evaluation. It involves two main stages: first, fetching raw market data and calculating technical indicators, and second, **calculating the daily performance snapshot for every portfolio and holding**. The final, enriched data is stored in the `marketData` collection and the `dailySnapshots` subcollections respectively.
 - **Trigger**: Fired by a Google Cloud Scheduler job once every 24 hours.
-- **Sequence Diagram for Market Data Synchronization**
+- **Sequence Diagram for Daily Data Synchronization and Calculation**
 
 ```mermaid
 sequenceDiagram
@@ -2411,29 +2437,35 @@ sequenceDiagram
     participant DB as Database (Firestore)
     participant API as Market Data API
 
-    Scheduler->>Engine: 1. Trigger Daily Sync Job
+    Scheduler->>Engine: 1. Trigger Daily Job
     activate Engine
 
-    Note over Engine, DB: Compile list of all required tickers
-    Engine->>DB: 2. Query for unique tickers from user holdings
+    Note over Engine, API: Stage 1: Market Data Synchronization
+    Engine->>DB: 2. Get all unique tickers
     activate DB
-    DB-->>Engine: 3. Return user tickers
+    DB-->>Engine: 3. Return ticker list
     deactivate DB
-    Engine->>Engine: 4. Merge with system-required tickers from config
+    
+    Engine->>API: 4. Fetch raw OHLCV data for tickers
+    activate API
+    API-->>Engine: 5. Return raw data
+    deactivate API
 
-    alt API is available
-        Engine->>API: 5. Request raw OHLCV data for all tickers
-        activate API
-        API-->>Engine: 6. Return data (may be partial)
-        deactivate API
+    Engine->>Engine: 6. Calculate technical indicators (SMA, RSI, etc.)
+    Engine->>DB: 7. Save enriched data to /marketData cache
+    activate DB
+    DB-->>Engine: 8. Confirm cache updated
+    deactivate DB
 
-        Engine->>Engine: 7. Calculate all technical indicators (SMA, RSI, etc.)
-        Engine->>DB: 8. Save enriched data to /marketData cache
-        activate DB
-        DB-->>Engine: 9. Confirm data saved
-        deactivate DB
-    else API is unavailable
-        Engine->>Engine: Log system-wide API failure
+    Note over Engine, DB: Stage 2: Performance Snapshot Calculation
+    Engine->>DB: 9. Get all portfolios and holdings
+    activate DB
+    DB-->>Engine: 10. Return items
+    deactivate DB
+
+    loop For each portfolio and holding
+        Engine->>Engine: 11. Calculate new DailySnapshot
+        Engine->>DB: 12. Save snapshot to item's subcollection
     end
 
     deactivate Engine
@@ -2443,18 +2475,21 @@ sequenceDiagram
 
 | Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
 |:---|:---|:---|:---|:---|:---|
-| M_I_1001 | Sync succeeds | External API is available and returns valid data for all requested tickers. | Engine Internal | Enriched market data for all tickers is updated in the Firestore cache. | M_I_1001 |
-| M_W_1051 | Partial sync failure | The external API fails to return data for a subset of tickers. | Engine to API | The engine logs the failed tickers, continues processing the successful ones, and proceeds to the evaluation step. | M_W_1051 |
-| M_E_1101 | Total sync failure | The external API is completely unavailable or returns a system-wide error. | Engine to API | The entire daily run is aborted. The error is logged, and an alert is sent to system administrators. | M_E_1101 |
+| M_I_1001 | Full process succeeds | Market data is fetched, and performance snapshots are calculated and saved for all items. | Engine Internal | All data is prepared and ready for the Strategy Rule Evaluation step (`M_2000`). | M_I_1001 |
+| M_W_1051 | Partial market data failure | The external API fails to return data for a subset of tickers. | Engine to API | The engine logs the failed tickers and proceeds with the successful ones. | M_W_1051 |
+| M_W_1052 | Partial performance calculation failure | An error occurs while calculating the snapshot for a specific portfolio or holding. | Engine to DB | The error is logged, the item is skipped, and the process continues. | M_W_1052 |
+| M_E_1101 | Total market data failure | The external API is completely unavailable or returns a system-wide error. | Engine to API | The entire daily run is aborted, and an alert is sent to system administrators. | M_E_1101 |
 
 **Messages**:
-- **M_I_1001**: (Log) "Daily market data synchronization complete. {count} tickers updated."
+- **M_I_1001**: (Log) "Daily data synchronization and performance calculation complete."
 - **M_W_1051**: (Log) "Warning: Could not fetch market data for the following tickers: {failed_tickers}."
+- **M_W_1052**: (Log) "Warning: Failed to calculate daily snapshot for item {itemId}. Reason: {error}."
 - **M_E_1101**: (Log) "Error: Market data API is unavailable. Daily monitoring run aborted."
 
 #### 7.3.2. M_2000: Strategy Rule Evaluation
-- **Description**: This rule governs the core logic of the system. After data synchronization is complete, this process iterates through all relevant holdings, retrieves their effective strategy rules (respecting the portfolio/holding hierarchy), and evaluates them.
-- **Trigger**: Successful completion of the data synchronization process (`M_1000`).
+
+- **Description**: This rule governs the core logic of the system. After all data is prepared, this process iterates through all relevant holdings, retrieves their effective strategy rules, and evaluates them.
+- **Trigger**: Successful completion of the data synchronization and calculation process (`M_1000`).
 - **Sequence Diagram for Strategy Rule Evaluation**
 
 ```mermaid

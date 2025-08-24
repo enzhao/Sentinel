@@ -65,13 +65,12 @@ components:
 viewId: VIEW_HOME_PAGE
 title: "Sentinel Home"
 requiresAuth: false
-description: "The main entry point for unauthenticated users."
+description: "The main entry point for unauthenticated users, showcasing the app's features and target audience."
 
 components:
   - type: "StandardLayout"
     slots:
       header:
-        # AppBar is an included view.
         - type: "VIEW_APP_BAR"
           bindings:
             title: "Sentinel"
@@ -79,10 +78,64 @@ components:
               - label: "Login"
                 event: "USER_CLICKS_LOGIN"
       body:
+        # 1. Real-time market data ticker for engagement
+        - type: "MarketDataTicker"
+          props:
+            tickers: ["^GSPC", "^IXIC", "^GDAXI", "^VIX"]
+
+        # 2. Main value proposition
         - type: "HeroSection"
           props:
             title: "Automate Your Investment Strategy."
             subtitle: "Sentinel helps you follow your investment plan with discipline by monitoring the market for you. Define your rules, get notified, and stay in control."
+        
+        # 3. Key feature showcase
+        - type: "KeyFeaturesSection"
+          props:
+            features:
+              - icon: "rule"
+                title: "Define Your Strategy"
+                description: "Codify your investment philosophy into a set of clear, unemotional buy and sell rules."
+              - icon: "automation"
+                title: "Automated Monitoring"
+                description: "Let Sentinel watch the market for you 24/7, tracking prices and technical indicators."
+              - icon: "notifications_active"
+                title: "Stay in Control"
+                description: "Receive timely, data-driven alerts, allowing you to execute your plan with discipline."
+
+        # 4. Pain points and solutions
+        - type: "ProblemSolutionSection"
+          props:
+            title: "For the Busy, Hands-On Investor"
+            items:
+              - title: "The Problem: No Time to Watch"
+                description: "You have a strategy, but work and family commitments prevent you from monitoring the market for the right entry and exit points."
+                icon: "watch_later"
+              - title: "The Problem: High Management Fees"
+                description: "Professional wealth managers are expensive and often don't align perfectly with your personal investment philosophy."
+                icon: "paid"
+              - title: "The Solution: Your Personal Sentinel"
+                description: "Sentinel automates your market surveillance. It's your always-on assistant, executing your strategy with precision so you can stay in control, save on fees, and invest with confidence."
+                icon: "shield"
+        
+        # 5. Target audience definition
+        - type: "TargetAudienceSection"
+          props:
+            title: "Is Sentinel Right For You?"
+            goodFit:
+              title: "✅ Yes, if you are a..."
+              items:
+                - "Swing or Positional Trader"
+                - "Disciplined, rule-based investor"
+                - "Long-term thinker who still values good timing"
+                - "Busy professional who uses daily charts for decisions"
+            badFit:
+              title: "❌ Probably Not, if you are a..."
+              items:
+                - "Day Trader who needs real-time, intraday data"
+                - "High-frequency trader"
+                - "Purely 'buy and hold forever' investor"
+                - "Trader who relies on gut feeling over a defined strategy"
 ---
 # A modal form for user login.
 viewId: VIEW_LOGIN_FORM
@@ -249,7 +302,6 @@ components:
   - type: "StandardLayout"
     slots:
       header:
-        # AppBar is an included view.
         - type: "VIEW_APP_BAR"
           bindings:
             title: "My Portfolios"
@@ -263,12 +315,15 @@ components:
             mode: "currentMode"
       fab:
         - type: "FloatingActionButton"
-          shownIf: "currentMode == 'ManageMode'"
           props:
-            icon: "add"
-          events:
-            onClick:
-              name: "USER_CLICKS_ADD_PORTFOLIO"
+            icon: "more_vert"
+          actions:
+            - icon: "add"
+              label: "Add Portfolio"
+              event: "USER_CLICKS_ADD_PORTFOLIO"
+            - icon: "edit"
+              label: "Edit List"
+              event: "USER_CLICKS_EDIT_PORTFOLIOS"
 ---
 # This is the form UI for editing trading rules for a portfolio or holding.
 viewId: VIEW_RULE_SET_FORM
@@ -387,10 +442,8 @@ description: "A reusable view component that displays a list of portfolios."
 data:
   - name: "portfolios"
     type: "Array<Portfolio>"
-    description: "The array of portfolio objects to be displayed."
   - name: "mode"
     type: "String"
-    description: "The display mode, e.g., 'ReadOnlyMode' or 'ManageMode'."
 
 components:
   - type: "PortfolioList"
@@ -402,8 +455,9 @@ components:
         type: "PortfolioListItem"
         bindings:
           name: "portfolio.name"
-          description: "portfolio.description"
           currentValue: "portfolio.computed.currentValue"
+          # NEW: Bind sparkline data to the list item
+          sparklineData: "portfolio.sparklineData"
           mode: "mode"
         events:
           onTap:
@@ -435,7 +489,6 @@ components:
   - type: "StandardLayout"
     slots:
       header:
-        # AppBar is an included view.
         - type: "VIEW_APP_BAR"
           bindings:
             title: "portfolio.name"
@@ -446,12 +499,20 @@ components:
               - icon: "logout"
                 event: "USER_CLICKS_LOGOUT"
       body:
+        # NEW: Add the interactive performance chart
+        - type: "PerformanceChart"
+          props:
+            timePeriods: ["1M", "3M", "6M", "1Y", "3Y", "5Y", "MAX"]
+            # Only overlays meaningful for a portfolio are offered
+            overlays: ["SMA50", "SMA200"]
+          bindings:
+            performanceData: "portfolio.historicalPerformance"
+
         - type: "VIEW_HOLDINGS_LIST"
           bindings:
             holdings: "portfolio.holdings"
             mode: "currentMode"
       fab:
-        # FAB holds primary actions for the portfolio.
         - type: "FloatingActionButton"
           props:
             icon: "more_vert"
@@ -461,7 +522,7 @@ components:
               event: "USER_CLICKS_MANAGE_RULES"
             - icon: "edit"
               label: "Edit Portfolio"
-              event: "USER_CLICKS_EDIT"
+              event: "USER_CLICKS_EDIT_PORTFOLIO"
 ---
 # This is the unified form for both creating and editing a portfolio.
 viewId: VIEW_PORTFOLIO_FORM
@@ -687,6 +748,8 @@ components:
           ticker: "holding.ticker"
           currentValue: "holding.computed.currentValue"
           gainLossPercentage: "holding.computed.gainLossPercentage"
+          # NEW: Bind sparkline data to the list item
+          sparklineData: "holding.sparklineData"
           mode: "mode"
         events:
           onTap:
@@ -722,7 +785,6 @@ components:
   - type: "StandardLayout"
     slots:
       header:
-        # AppBar is an included view.
         - type: "VIEW_APP_BAR"
           bindings:
             title: "holding.ticker"
@@ -739,12 +801,20 @@ components:
             currentValue: "holding.computed.currentValue"
             preTaxGainLoss: "holding.computed.preTaxGainLoss"
 
+        # NEW: Add the interactive performance chart for the holding
+        - type: "PerformanceChart"
+          props:
+            timePeriods: ["1M", "3M", "6M", "1Y", "3Y", "5Y", "MAX"]
+            # The full suite of overlays is available for a single holding
+            overlays: ["Volume", "SMA50", "SMA200", "MACD"]
+          bindings:
+            performanceData: "holding.historicalPerformance"
+
         - type: "VIEW_LOTS_LIST"
           bindings:
             lots: "holding.lots"
             mode: "currentMode"
       fab:
-        # FAB now holds primary actions for the holding.
         - type: "FloatingActionButton"
           props:
             icon: "more_vert"
