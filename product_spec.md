@@ -143,7 +143,26 @@ flowchart LR
     - For authenticated users, the bar also provides access to user-specific actions, such as logging out.
 
 
-### 1.6. General API and Technical Notes
+## 1.6. Key Process Overviews
+
+This section provides high-level summaries of critical, cross-chapter business processes to clarify the end-to-end system behavior.
+
+### 1.6.1. Initial Data Seeding
+
+Upon the initial deployment of the Sentinel application to a new environment, a one-time data seeding script must be executed. This process is essential to bootstrap the `marketData` collection and ensure the system is operational before the first scheduled daily sync (`M_1000`) occurs.
+
+**Process**: The seeding script will perform a historical data backfill (`H_5000`) for every ticker listed in the backend configuration for **system-required tickers (as defined in Section 9.2.1)**. This ensures that data required for context-aware rules (e.g., the `VIX_LEVEL` rule) is available from day one.
+
+### 1.6.2. First-Time User Data Pull
+The first pull of market data from Alpha Vantage for a new user is not triggered by their signup, but rather by their first action of adding a holding with a ticker that is new to the system's cache.
+
+**Process**:
+1.  A new user is provisioned with an empty default portfolio (see **Section 8.3.1**).
+2.  The user manually adds their first holding (e.g., for ticker "VOO") (see **Section 4.1.1**).
+3.  When this holding is created, the system checks if data for "VOO" exists in the `marketData` collection. If not, it triggers an asynchronous backfill job (see **Section 4.3.1.2**).
+4.  This backfill job is the process that calls the Alpha Vantage API to fetch at least one year of historical data for the new ticker, which is then saved to the database (see **Section 4.3.6**).
+
+## 1.7. General API and Technical Notes
 
 - **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
 - **API Design**: All API endpoints that operate on a user's specific data are nested under the `/api/users/me/` path. This ensures that all operations are clearly scoped to the authenticated user, enhancing security and clarity. For example, to get a portfolio, the endpoint is `/api/users/me/portfolios/{portfolioId}`.
