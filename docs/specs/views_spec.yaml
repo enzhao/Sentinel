@@ -1,8 +1,6 @@
 # This is a reusable, self-contained view for the main application AppBar.
-# It is included by parent views, which pass the required title and actions
-# down to it via data bindings.
 viewId: VIEW_APP_BAR
-requiresAuth: false # The bar itself is public; its actions are controlled by the parent.
+requiresAuth: false
 description: "The main application navigation and action bar."
 
 data:
@@ -12,6 +10,9 @@ data:
     type: "Object"
   - name: "actions"
     type: "Array<Object>"
+  # NEW: Data to control the alert icon's state (e.g., showing a badge)
+  - name: "alertInfo"
+    type: "Object" # e.g., { hasUnread: true }
 
 components:
   - type: "AppBar"
@@ -19,6 +20,46 @@ components:
       title: "title"
       leadingAction: "leadingAction"
       actions: "actions"
+    # NEW: Dedicated property for the alert icon and its state
+    alertAction:
+      icon: "notifications"
+      event: "USER_CLICKS_ALERTS_ICON"
+      bindings:
+        badgeVisible: "alertInfo.hasUnread"
+---
+# NEW: The small modal that shows a summary of recent, unread alerts.
+viewId: VIEW_ALERTS_DROPDOWN_MODAL
+title: "New Alerts"
+requiresAuth: true
+description: "A small modal showing a summary of the latest unread alerts."
+
+data:
+  - name: "unreadAlerts"
+    type: "Array<Alert>"
+
+components:
+  - type: "ModalLayout"
+    props:
+      title: "Recent Alerts"
+    slots:
+      body:
+        - type: "AlertSummaryList"
+          item:
+            forEach: "alert in unreadAlerts"
+            component:
+              type: "AlertSummaryListItem"
+              bindings:
+                ticker: "alert.holding.ticker"
+                ruleType: "alert.rule.ruleType"
+                triggeredAt: "alert.triggeredAt"
+      footer:
+        - type: "Button"
+          props:
+            label: "View All Alerts"
+            variant: "text"
+          events:
+            onClick:
+              name: "USER_CLICKS_VIEW_ALL_ALERTS"
 ---
 # The public-facing home page for unauthenticated users.
 viewId: VIEW_HOME_PAGE
@@ -112,6 +153,85 @@ components:
               event: "USER_CLICKS_CANCEL"
             - label: "Logout"
               event: "USER_CONFIRMS_LOGOUT"
+---
+---
+# NEW: The full-screen view for the user's complete alert history.
+viewId: VIEW_ALERTS_LIST
+title: "Alert History"
+requiresAuth: true
+description: "A full-screen view displaying the user's entire alert history."
+
+data:
+  - name: "alerts"
+    type: "Array<Alert>"
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "VIEW_APP_BAR"
+          bindings:
+            title: "Alert History"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
+      body:
+        - type: "AlertList"
+          item:
+            forEach: "alert in alerts"
+            component:
+              type: "AlertListItem"
+              bindings:
+                ticker: "alert.holding.ticker"
+                ruleType: "alert.rule.ruleType"
+                triggeredAt: "alert.triggeredAt"
+                isRead: "alert.isRead"
+              events:
+                onTap:
+                  name: "USER_SELECTS_ALERT"
+                  payload:
+                    alertId: "alert.alertId"
+---
+# NEW: The detail view for a single historical alert.
+viewId: VIEW_ALERT_DETAIL
+title: "Alert Detail"
+requiresAuth: true
+description: "A detailed view of a single alert, with navigation to other alerts."
+
+data:
+  - name: "alert"
+    type: "Alert"
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "VIEW_APP_BAR"
+          bindings:
+            title: "Alert Detail"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_BACK_TO_LIST"
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
+      body:
+        - type: "AlertDetailCard"
+          bindings:
+            alertData: "alert" # Pass the whole alert object
+      footer:
+        # Navigation actions for moving between alerts in the historical list
+        - type: "BottomNavBar"
+          actions:
+            - icon: "arrow_back_ios"
+              label: "Previous"
+              event: "USER_CLICKS_PREVIOUS_ALERT"
+            - icon: "arrow_forward_ios"
+              label: "Next"
+              event: "USER_CLICKS_NEXT_ALERT"
 ---
 # This is the main dashboard view after a user logs in.
 viewId: VIEW_DASHBOARD

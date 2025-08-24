@@ -70,6 +70,10 @@ Each object in the `components` array represents a single UI element.
     - `label` (String, Optional): The text label for the action.
     - `icon` (String, Optional): The name of the icon for the action.
     - **Note**: At least one of `label` or `icon` must be provided.
+- `alertAction` (Object, Optional): Defines the dedicated notification alert action, typically an icon with a badge, within a component like an `AppBar`.
+    - `icon` (String, Required): The name of the icon to display.
+    - `event` (String, Required): The `UPPER_SNAKE_CASE` event name dispatched when the action is triggered.
+    - `bindings` (Object, Optional): Used to bind data to the action's properties, such as the visibility of a notification badge (e.g., `badgeVisible: "alertInfo.hasUnread"`).
 - `actions` (Array, Optional): A list of actions, typically for the "trailing" (right) side of an `AppBar` or for a Floating Action Button's speed-dial menu. Each action object is defined as follows:
     - `event` (String, Required): The `UPPER_SNAKE_CASE` event name dispatched when the action is triggered.
     - `label` (String, Optional): The text label for the action.

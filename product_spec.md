@@ -75,58 +75,44 @@ Each functional chapter (3-8) is structured to provide a multi-layered view of t
 
 ```mermaid
 flowchart LR
-    %% USER LAYER
+    %% Define components with emojis
+    A["🖥️ Frontend Web App (Firebase Hosting)"]
+    G[["🔑 Firebase Authentication"]]
+    B{{"⚙️ Backend API (Cloud Run)"}}
+    C[("🗃️ Database (Firestore)")]
+    Scheduler@{ shape: odd, label: "⏰ Cloud Scheduler"}
+    E["📮 Notification Service"]
+    F@{ shape: curv-trap, label: "📈 Market Data API (Alpha Vantage)"}
+
+    %% Group components into zones
     subgraph User["User Interaction"]
-        A["Frontend Web App<br/>(Firebase Hosting)"]
+        A
     end
 
-    %% PLATFORM CORE (Now includes Auth)
     subgraph Platform["Google Cloud Platform"]
-        direction TB
-        G["Firebase Authentication"]
-        B{{"Backend API Server<br/>(Cloud Run)"}}
-        C[("Database<br/>(Firestore)<br/>- Portfolios<br/>- Market Data Cache")]
-        Scheduler["Cloud Scheduler"]
-        E["Notification Service"]
+        G
+        B
+        C
+        Scheduler
+        E
     end
 
-    %% EXTERNAL ZONE
-    subgraph Ext["External Data/APIs"]
-        F>"Market Data API<br/>(Alpha Vantage)"]
+    subgraph Ext["External APIs"]
+        F
     end
 
-    %% Flows
-
-    %% ①② Authentication
-    A -- "① Login/Signup" --> G
-    G -- "② Issues ID Token" --> A
-
-    %% ③④⑤⑥ Portfolio Read
-    A -- "③ API Call with JWT<br/>(e.g., GET /api/users/me/portfolios)" --> B
-    B -- "④ Verifies JWT" --> G
-    B -- "⑤ Reads Portfolio Data" --> C
-    B -- "⑥ Reads Market Data Cache" --> C
-
-    %% Portfolio Write
-    A -- "⑦ API Call with JWT<br/>(e.g., POST /api/users/me/portfolios)" --> B
-    B -- "⑧ Writes Portfolio Data" --> C
-    B -- "⑨ Triggers Backfill (async)" --> F
-    F -- "⑩ Returns Historical Data" --> B
-    B -- "⑪ Writes to Market Data Cache" --> C
-
-    %% Scheduled Job (Daily Sync)
-    Scheduler -- "⑫ Triggers Daily Sync" --> B
-    B <-- "⑬ Fetches Latest Data" --> F
-    %% F -- "⑭ Returns Latest Data" --> B
-    B -- "⑭ Writes to Market Data Cache" --> C
-
-    %% OPTIONAL: Notification Flow Example
-    B -- "Rule Triggered" --> E
-    E -- "Email/Push Notification" --> A
-
-    %% Visual grouping
-    classDef zone fill:#F7F9FF,stroke:#555,stroke-width:2px;
-    class User,Platform,Ext zone;
+    %% Simplified connections
+    A -- "① Authenticates" --> G
+    A -- "② API Calls" --> B
+    
+    B -- "③ Verifies Tokens" --> G
+    B -- "④ Reads/Writes Data" --> C
+    B -- "⑤ Triggers Notifications" --> E
+    
+    Scheduler -- "⑥ Triggers Daily Sync" --> B
+    B -- "⑦ Fetches Market Data" --> F
+    
+    E -- "⑧ Sends Notifications" --> A
 ```
 
 ### 1.4. General Data and Business Process Notes
@@ -139,8 +125,8 @@ flowchart LR
 - **Mobile-First Responsive Design**: The application's interface will be designed primarily for mobile phones. This means the layout will be clean, easy to navigate with a thumb, and optimized for smaller screens. When viewed on a larger screen, like a tablet or desktop computer, the application will automatically adapt its layout to make good use of the extra space, ensuring a comfortable and effective user experience on any device.
 - **Application Bar**: A persistent application bar is displayed at the top of the screen.
     - On mobile devices or narrow screens, the bar displays the application title and a menu icon that, when tapped, reveals navigation links.
-    - On wider screens (tablets, desktops), the navigation links are displayed directly within the application bar for quick access.
-    - For authenticated users, the bar also provides access to user-specific actions, such as logging out.
+    - On wider screens (tablets, desktops), the navigation links are displayed directly in the application bar for quick access.
+    - For authenticated users, the bar also provides access to user-specific actions, such as logging out, and includes an alert icon. A red dot will appear on this icon to indicate when new, unread alerts have been generated since the user's last session.
 
 
 ## 1.6. Key Process Overviews
@@ -181,44 +167,54 @@ The diagram below illustrates the primary paths a user can take through the appl
 stateDiagram-v2
     direction LR
 
-    state "Unauthenticated" as Unauthenticated {
-        [*] --> Login
-        Login --> Signup
-        Signup --> Login
-    }
+    [*] --> Authentication
+    Authentication --> PortfolioManagement : Successful Login
 
-    state "Authenticated" as Authenticated {
-        [*] --> PortfolioHoldingsView
-        PortfolioHoldingsView --> HoldingDetailView : User clicks a holding
-        HoldingDetailView --> PortfolioHoldingsView : User navigates back
+    state "💼 Portfolio Management" as PortfolioManagement
+    note right of PortfolioManagement
+        User manages portfolios, 
+        holdings, and lots here.
+    end note
 
-        PortfolioHoldingsView --|> AddHoldingModal : User clicks 'Add Holding'
-        HoldingDetailView --|> AddRuleModal : User clicks 'Add Rule'
-    }
+    state "⚖️ Strategy Rule Management" as RuleManagement
+    note right of RuleManagement
+        User defines Buy/Sell 
+        rules for their strategy.
+    end note
+    
+    PortfolioManagement --> RuleManagement : Manages Rules
+    RuleManagement --> PortfolioManagement : Saves or Cancels
 
-    Unauthenticated --> Authenticated : Login Success
-    Authenticated --> Unauthenticated : User clicks 'Logout'
+    PortfolioManagement --> Alerts : Views Alerts
+    state "🔔 Alerts" as Alerts
+    
+    Alerts --> PortfolioManagement : Navigates Back
+    
+    state "🔑 Authentication" as Authentication
+    
+    PortfolioManagement --> Authentication : User Logs Out
+
 ```
 
 ### 2.2. User Interaction Flows
 
-This section provides the detailed state machine definitions for all user journeys in the application, using the Flow DSL defined in `docs/state_machine_dsl.md`. Each flow describes how the user navigates between different views to accomplish a task.
+All detailed user interaction flows of the Sentinel Invest App are formally specified using the Flow DSL defined in `docs/state_machine_dsl.md`. Each flow captures a specific user journey, detailing every state, user action, and system response.
 
 The complete and definitive specifications for all user interaction flows are located in the following file:
 
 - `docs/specs/ui_flows_spec.yaml`
 
-Each flow in the document is identified by a unique `flowId`, which can be referenced from the business process descriptions in this document.
+Each flow in the document is identified by a unique `flowId`, which can be referenced from the business process descriptions in this document. This includes flows for core features like portfolio, holding and rules management, as well as for the user-facing alert and notification system.
 
 ### 2.3. View Specifications
 
-This section provides a complete catalog of all the views and modals in the application. Each view is defined using the View DSL (see `docs/view_dsl.md`), which specifies its layout, components, data requirements, and the events it can dispatch.
+All views (user interface screens) of the Sentinel Invest App are formally specified using the View DSL outlined in `docs/view_dsl.md`. Each view captures its layout, components, data requirements, and the events it can dispatch.
 
 The complete and definitive specifications for all views are located in the following file:
 
 - `docs/specs/views_spec.yaml`
 
-Each view in the document is identified by a unique `viewId`, which is referenced by the state machine flows to explicitly link a state to the view it renders.
+Each view in the document is identified by a unique `viewId`, which is referenced by the state machine flows to explicitly link a state to the view it renders. This includes views for core features and for the user-facing alert and notification system.
 
 ---
 
@@ -2264,6 +2260,8 @@ This chapter details the automated backend processes that form the core of Senti
 
 ### 7.1. Business Process
 
+#### 7.1.1 Backend Business Process: Alert Generation
+
 The monitoring and notification system runs as an automated, daily batch process. The entire sequence is triggered by a scheduler and requires no user interaction.
 
 1. **Scheduled Trigger**: The process is initiated once per day, after the primary markets (e.g., European and US markets) have closed. This is managed by Google Cloud Scheduler.
@@ -2344,6 +2342,41 @@ sequenceDiagram
     deactivate Engine
 ```
 
+#### 7.1.2. Frontend Business Process: Alert Consumption
+
+This section describes the user-facing process for viewing and managing alerts within the application.
+
+##### 7.1.2.1. User Journey Spec and Visual Representation
+
+When a user logs in, a red dot on the app bar's alert icon indicates new alerts. Clicking the icon opens a modal with the latest unread alerts. From there, the user can navigate to a full history view, which allows them to inspect the details of any past alert.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_ALERTS`**.
+
+```mermaid
+stateDiagram-v2
+    [*] --> AppWithAlerts
+    
+    state "App Bar" as AppWithAlerts {
+        [*] --> AlertsModal : USER_CLICKS_ALERT_ICON
+    }
+
+    state "Alerts Modal (Unread)" as AlertsModal {
+        [*] --> AlertsHistoryView : USER_CLICKS_VIEW_MORE
+        [*] --> AppWithAlerts : USER_CLICKS_DISMISS
+    }
+
+    state "Alerts History (All)" as AlertsHistoryView {
+        [*] --> AlertDetailView : USER_CLICKS_ALERT_ITEM
+        [*] --> AppWithAlerts : USER_CLICKS_BACK
+    }
+
+    state "Alert Detail" as AlertDetailView {
+        [*] --> AlertsHistoryView : USER_CLICKS_BACK_TO_LIST
+        AlertDetailView --> AlertDetailView : USER_CLICKS_PREVIOUS
+        AlertDetailView --> AlertDetailView : USER_CLICKS_NEXT
+    }
+```
+
 ### 7.2. Data Models
 
 This process introduces a new top-level data collection for storing historical alerts.
@@ -2355,6 +2388,7 @@ This process introduces a new top-level data collection for storing historical a
     -   `ruleSetId`: String (UUID of the `RuleSet` that was triggered).
     -   `ruleId`: String (UUID of the specific `Rule` within the `RuleSet` that was triggered).
     -   `triggeredAt`: ISODateTime (Timestamp when the alert was generated).
+    -   `isRead`: Boolean (Indicates if the user has viewed the alert, default: `false`).
     -   `marketDataSnapshot`: Object (A snapshot of the key market data points for the holding's ticker at the time of the trigger, e.g., `{ "closePrice": 150.25, "rsi14": 28.5, "sma200": 165.10 }`).
     -   `triggeredConditions`: Array of Objects (A list detailing exactly which conditions were met and their values, e.g., `[{ "type": "RSI_LEVEL", "parameters": { "threshold": 30 }, "actualValue": 28.5 }]`).
     -   `taxInfo`: Object (Optional, only for `SELL` alerts. Contains `{ "preTaxProfit": 1200.50, "capitalGainTax": 316.50, "afterTaxProfit": 884.00, "appliedTaxRate": 26.375 }`).
@@ -2562,6 +2596,128 @@ sequenceDiagram
 **Messages**:
 - **M_I_4001**: (Log) "Notification for alert {alertId} sent successfully to user {userId}."
 - **M_E_4101**: (Log) "Error: Failed to send notification for alert {alertId}. Reason: {service_error}."
+
+### 7.4. Frontend-Related Business Rules
+
+This section details the business rules for the API endpoints that support the user-facing alert and notification UI.
+
+#### 7.4.1. A_1000: Alert List Retrieval
+- **Description**: Retrieves a list of all historical alerts for the authenticated user.
+- **Endpoint**: `GET /api/users/me/alerts`.
+- **Sequence Diagram for Alert List Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. GET /api/users/me/alerts (with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Get UID
+    Sentinel->>DB: 3. Query 'alerts' collection where userId == UID
+    activate DB
+    DB-->>Sentinel: 4. Return list of Alert documents
+    deactivate DB
+    Sentinel-->>User: 5. Return Alert List
+    deactivate Sentinel
+```
+
+- **Success Response**: A list of `Alert` objects for the user is returned, ordered from newest to oldest.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| A_I_1001 | List retrieval succeeds | User is authenticated. | Response Sentinel to User | A list of the user's alerts is returned. | A_I_1001 |
+| A_E_1101 | User unauthorized | User is not authenticated. | Request User to Sentinel | Retrieval rejected with HTTP 401 Unauthorized. | A_E_1101 |
+
+**Messages**:
+- **A_I_1001**: "Alert list retrieved successfully for user {userId}."
+- **A_E_1101**: "User is not authenticated."
+
+#### 7.4.2. A_2000: Single Alert Retrieval
+
+- **Description**: Retrieves the full details of a single, specific alert for the authenticated user.
+- **Endpoint**: `GET /api/users/me/alerts/{alertId}`.
+- **Sequence Diagram for Single Alert Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. GET /api/users/me/alerts/{alertId} (with ID Token)
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User for alertId
+    Sentinel->>DB: 3. Fetch Alert Document from 'alerts' collection
+    activate DB
+    DB-->>Sentinel: 4. Return Alert Document
+    deactivate DB
+    Sentinel-->>User: 5. Return Full Alert Data
+    deactivate Sentinel
+```
+
+- **Success Response**: A single, complete `Alert` object is returned.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| A_I_2001 | Single retrieval succeeds | User is authenticated and owns the alert. | Response Sentinel to User | Full, detailed alert data is returned. | A_I_2001 |
+| A_E_2101 | User unauthorized | User is not authenticated or is not the owner of the requested alert. | Request User to Sentinel | Retrieval rejected with HTTP 403 Forbidden. | A_E_2101 |
+| A_E_2102 | Alert not found | The specified `alertId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | A_E_2102 |
+
+**Messages**:
+- **A_I_2001**: "Alert {alertId} retrieved successfully."
+- **A_E_2101**: "User is not authorized to access this alert."
+- **A_E_2102**: "Alert with ID {alertId} not found."
+
+#### 7.4.3. A_3000: Mark Alerts as Read
+
+- **Description**: Updates the status of one or more alerts to `isRead: true`. This is used by the frontend to clear the "new alert" indicator badge.
+- **Endpoint**: `PATCH /api/users/me/alerts`.
+- **Sequence Diagram for Marking Alerts as Read**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. PATCH /api/users/me/alerts<br/>(body: [{alertId, isRead: true}, ...], ID Token)
+    activate Sentinel
+    
+    Note over Sentinel: Verify ID Token & authorize user for ALL alertIds in payload
+    
+    alt Authorization OK
+        Sentinel->>DB: 2. Batch update Alert documents<br/>set isRead = true
+        activate DB
+        DB-->>Sentinel: 3. Confirm Update
+        deactivate DB
+        Sentinel-->>User: 4. Return HTTP 200 OK (Success)
+    else Authorization Fails
+        Sentinel-->>User: Return HTTP 403 Forbidden
+    end
+    
+    deactivate Sentinel
+```
+
+- **Success Response**: The specified `Alert` documents are updated in Firestore.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| A_I_3001 | Update succeeds | User is authenticated and owns all specified alerts. | Response Sentinel to User | The specified alerts are marked as read. | A_I_3001 |
+| A_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The original success response is returned. | N/A |
+| A_E_3101 | User unauthorized | User is not authenticated or does not own one or more of the specified alerts. | Request User to Sentinel | Update rejected with HTTP 403 Forbidden. | A_E_3101 |
+| A_E_3102 | Invalid request body | The request body is not a valid array of alert update objects. | Request User to Sentinel | Update rejected with HTTP 400 Bad Request. | A_E_3102 |
+| A_E_3103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | A_E_3103 |
+
+**Messages**:
+- **A_I_3001**: "Alerts successfully marked as read."
+- **A_E_3101**: "User is not authorized to modify one or more of the specified alerts."
+- **A_E_3102**: "Invalid request. Please provide a valid array of alerts to update."
+- **A_E_3103**: "A valid Idempotency-Key header is required for this operation."
 
 ---
 

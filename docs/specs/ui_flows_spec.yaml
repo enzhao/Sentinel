@@ -1081,3 +1081,43 @@ states:
     events:
       USER_DISMISSES_ERROR: Idle
 ---
+# NEW: Flow to handle the alert icon click and display the dropdown modal.
+# This would be activated as a subflow from the main application shell's flow.
+flowId: FLOW_SHOW_ALERTS_DROPDOWN
+requiresAuth: true
+initialState: ShowingDropdown
+states:
+  - name: ShowingDropdown
+    renders: VIEW_ALERTS_DROPDOWN_MODAL
+    description: "The user is viewing a summary of their recent unread alerts."
+    events:
+      USER_CLICKS_VIEW_ALL_ALERTS: ViewAll
+      USER_CLICKS_CLOSE_MODAL: (exit flow with onCancel)
+
+  - name: ViewAll
+    description: "The user wants to see their full alert history."
+    exitAction:
+      action: NAVIGATE_TO
+      target: VIEW_ALERTS_LIST
+---
+# NEW: Flow to manage the alert history list and detail views.
+flowId: FLOW_VIEW_ALERTS
+requiresAuth: true
+initialState: ViewingList
+states:
+  - name: ViewingList
+    renders: VIEW_ALERTS_LIST
+    description: "The user is viewing their full alert history."
+    events:
+      USER_SELECTS_ALERT: ViewingDetail
+      USER_CLICKS_BACK: (exit flow) # e.g., navigate back to dashboard
+
+  - name: ViewingDetail
+    renders: VIEW_ALERT_DETAIL
+    description: "The user is viewing the details of a single alert."
+    # This state would need to manage an index to know which alert is "next" or "previous".
+    events:
+      USER_CLICKS_PREVIOUS_ALERT: ViewingDetail # Transitions to self with new data
+      USER_CLICKS_NEXT_ALERT: ViewingDetail # Transitions to self with new data
+      USER_CLICKS_BACK_TO_LIST: ViewingList
+---
