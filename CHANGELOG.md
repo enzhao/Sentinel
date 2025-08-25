@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.3.0](https://github.com/enzhao/Sentinel/compare/v0.2.0...v0.3.0) (2025-08-25)
+
+
+### Features
+
+* **backend:** add market monitor and tax configuration ([21b0040](https://github.com/enzhao/Sentinel/commit/21b004087f91fb653021af915fd0da6aabe00e29)), closes [#20](https://github.com/enzhao/Sentinel/issues/20)
+* **data:** trigger background backfill on new holding ([ece6d10](https://github.com/enzhao/Sentinel/commit/ece6d10e28ca5ce1d7135774e6427de7e1d7f895)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+* **dev:** add script to generate mermaid diagrams from specs ([dbbca28](https://github.com/enzhao/Sentinel/commit/dbbca28f678ca602635a441c794a7fc39384c3d2)), closes [#4](https://github.com/enzhao/Sentinel/issues/4) [#8](https://github.com/enzhao/Sentinel/issues/8)
+* implement spec-driven message system ([3759960](https://github.com/enzhao/Sentinel/commit/3759960c2860a570a52d4162e5989a690f44ab9b)), closes [#18](https://github.com/enzhao/Sentinel/issues/18)
+* **spec:** define strategy rule management and tax configuration ([2760a05](https://github.com/enzhao/Sentinel/commit/2760a0531182ec0acbdf0a7acbaf2e5c10af067d)), closes [#4](https://github.com/enzhao/Sentinel/issues/4)
+
 ## [0.2.0](https://github.com/enzhao/Sentinel/compare/v0.1.0...v0.2.0) (2025-07-31)
 
 
