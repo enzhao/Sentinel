@@ -153,6 +153,12 @@ The first pull of market data from Alpha Vantage for a new user is not triggered
 
 - **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
 - **API Design**: All API endpoints that operate on a user's specific data are nested under the `/api/users/me/` path. This ensures that all operations are clearly scoped to the authenticated user, enhancing security and clarity. For example, to get a portfolio, the endpoint is `/api/users/me/portfolios/{portfolioId}`.
+- **Resource Endpoint Design:** The API employs a hybrid approach for modeling resource relationships to provide both clarity and efficiency.
+    - **For listing child resources**, a nested endpoint is used to make the parent-child context explicit. For example, to list all holdings within a portfolio, the endpoint is `GET /api/users/me/portfolios/{portfolioId}/holdings`.
+    - **For operating on a specific child resource** (retrieving, updating, or deleting it), a top-level endpoint is used for direct access. For example, to retrieve a single holding, the endpoint is `GET /api/users/me/holdings/{holdingId}`.
+    - This hybrid model ensures that the relationship is clear when fetching collections, while allowing individual, significant resources to be addressed directly and efficiently.
+
+- A comprehensive list of all API endpoints is maintained in the `docs/api_endpoints.md` file for developer reference.
 
 ---
 
@@ -329,7 +335,7 @@ stateDiagram-v2
 
 ##### 3.1.2.2. Single Retrieval (Portfolio Details View)
 
-From the dashboard, a user can select a single portfolio to navigate to the Portfolio Details View. This view displays the portfolio's metadata and the list of its holdings. From here, the user can manage the portfolio's details, its holdings, or set it as their default portfolio.
+From the dashboard, a user can select a single portfolio to navigate to the Portfolio Details View. This view displays the portfolio's metadata and the list of its holdings. From here, the user can manage the portfolio's details, its holdings, or set it as their default portfolio. The view also contains a historical performance chart, which loads its data asynchronously to ensure the main details are displayed instantly.
 
 ###### 3.1.2.2.1. User Journey Spec and Visual Representation
 
@@ -691,6 +697,43 @@ sequenceDiagram
 **Messages**:
 - **P_I_2201**: "Portfolio list retrieved successfully for user {userId}."
 - **P_E_2301**: "User is not authenticated."
+
+##### 3.3.2.3. P_2400: Portfolio Chart Data Retrieval
+
+- **Description**: Retrieves aggregated, time-series performance data for a specific portfolio, optimized for display in a chart. To ensure fast response times and small payload sizes, the backend performs **downsampling** based on the requested `range` query parameter. For shorter ranges (e.g., '1m'), it returns daily data points. For longer ranges (e.g., '1y', 'all'), it aggregates the data into weekly or monthly data points.
+
+- **Endpoint:** `GET /api/users/me/portfolios/{portfolioId}/chart-data?range={range}`
+
+- **Sequence Diagram for Portfolio Chart Data Retrieval**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database (Firestore)
+
+    User->>Sentinel: 1. GET /api/users/me/portfolios/{portfolioId}/chart-data?range=1y
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User
+    Sentinel->>DB: 3. Query 'dailySnapshots' subcollection for portfolio
+    activate DB
+    DB-->>Sentinel: 4. Return time-series data
+    deactivate DB
+
+    Note over Sentinel: 5. Backend performs downsampling based on 'range'.<br/>For '1y', it aggregates daily data into weekly data points.
+
+    Sentinel-->>User: 6. Return downsampled list of snapshots
+    deactivate Sentinel
+```
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| P_I_2401 | Chart data retrieval succeeds | User is authenticated, owns the portfolio, and provides a valid `range`. | Response Sentinel to User | An array of downsampled `DailyPortfolioSnapshot` objects is returned. | P_I_2401 |
+| P_E_2501 | User unauthorized | User is not authenticated or does not own the portfolio. | Request User to Sentinel | Retrieval rejected with HTTP 403 Forbidden. | P_E_2501 |
+| P_E_2502 | Portfolio not found | The specified `portfolioId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | P_E_2502 |
+| P_E_2503 | Invalid range parameter | The `range` query parameter is missing or not one of the supported values. | Request User to Sentinel | Retrieval rejected with HTTP 400 Bad Request. | P_E_2503 |
 
 #### 3.3.3. Portfolio Update
 
@@ -1061,7 +1104,7 @@ stateDiagram-v2
 
 ##### 4.1.2.2. Single Retrieval (Holding Detail View)
 
-From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. The view has two modes: a default "Read-Only Mode" and a "Manage Mode" for editing the holding and its lots.
+From the holding list, a user can select a single holding to navigate to the Holding Detail View. This view displays the holding's complete computed data and a list of all its associated purchase lots. The view has two modes: a default "Read-Only Mode" and a "Manage Mode" for editing the holding and its lots. The view also contains a historical performance chart, which loads its data asynchronously to ensure the main details are displayed instantly.
 
 ###### 4.1.2.2.1. User Journey Spec and Visual Representation
 
@@ -1462,6 +1505,43 @@ sequenceDiagram
 - **H_I_2201**: "Holding {holdingId} retrieved successfully."
 - **H_E_2301**: "User is not authorized to access this resource."
 - **H_E_2302**: "The requested holding was not found."
+
+##### 4.3.3.3. H_2400: Holding Chart Data Retrieval
+
+- **Description**: Retrieves aggregated, time-series performance data for a specific holding, optimized for display in a chart. The endpoint uses the same **downsampling** logic as the portfolio chart endpoint (`P_2400`) based on the `range` query parameter to ensure optimal performance.
+
+- **Endpoint**: `GET /api/users/me/holdings/{holdingId}/chart-data?range={range}`
+
+- **Sequence Diagram for Holding Chart Data Retrieval**
+
+```mermaid 
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database (Firestore)
+
+    User->>Sentinel: 1. GET /api/users/me/holdings/{holdingId}/chart-data?range=1y
+    activate Sentinel
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User
+    Sentinel->>DB: 3. Query 'dailySnapshots' subcollection for holding
+    activate DB
+    DB-->>Sentinel: 4. Return time-series data
+    deactivate DB
+
+    Note over Sentinel: 5. Backend performs downsampling based on 'range'.
+
+    Sentinel-->>User: 6. Return downsampled list of snapshots
+    deactivate Sentinel
+```
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| H_I_2401 | Chart data retrieval succeeds | User is authenticated, owns the holding, and provides a valid `range`. | Response Sentinel to User | An array of downsampled `DailyHoldingSnapshot` objects is returned. | H_I_2401 |
+| H_E_2501 | User unauthorized | User is not authenticated or does not own the holding. | Request User to Sentinel | Retrieval rejected with HTTP 403 Forbidden. | H_E_2501 |
+| H_E_2502 | Holding not found | The specified `holdingId` does not exist. | Sentinel internal | Retrieval rejected with HTTP 404 Not Found. | H_E_2502 |
+| H_E_2503 | Invalid range parameter | The `range` query parameter is missing or not one of the supported values. | Request User to Sentinel | Retrieval rejected with HTTP 400 Bad Request. | H_E_2503 |
 
 #### 4.3.4. Holding Update
 
@@ -3275,4 +3355,12 @@ COMMODITY:
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
 - **Availability**: 99.9% uptime via GCP.
+
+#### 9.4.1. Time-Series Data Handling Rationale
+
+To meet the **Performance** and **Scalability** non-functional requirements, a specific architectural approach has been chosen for handling historical time-series data (e.g., daily performance snapshots).
+
+-  **Problem**: Storing daily snapshots for every portfolio and holding means the dataset can grow very large over time. Including this entire history in the main `GET` requests for portfolios or holdings would lead to large payload sizes, slow API response times, and a poor user experience, especially on mobile networks.
+-  **Solution**: The system uses **dedicated endpoints** (`.../chart-data`) that provide **downsampled** data. Instead of returning thousands of daily data points for a multi-year view, the backend intelligently aggregates them into weekly or monthly points.
+-  **Benefits**: This approach ensures that the data payload remains small and manageable, API responses are consistently fast, and the frontend charts render quickly, directly supporting the NFR of API response times under 500ms.
 
