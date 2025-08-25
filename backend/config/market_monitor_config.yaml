@@ -1,0 +1,7 @@
+# This file defines system-wide configurations, including the list of
+# tickers required by the system for certain rule conditions (e.g., VIX).
+
+system_required_tickers:
+  - "VIXY" # Proxy for the VIX index
+
+  

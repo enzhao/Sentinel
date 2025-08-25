@@ -1,0 +1,19 @@
+# This file defines the tax rules for different asset classes.
+# The backend loads this configuration on startup.
+
+EQUITY:
+  - description: "Standard capital gains tax for equities."
+    taxRate: 26.375
+
+CRYPTO:
+  - description: "Cryptocurrencies held for more than one year are tax-free."
+    taxRate: 0
+    condition: "holdingDurationDays > 365"
+  - description: "Cryptocurrencies held for one year or less are subject to standard capital gains tax."
+    taxRate: 26.375
+
+COMMODITY:
+  - description: "Standard capital gains tax for commodities."
+    taxRate: 26.375
+
+    
