@@ -1,2 +1,6 @@
 # Developer tools and script dependencies
 pyyaml
+mkdocs 
+mkdocs-material
+pymdown-extensions
+mkdocs-markdownextradata-plugin

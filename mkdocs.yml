@@ -1,0 +1,54 @@
+# Site metadata
+site_name: Sentinel User Manual
+site_description: User guide for Sentinel, a tool for rule-based investment strategy automation
+site_url: https://example.com/docs  # Replace with your actual deployment URL, if applicable
+docs_dir: docs/user_docs
+site_dir: docs_generated
+
+# Theme configuration
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: green
+      accent: light blue
+    - scheme: slate
+      primary: green
+      accent: light blue
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - content.tabs
+  icon:
+    repo: fontawesome/brands/github  # Optional: Customize if hosted on GitHub
+
+# Plugins for enhanced functionality
+plugins:
+  - search
+  - markdownextradata  # Optional: For advanced Markdown features, if needed
+
+# Markdown extensions for Mermaid and other features
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - Quick Start Guide:
+    - Setup: getting-started.md
+    - Tour: understanding-the-dashboard.md
+    - Action: creating-your-first-rule.md
+  - Supported Trading Rules: supported-trading-rules.md
