@@ -1,88 +1,127 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { createTestingPinia } from '@pinia/testing'
-import AppBar from '@/components/AppBar.vue'
-import { useAuthStore } from '@/stores/auth'
-import { createRouter, createWebHistory } from 'vue-router'
-import routes from '@/router/routes'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
+import AppBar from '@/components/AppBar.vue';
+import { createVuetify } from 'vuetify';
+import * as components from 'vuetify/components';
+import * as directives from 'vuetify/directives';
 
-// Setup
-const router = createRouter({ history: createWebHistory(), routes })
-const vuetify = createVuetify({ components, directives })
+const vuetify = createVuetify({
+  components,
+  directives,
+});
 
 describe('AppBar.vue', () => {
-  it('displays login and signup buttons when user is not authenticated', () => {
-    const pinia = createTestingPinia({ createSpy: vi.fn })
-    const authStore = useAuthStore(pinia)
-    authStore.user = null
-
-    const wrapper = mount({
-      template: '<v-app><AppBar /></v-app>',
-    }, {
-      global: {
-        components: {
-          AppBar,
-        },
-        plugins: [pinia, router, vuetify],
+  const mountAppBar = (props: any) => mount(AppBar, {
+    global: {
+      plugins: [vuetify],
+      stubs: {
+        VAppBar: { template: '<header><slot name="prepend" /><slot /><slot name="append" /></header>' },
+        VAppBarNavIcon: { template: '<button class="v-app-bar-nav-icon"><slot /></button>' },
+        VAppBarTitle: { template: '<div class="v-app-bar-title"><slot /></div>' },
+        VSpacer: { template: '<div class="v-spacer"></div>' },
+        VBtn: { template: '<button class="v-btn"><slot /></button>' },
+        VBadge: { template: '<span class="v-badge"><slot /></span>' },
+        VIcon: { template: '<i class="v-icon"><slot /></i>' },
       },
-    })
+    },
+    props,
+  });
 
-    // Use `findComponent` for Vuetify components
-    const loginBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log In')
-    const logoutBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log Out')
+  it('renders title correctly', () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+    });
+    expect(wrapper.find('.v-app-bar-title').text()).toBe('Test Title');
+  });
 
-    expect(loginBtn?.exists()).toBe(true)
-    expect(logoutBtn).toBe(undefined)
-  })
-
-  it('displays user email and logout button when user is authenticated', () => {
-    const pinia = createTestingPinia({ createSpy: vi.fn })
-    const authStore = useAuthStore(pinia)
-    authStore.user = { email: 'test@example.com' } as any
-
-    const wrapper = mount({
-      template: '<v-app><AppBar /></v-app>',
-    }, {
-      global: {
-        components: {
-          AppBar,
-        },
-        plugins: [pinia, router, vuetify],
+  it('renders leading action icon and emits event', async () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+      leadingAction: {
+        icon: 'menu',
+        event: 'USER_CLICKS_MENU',
       },
-    })
+    });
 
-    const logoutBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log Out')
-    const loginBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log In')
+    expect(wrapper.find('.v-app-bar-nav-icon').exists()).toBe(true);
+    expect(wrapper.find('.v-app-bar-nav-icon .v-icon').text()).toBe('menu');
 
-    expect(wrapper.text()).toContain('test@example.com')
-    expect(logoutBtn?.exists()).toBe(true)
-    expect(loginBtn).toBe(undefined)
-  })
+    await wrapper.find('.v-app-bar-nav-icon').trigger('click');
+    expect(wrapper.emitted().USER_CLICKS_MENU).toBeTruthy();
+  });
 
-  it('calls the logout action when the logout button is clicked', async () => {
-    const pinia = createTestingPinia({ createSpy: vi.fn })
-    const authStore = useAuthStore(pinia)
-    authStore.user = { email: 'test@example.com' } as any
-    // Mock the logout action
-    authStore.logout = vi.fn()
-
-    const wrapper = mount({
-      template: '<v-app><AppBar /></v-app>',
-    }, {
-      global: {
-        components: {
-          AppBar,
+  it('renders multiple actions and emits events', async () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+      actions: [
+        {
+          label: 'Login',
+          event: 'USER_CLICKS_LOGIN',
         },
-        plugins: [pinia, router, vuetify],
+        {
+          label: 'Register',
+          event: 'USER_CLICKS_REGISTER',
+        },
+      ],
+    });
+
+    const buttons = wrapper.findAll('.v-btn');
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].text()).toBe('Login');
+    expect(buttons[1].text()).toBe('Register');
+
+    await buttons[0].trigger('click');
+    expect(wrapper.emitted().USER_CLICKS_LOGIN).toBeTruthy();
+
+    await buttons[1].trigger('click');
+    expect(wrapper.emitted().USER_CLICKS_REGISTER).toBeTruthy();
+  });
+
+  it('renders alert action with badge when badgeVisible is true', () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+      alertAction: {
+        icon: 'notifications',
+        event: 'USER_CLICKS_ALERTS_ICON',
+        bindings: {
+          badgeVisible: true,
+        },
       },
-    })
+    });
 
-    const logoutBtn = wrapper.findAllComponents({ name: 'VBtn' }).find(btn => btn.text() === 'Log Out')
-    await logoutBtn?.trigger('click')
+    expect(wrapper.find('.v-badge').exists()).toBe(true);
+    expect(wrapper.find('.v-badge .v-icon').text()).toBe('notifications');
+  });
 
-    expect(authStore.logout).toHaveBeenCalledTimes(1)
-  })
-})
+  it('renders alert action without badge when badgeVisible is false', () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+      alertAction: {
+        icon: 'notifications',
+        event: 'USER_CLICKS_ALERTS_ICON',
+        bindings: {
+          badgeVisible: false,
+        },
+      },
+    });
+
+    expect(wrapper.find('.v-badge').exists()).toBe(false);
+    expect(wrapper.find('.v-icon').text()).toBe('notifications');
+  });
+
+  it('emits alert action event when clicked', async () => {
+    const wrapper = mountAppBar({
+      title: 'Test Title',
+      alertAction: {
+        icon: 'notifications',
+        event: 'USER_CLICKS_ALERTS_ICON',
+        bindings: {
+          badgeVisible: false,
+        },
+      },
+    });
+
+    await wrapper.find('.v-btn').trigger('click');
+    expect(wrapper.emitted().USER_CLICKS_ALERTS_ICON).toBeTruthy();
+  });
+});

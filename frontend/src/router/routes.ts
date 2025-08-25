@@ -1,4 +1,4 @@
-import HomeView from '../views/HomeView.vue'
+import HomePage from '../views/HomePage.vue'
 import LoginView from '../views/LoginView.vue'
 import PortfolioView from '../views/PortfolioView.vue'
 import AboutView from '../views/AboutView.vue'
@@ -7,7 +7,8 @@ const routes = [
   {
     path: '/',
     name: 'home',
-    component: HomeView
+    component: HomePage,
+    meta: { requiresAuth: false } // Public homepage does not require authentication
   },
   {
     path: '/about',
