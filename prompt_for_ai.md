@@ -39,6 +39,8 @@ I expect you to adopt an iterative, vertical slice, feature-driven approach. I w
 7. **End to End Testing:** Write and perform end-to-end testing of the entire feature to ensure it works as expected. If any tests fail, fix the issues before proceeding.
 8. **Verify:** Run all project-specific build, linting, and type-checking commands.
 
+There might exist outdated code in both backend and frontend for the features working on, feel free to modify or completely re-implement the code, and reoranize the code from scratch according to the product_spec.md. 
+
 ### Handling Inter-Feature Dependencies 
 
 If inter-feature dependencies present in the product_spec.md, please follow this approach: API Contract First with Minimal Backend Implementation and Frontend Mocking. To be specific:
@@ -64,14 +66,14 @@ The AI should prioritize features based on their foundational nature. A logical 
 ### Foundational Features (Must-Have for All Functional Features)
 
 - [x] project scaffolding and setup, including initial CI/CD pipelines (if not already done)
-- [ ] Generate the OpenAPI spec from the product_spec.md, the generated file should be api/sentinel_openapi.yaml, the generated openapi spec should contain section refrences back to the relevant sections in product_spec.md for traceability.
-- [ ] Shared Models: Generate or define shared data models (e.g., Pydantic models for FastAPI, TypeScript interfaces for Vue) based on the product_spec.md and the api/sentinel_openapi.yaml spec.
+- [x] Generate the OpenAPI spec from the product_spec.md, the generated file should be api/sentinel_openapi.yaml, the generated openapi spec should contain section refrences back to the relevant sections in product_spec.md for traceability.
+- [x] Shared Models: Generate or define shared data models (e.g., Pydantic models for FastAPI, TypeScript interfaces for Vue) based on the product_spec.md and the api/sentinel_api.yaml spec. All generated models should contain section refrences back to the relevant sections in product_spec.md for traceability. 
 
 ### Functional Features
 
-- [ ] Public Homepage (see product_spec.md Chapter 8)
-- [ ] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8)
-- [ ] Portfolio Management (see product_spec.md Chapter 3)
+- [ ] Public Homepage (see product_spec.md Chapter 8). 
+- [ ] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
+- [ ] Portfolio Management (see product_spec.md Chapter 3). 
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)
 - [ ] Lot Management (CRUD, see product_spec.md Chapter 5)
 - [ ] Strategy Rule Management (CRUD, Effective Rule Retrieval, etc., see product_spec.md Chapter 6)
