@@ -1,6 +1,35 @@
 version: '3'
 
+# Define a variable for the utility environment's Python executable
+vars:
+  UTIL_PYTHON: venv_util/bin/python
+
 tasks:
+  # Generates the source Mermaid diagrams from the ui_flows_spec.yaml file
+  spec:generate-flow-diagrams:
+    desc: Generates the source Mermaid diagrams from the ui_flows_spec.yaml file.
+    cmds:
+      - echo "Generating Mermaid diagrams from flow specs..."
+      - "{{.UTIL_PYTHON}} util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml"
+      - echo "Source diagrams generated in docs/ui_flow_diagrams.md."
+    silent: false
+
+  # Updates the product_spec.md with the latest generated Mermaid diagrams
+  spec:sync-flow-diagrams-to-spec:
+    desc: Updates the product_spec.md with the latest generated Mermaid diagrams.
+    cmds:
+      - echo "Synchronizing diagrams into product_spec.md..."
+      - "{{.UTIL_PYTHON}} util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md"
+      - echo "Product spec diagrams are up to date."
+    silent: false
+  
+  spec:update-flow-diagrams-in-product_spec:
+    desc: "Generates and updates all flow diagrams in the product spec."
+    cmds:
+      - task: spec:generate-flow-diagrams
+      - task: spec:sync-flow-diagrams-to-spec
+    silent: false
+
   generate-messages:
     desc: "Parses product_spec.md to generate message files for frontend and backend."
     cmds:
@@ -88,3 +117,4 @@ tasks:
       - task: backend:build-docker
       - task: backend:run-docker
     silent: false
+

@@ -20,36 +20,40 @@ For instructions on how to add, update, and manage messages, please see the **[M
 
 The project uses a specification-driven approach for the UI, where formal YAML documents define the structure and behavior of the frontend.
 
-* `docs/specs/views_spec.yaml`: Defines the static structure of all UI views.
-* `docs/specs/ui_flows_spec.yaml`: Defines the user interaction state machines (flows).
+- `docs/specs/views_spec.yaml`: Defines the static structure of all UI views.
+- `docs/specs/ui_flows_spec.yaml`: Defines the user interaction state machines (flows).
 
-#### 1.3.1 Generating UI Flow Diagrams
+#### 1.3.1. Step 1: Generating UI Flow Diagrams
 
-To keep the visual diagrams in `product_spec.md` synchronized with the flow definitions, we use a script to automatically generate MermaidJS code from the `ui_flows_spec.yaml` file. **Never edit the Mermaid diagrams in the product spec manually.**
-
-The script has two modes:
-
-**A) Generate All Diagrams into a File (Recommended)**
-
-To regenerate all diagrams at once, run the script without a `flowId`. This will create or update a single Markdown file containing all the diagrams.
+To visualize the flow definitions, we use a script to automatically generate Mermaid code from the `ui_flows_spec.yaml` file.
 
 1.  Ensure your utility virtual environment is active (`source util_env/bin/activate`).
 2.  Run the script from the project root:
     ```bash
     python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml
     ```
-3.  This will generate the file `docs/ui_flow_diagrams.md`. You can then copy the specific diagram you need and paste it into `product_spec.md`.
+3.  This will generate the source-of-truth diagrams in `docs/ui_flow_diagrams.md`.
 
-**B) Generate a Single Diagram to the Console**
+#### 1.3.2. Step 2: Synchronizing Diagrams into the Product Spec
 
-If you only need to quickly visualize a single flow, provide the `flowId` as an argument.
+After generating the diagrams, use this second script to automatically insert them into the main `product_spec.md`. **Never edit the Mermaid diagrams in the product spec manually**.
 
-1.  Ensure your utility virtual environment is active.
-2.  Run the script with a `flowId`:
-    ```bash
-    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml FLOW_CREATE_PORTFOLIO_MANUAL
-    ```
-3.  The script will print the Mermaid code for that single flow to your console.
+-   **Prerequisite**: The `product_spec.md` file must contain placeholder comments where the diagrams should be inserted (e.g., ```mermaid).
+
+-   **Usage**:
+    1.  Ensure your utility virtual environment is active.
+    2.  Run the script from the project root, providing the source diagrams file and the target spec file.
+        ```bash
+        python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md
+        ```
+    3.  The script will find the placeholders and replace them with the latest diagrams. It will then print a report summarizing which diagrams were updated or if any are out of sync.
+    
+> **Tip for Testing**: You can provide an optional third argument (`--output` or `-o`) to write the results to a new file instead of overwriting the original. This is useful for verifying the script's output before committing changes.
+> ```bash
+> python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md -o product_spec_test.md
+> ```
+
+> **Caution**: This script relies on the specific formatting of the placeholder comments in `product_spec.md` and the `## Flow: ...` headings in `docs/ui_flow_diagrams.md`. Significant changes to these formats may break the script. If the script fails, ensure these structures have not been altered.
 
 ---
 
