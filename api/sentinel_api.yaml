@@ -1,0 +1,1782 @@
+openapi: 3.1.1
+info:
+  title: Sentinel API
+  version: 0.3.0
+  description: API for the Sentinel investment monitoring application.
+servers:
+  - url: https://api.sentinel.com/api/v1
+    description: Production server (v1)
+  - url: http://localhost:8000/api/v1
+    description: Local development server (v1)
+    
+security:
+  - firebaseAuth: []
+
+paths:
+  /users/me/settings:
+    put:
+      # Reference: product_spec.md#3332-p_3400-set-default-portfolio
+      summary: Update User Settings
+      operationId: updateUserSettings
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserSettingsRequest'
+      responses:
+        '200':
+          description: User settings updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/me/portfolios:
+    post:
+      # Reference: product_spec.md#331-p_1000-portfolio-creation
+      summary: Create a new portfolio
+      operationId: createPortfolio
+      tags:
+        - Portfolios
+      parameters:
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortfolioCreationRequest'
+      responses:
+        '201':
+          description: Portfolio created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A portfolio with the same name already exists for the user.
+    get:
+      # Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
+      summary: Retrieve a list of all portfolios for the authenticated user
+      operationId: listPortfolios
+      tags:
+        - Portfolios
+      responses:
+        '200':
+          description: A list of the user's portfolios.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PortfolioSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /users/me/portfolios/{portfolioId}:
+    get:
+      # Reference: product_spec.md#3321-p_2000-single-portfolio-retrieval
+      summary: Retrieve a single portfolio by ID
+      operationId: getPortfolioById
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to retrieve.
+      responses:
+        '200':
+          description: Full, enriched portfolio data is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Portfolio not found.
+    put:
+      # Reference: product_spec.md#3331-p_3000-portfolio-update-manual
+      summary: Update a specific portfolio's settings
+      operationId: updatePortfolio
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to update.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortfolioUpdateRequest'
+      responses:
+        '200':
+          description: Portfolio updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Portfolio not found.
+    delete:
+      # Reference: product_spec.md#3341-p_4000-portfolio-deletion-entire-portfolio
+      summary: Delete an entire portfolio
+      operationId: deletePortfolio
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to delete.
+        - $ref: '#/components/headers/IdempotencyKey'
+      responses:
+        '204':
+          description: Portfolio and its associated holdings successfully deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Portfolio not found.
+  /users/me/portfolios/{portfolioId}/chart-data:
+    get:
+      # Reference: product_spec.md#3323-p_2400-portfolio-chart-data-retrieval
+      summary: Retrieve time-series performance data for a portfolio
+      operationId: getPortfolioChartData
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio.
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [ '1m', '3m', '6m', '1y', '5y', 'all' ]
+            default: '1y'
+          required: true
+          description: The time range for the chart data (e.g., '1m', '1y', 'all').
+      responses:
+        '200':
+          description: An array of downsampled DailyPortfolioSnapshot objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyPortfolioSnapshot'
+        '400':
+          description: Invalid range parameter.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Portfolio not found.
+  /users/me/portfolios/{portfolioId}/transactions/import:
+    post:
+      # Reference: product_spec.md#335-p_5000-unified-transaction-import
+      summary: Upload a file for unified transaction import
+      operationId: uploadTransactionsFile
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to import transactions into.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The transaction file (e.g., CSV) to upload.
+      responses:
+        '200':
+          description: File processed successfully. Returns annotated list for review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionImportReview'
+        '400':
+          description: Invalid file type or size, or parsing failed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/me/portfolios/{portfolioId}/transactions/import/confirm:
+    post:
+      # Reference: product_spec.md#335-p_5000-unified-transaction-import
+      summary: Confirm and apply imported transactions
+      operationId: confirmTransactionsImport
+      tags:
+        - Portfolios
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to confirm transactions for.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionImportConfirmRequest'
+      responses:
+        '200':
+          description: Portfolio successfully updated with imported transactions.
+        '400':
+          description: Confirmed data invalid.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/me/holdings/lookup:
+    post:
+      # Reference: product_spec.md#4311-h_1000-financial-instrument-lookup
+      summary: Look up financial instruments
+      operationId: lookupInstrument
+      tags:
+        - Holdings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentLookupRequest'
+      responses:
+        '200':
+          description: Instrument(s) found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Instrument'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No instrument could be found for the identifier.
+  /users/me/holdings:
+    post:
+      # Reference: product_spec.md#4312-h_1200-holding-creation
+      summary: Create a new holding
+      operationId: createHolding
+      tags:
+        - Holdings
+      parameters:
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldingCreationRequest'
+      responses:
+        '201':
+          description: Holding created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/portfolios/{portfolioId}/holdings:
+    get:
+      # Reference: product_spec.md#4331-h_2000-holding-list-retrieval-portfolio-details-view
+      summary: Retrieve a list of all holdings for a specific portfolio
+      operationId: listHoldingsForPortfolio
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: portfolioId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the portfolio to retrieve holdings from.
+      responses:
+        '200':
+          description: A list of enriched holdings for the portfolio.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HoldingSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}:
+    get:
+      # Reference: product_spec.md#4332-h_2200-single-holding-retrieval-holding-details-view
+      summary: Retrieve a single holding by ID
+      operationId: getHoldingById
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to retrieve.
+      responses:
+        '200':
+          description: Full, enriched holding data is returned, including all lots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      # Reference: product_spec.md#4341-h_3000-manual-holding-update
+      summary: Update a specific holding's metadata
+      operationId: updateHolding
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to update.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldingUpdateRequest'
+      responses:
+        '200':
+          description: Holding metadata updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holding'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      # Reference: product_spec.md#435-h_4000-holding-deletion
+      summary: Delete an entire holding
+      operationId: deleteHolding
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to delete.
+        - $ref: '#/components/headers/IdempotencyKey'
+      responses:
+        '204':
+          description: Holding successfully deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}/chart-data:
+    get:
+      # Reference: product_spec.md#4333-h_2400-holding-chart-data-retrieval
+      summary: Retrieve time-series performance data for a holding
+      operationId: getHoldingChartData
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding.
+        - in: query
+          name: range
+          schema:
+            type: string
+            enum: [ '1m', '3m', '6m', '1y', '5y', 'all' ]
+            default: '1y'
+          required: true
+          description: The time range for the chart data (e.g., '1m', '1y', 'all').
+      responses:
+        '200':
+          description: An array of downsampled DailyHoldingSnapshot objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DailyHoldingSnapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}/move:
+    post:
+      # Reference: product_spec.md#437-h_6000-move-holding
+      summary: Move a holding to another portfolio
+      operationId: moveHolding
+      tags:
+        - Holdings
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to move.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveHoldingRequest'
+      responses:
+        '200':
+          description: Holding successfully moved.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}/lots:
+    post:
+      # Reference: product_spec.md#5311-l_1000-manual-creation
+      summary: Manually add a new purchase lot to an existing holding
+      operationId: createLot
+      tags:
+        - Lots
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to add the lot to.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotCreationRequest'
+      responses:
+        '201':
+          description: Lot added successfully to the holding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}/lots/{lotId}:
+    put:
+      # Reference: product_spec.md#533-l_3000-manual-lot-update
+      summary: Manually update the details of an existing lot
+      operationId: updateLot
+      tags:
+        - Lots
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the parent holding.
+        - in: path
+          name: lotId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the lot to update.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LotUpdateRequest'
+      responses:
+        '200':
+          description: Lot updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      # Reference: product_spec.md#534-l_4000-lot-deletion
+      summary: Delete a specific purchase lot from a holding
+      operationId: deleteLot
+      tags:
+        - Lots
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the parent holding.
+        - in: path
+          name: lotId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the lot to delete.
+        - $ref: '#/components/headers/IdempotencyKey'
+      responses:
+        '204':
+          description: Lot successfully deleted.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/rulesets:
+    post:
+      # Reference: product_spec.md#631-r_1000-rule-set-creation
+      summary: Create a new RuleSet and link it to a parent Portfolio or Holding
+      operationId: createRuleSet
+      tags:
+        - RuleSets
+      parameters:
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleSetCreationRequest'
+      responses:
+        '201':
+          description: Rule Set created and linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/me/rulesets/{ruleSetId}:
+    put:
+      # Reference: product_spec.md#633-r_3000-rule-set-update
+      summary: Update the contents of an existing RuleSet
+      operationId: updateRuleSet
+      tags:
+        - RuleSets
+      parameters:
+        - in: path
+          name: ruleSetId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the RuleSet to update.
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleSetUpdateRequest'
+      responses:
+        '200':
+          description: Rule Set updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      # Reference: product_spec.md#634-r_4000-rule-set-deletion
+      summary: Delete a RuleSet and unlink it from its parent
+      operationId: deleteRuleSet
+      tags:
+        - RuleSets
+      parameters:
+        - in: path
+          name: ruleSetId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the RuleSet to delete.
+        - $ref: '#/components/headers/IdempotencyKey'
+      responses:
+        '204':
+          description: Rule Set deleted and unlinked successfully.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/holdings/{holdingId}/effective-rules:
+    get:
+      # Reference: product_spec.md#632-r_2000-effective-rule-set-retrieval
+      summary: Retrieve the effective RuleSet for a given holding
+      operationId: getEffectiveRuleSetForHolding
+      tags:
+        - RuleSets
+      parameters:
+        - in: path
+          name: holdingId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the holding to retrieve effective rules for.
+      responses:
+        '200':
+          description: The effective RuleSet is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleSet'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /users/me/alerts:
+    get:
+      # Reference: product_spec.md#741-a_1000-alert-list-retrieval
+      summary: Retrieve a list of all historical alerts for the authenticated user
+      operationId: listAlerts
+      tags:
+        - Alerts
+      responses:
+        '200':
+          description: A list of the user's alerts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      # Reference: product_spec.md#743-a_3000-mark-alerts-as-read
+      summary: Update the status of one or more alerts to isRead true
+      operationId: markAlertsAsRead
+      tags:
+        - Alerts
+      parameters:
+        - $ref: '#/components/headers/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AlertUpdateRequest'
+      responses:
+        '200':
+          description: Alerts successfully marked as read.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /users/me/alerts/{alertId}:
+    get:
+      # Reference: product_spec.md#742-a_2000-single-alert-retrieval
+      summary: Retrieve the full details of a single, specific alert
+      operationId: getAlertById
+      tags:
+        - Alerts
+      parameters:
+        - in: path
+          name: alertId
+          schema:
+            $ref: '#/components/schemas/UUID'
+          required: true
+          description: The ID of the alert to retrieve.
+      responses:
+        '200':
+          description: Full, detailed alert data is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  headers:
+    IdempotencyKey:
+      description: Client-generated UUID v4 to ensure idempotent behavior.
+      schema:
+        type: string
+        format: uuid
+      required: true
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID Token
+  schemas:
+    # Reusable types
+    UUID:
+      type: string
+      format: uuid
+      description: Unique identifier (UUID v4).
+    ISODateTime:
+      type: string
+      format: date-time
+      description: Date and time in ISO 8601 format.
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: A unique, machine-readable error code.
+          example: 'P_E_1102'
+        message:
+          type: string
+          description: A human-readable description of the error.
+          example: 'Portfolio with the specified ID was not found.'
+      required:
+        - code
+        - message
+
+    # Reference: product_spec.md#82-data-models
+    User:
+      type: object
+      properties:
+        uid:
+          type: string
+          description: Firebase Auth UID.
+          readOnly: true
+        username:
+          type: string
+          description: User-defined, for display purposes.
+        email:
+          type: string
+          format: email
+          description: Copied from Firebase Auth for convenience.
+          readOnly: true
+        defaultPortfolioId:
+          $ref: '#/components/schemas/UUID'
+        subscriptionStatus:
+          $ref: '#/components/schemas/SubscriptionStatus'
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+        createdAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        modifiedAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+      required:
+        - uid
+        - username
+        - email
+        - defaultPortfolioId
+        - subscriptionStatus
+        - notificationPreferences
+        - createdAt
+        - modifiedAt
+    # Reference: product_spec.md#82-data-models
+    UpdateUserSettingsRequest:
+      type: object
+      properties:
+        defaultPortfolioId:
+          $ref: '#/components/schemas/UUID'
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+      required:
+        - defaultPortfolioId
+    # Reference: product_spec.md#82-data-models
+    NotificationPreferences:
+      type: object
+      properties:
+        email:
+          type: boolean
+          description: Whether to send email notifications.
+          default: true
+        push:
+          type: boolean
+          description: Whether to send push notifications.
+          default: false
+      required:
+        - email
+        - push
+    # Reference: product_spec.md#82-data-models
+    SubscriptionStatus:
+      type: string
+      enum:
+        - FREE
+        - PREMIUM
+      default: FREE
+    # Reference: product_spec.md#321-primary-stored-models
+    Portfolio:
+      type: object
+      properties:
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        userId:
+          type: string
+          description: Firebase Auth UID, links the portfolio to its owner.
+          readOnly: true
+        name:
+          type: string
+          description: User-defined, e.g., "My Real Portfolio", "Tech Speculation".
+        description:
+          type: string
+          nullable: true
+          description: Optional, user-defined description for the portfolio.
+        defaultCurrency:
+          $ref: '#/components/schemas/Currency'
+        cashReserve:
+          $ref: '#/components/schemas/CashReserve'
+        ruleSetId:
+          $ref: '#/components/schemas/UUID'
+          nullable: true
+          description: Optional, UUID linking to a RuleSet document, for trading rules.
+        createdAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        modifiedAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+      required:
+        - portfolioId
+        - userId
+        - name
+        - defaultCurrency
+        - cashReserve
+        - createdAt
+        - modifiedAt
+    # Reference: product_spec.md#321-primary-stored-models
+    CashReserve:
+      type: object
+      properties:
+        totalAmount:
+          type: number
+          format: float
+          description: Total cash amount in defaultCurrency.
+        warChestAmount:
+          type: number
+          format: float
+          description: Portion for opportunistic buying in defaultCurrency.
+      required:
+        - totalAmount
+        - warChestAmount
+    # Reference: product_spec.md#321-primary-stored-models
+    Currency:
+      type: string
+      enum:
+        - EUR
+        - USD
+        - GBP
+      default: EUR
+    # Reference: product_spec.md#322-time-series-subcollections
+    DailyPortfolioSnapshot:
+      type: object
+      properties:
+        date:
+          $ref: '#/components/schemas/ISODateTime'
+        totalCost:
+          type: number
+          format: float
+        currentValue:
+          type: number
+          format: float
+        preTaxGainLoss:
+          type: number
+          format: float
+        afterTaxGainLoss:
+          type: number
+          format: float
+        gainLossPercentage:
+          type: number
+          format: float
+        sma7:
+          type: number
+          format: float
+          nullable: true
+        sma20:
+          type: number
+          format: float
+          nullable: true
+        sma50:
+          type: number
+          format: float
+          nullable: true
+        sma200:
+          type: number
+          format: float
+          nullable: true
+      required:
+        - date
+        - totalCost
+        - currentValue
+        - preTaxGainLoss
+        - afterTaxGainLoss
+        - gainLossPercentage
+    # Reference: product_spec.md#331-p_1000-portfolio-creation
+    PortfolioCreationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: User-defined name for the portfolio.
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Optional, user-defined description for the portfolio.
+          maxLength: 500
+        defaultCurrency:
+          $ref: '#/components/schemas/Currency'
+        cashReserve:
+          $ref: '#/components/schemas/CashReserve'
+      required:
+        - name
+        - defaultCurrency
+        - cashReserve
+    # Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
+    PortfolioSummary:
+      type: object
+      properties:
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          description: Unique UUID of the portfolio.
+        name:
+          type: string
+          description: User-defined name for the portfolio.
+        currentValue:
+          type: number
+          format: float
+          description: Current total value of the portfolio.
+      required:
+        - portfolioId
+        - name
+        - currentValue
+    # Reference: product_spec.md#3331-p_3000-portfolio-update-manual
+    PortfolioUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: User-defined name for the portfolio.
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          nullable: true
+          description: Optional, user-defined description for the portfolio.
+          maxLength: 500
+        defaultCurrency:
+          $ref: '#/components/schemas/Currency'
+        cashReserve:
+          $ref: '#/components/schemas/CashReserve'
+      required:
+        - name
+        - defaultCurrency
+        - cashReserve
+    # Reference: product_spec.md#335-p_5000-unified-transaction-import
+    TransactionImportReview:
+      type: object
+      properties:
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          description: The ID of the portfolio.
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotatedTransaction'
+      required:
+        - portfolioId
+        - transactions
+    # Reference: product_spec.md#335-p_5000-unified-transaction-import
+    AnnotatedTransaction:
+      type: object
+      properties:
+        ticker:
+          type: string
+          description: The ticker symbol of the security.
+        purchaseDate:
+          $ref: '#/components/schemas/ISODateTime'
+          description: The date of the transaction.
+        quantity:
+          type: number
+          format: float
+          description: The quantity of shares.
+        purchasePrice:
+          type: number
+          format: float
+          description: The purchase price per share.
+        action:
+          type: string
+          enum:
+            - CREATE
+            - UPDATE
+          description: 'Indicates whether this transaction will CREATE a new holding or UPDATE an existing one.'
+      required:
+        - ticker
+        - purchaseDate
+        - quantity
+        - purchasePrice
+        - action
+    # Reference: product_spec.md#335-p_5000-unified-transaction-import
+    TransactionImportConfirmRequest:
+      type: object
+      properties:
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          description: The ID of the portfolio.
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotatedTransaction'
+      required:
+        - portfolioId
+        - transactions
+    # Reference: product_spec.md#421-primary-stored-models
+    Holding:
+      type: object
+      properties:
+        holdingId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        userId:
+          type: string
+          description: Firebase Auth UID, links the holding to its owner.
+          readOnly: true
+        ticker:
+          type: string
+          description: e.g., "VOO", "QQQ.DE".
+        ISIN:
+          type: string
+          nullable: true
+          description: Optional, e.g., "IE00B5BMR087".
+        WKN:
+          type: string
+          nullable: true
+          description: Optional, e.g., "A0YEDG".
+        securityType:
+          $ref: '#/components/schemas/SecurityType'
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        annualCosts:
+          type: number
+          format: float
+          nullable: true
+          description: Optional, percentage, e.g., 0.07 for a 0.07% TER.
+        createdAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        modifiedAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        lots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Lot'
+          description: Array of Lot objects.
+      required:
+        - holdingId
+        - portfolioId
+        - userId
+        - ticker
+        - securityType
+        - assetClass
+        - currency
+        - createdAt
+        - modifiedAt
+        - lots
+    # Reference: product_spec.md#421-primary-stored-models
+    SecurityType:
+      type: string
+      enum:
+        - STOCK
+        - ETF
+        - FUND
+    # Reference: product_spec.md#421-primary-stored-models
+    AssetClass:
+      type: string
+      enum:
+        - EQUITY
+        - CRYPTO
+        - COMMODITY
+    # Reference: product_spec.md#422-time-series-subcollections
+    DailyHoldingSnapshot:
+      type: object
+      properties:
+        date:
+          $ref: '#/components/schemas/ISODateTime'
+        totalCost:
+          type: number
+          format: float
+        currentValue:
+          type: number
+          format: float
+        preTaxGainLoss:
+          type: number
+          format: float
+        afterTaxGainLoss:
+          type: number
+          format: float
+        gainLossPercentage:
+          type: number
+          format: float
+        sma7:
+          type: number
+          format: float
+          nullable: true
+        sma20:
+          type: number
+          format: float
+          nullable: true
+        sma50:
+          type: number
+          format: float
+          nullable: true
+        sma200:
+          type: number
+          format: float
+          nullable: true
+        vwma7:
+          type: number
+          format: float
+          nullable: true
+        vwma20:
+          type: number
+          format: float
+          nullable: true
+        vwma50:
+          type: number
+          format: float
+          nullable: true
+        vwma200:
+          type: number
+          format: float
+          nullable: true
+        rsi14:
+          type: number
+          format: float
+          nullable: true
+        macd:
+          type: object
+          nullable: true
+          properties:
+            value:
+              type: number
+              format: float
+            signal:
+              type: number
+              format: float
+            histogram:
+              type: number
+              format: float
+          required:
+            - value
+            - signal
+            - histogram
+      required:
+        - date
+        - totalCost
+        - currentValue
+        - preTaxGainLoss
+        - afterTaxGainLoss
+        - gainLossPercentage
+    # Reference: product_spec.md#4311-h_1000-financial-instrument-lookup
+    InstrumentLookupRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+          description: Ticker, ISIN, or WKN to search for.
+      required:
+        - identifier
+    # Reference: product_spec.md#4311-h_1000-financial-instrument-lookup
+    Instrument:
+      type: object
+      properties:
+        ticker:
+          type: string
+          description: The ticker symbol of the instrument.
+        ISIN:
+          type: string
+          nullable: true
+          description: The ISIN of the instrument.
+        WKN:
+          type: string
+          nullable: true
+          description: The WKN of the instrument.
+        securityType:
+          $ref: '#/components/schemas/SecurityType'
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        currency:
+          $ref: '#/components/schemas/Currency'
+      required:
+        - ticker
+        - securityType
+        - assetClass
+        - currency
+    # Reference: product_spec.md#4312-h_1200-holding-creation
+    HoldingCreationRequest:
+      type: object
+      properties:
+        portfolioId:
+          $ref: '#/components/schemas/UUID'
+          description: The ID of the parent portfolio.
+        confirmedInstrument:
+          $ref: '#/components/schemas/Instrument'
+        annualCosts:
+          type: number
+          format: float
+          nullable: true
+          description: Optional, percentage, e.g., 0.07 for a 0.07% TER.
+      required:
+        - portfolioId
+        - confirmedInstrument
+    # Reference: product_spec.md#4331-h_2000-holding-list-retrieval-portfolio-details-view
+    HoldingSummary:
+      type: object
+      properties:
+        holdingId:
+          $ref: '#/components/schemas/UUID'
+          description: Unique UUID of the holding.
+        ticker:
+          type: string
+          description: The ticker symbol of the security.
+        securityType:
+          $ref: '#/components/schemas/SecurityType'
+        assetClass:
+          $ref: '#/components/schemas/AssetClass'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        totalCost:
+          type: number
+          format: float
+          description: Aggregated total cost of the holding.
+        currentValue:
+          type: number
+          format: float
+          description: Current market value of the holding.
+        preTaxGainLoss:
+          type: number
+          format: float
+          description: Pre-tax gain or loss for the holding.
+        gainLossPercentage:
+          type: number
+          format: float
+          description: Percentage gain or loss for the holding.
+      required:
+        - holdingId
+        - ticker
+        - securityType
+        - assetClass
+        - currency
+        - totalCost
+        - currentValue
+        - preTaxGainLoss
+        - gainLossPercentage
+    # Reference: product_spec.md#4341-h_3000-manual-holding-update
+    HoldingUpdateRequest:
+      type: object
+      properties:
+        annualCosts:
+          type: number
+          format: float
+          nullable: true
+          description: Optional, percentage, e.g., 0.07 for a 0.07% TER.
+      required:
+        - annualCosts
+    # Reference: product_spec.md#437-h_6000-move-holding
+    MoveHoldingRequest:
+      type: object
+      properties:
+        destinationPortfolioId:
+          $ref: '#/components/schemas/UUID'
+          description: The ID of the portfolio to move the holding to.
+      required:
+        - destinationPortfolioId
+    # Reference: product_spec.md#521-primary-stored-models
+    Lot:
+      type: object
+      properties:
+        lotId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        purchaseDate:
+          $ref: '#/components/schemas/ISODateTime'
+        quantity:
+          type: number
+          format: float
+          description: Number of shares, positive.
+        purchasePrice:
+          type: number
+          format: float
+          description: Per share price, positive, in the currency of the holding.
+        createdAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        modifiedAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        computedInfo:
+          $ref: '#/components/schemas/ComputedInfoLot'
+      required:
+        - lotId
+        - purchaseDate
+        - quantity
+        - purchasePrice
+        - createdAt
+        - modifiedAt
+    # Reference: product_spec.md#5311-l_1000-manual-creation
+    LotCreationRequest:
+      type: object
+      properties:
+        purchaseDate:
+          $ref: '#/components/schemas/ISODateTime'
+        quantity:
+          type: number
+          format: float
+          description: Number of shares, positive.
+        purchasePrice:
+          type: number
+          format: float
+          description: Per share price, positive, in the currency of the holding.
+      required:
+        - purchaseDate
+        - quantity
+        - purchasePrice
+    # Reference: product_spec.md#513-manual-update-of-a-single-lot
+    LotUpdateRequest:
+      type: object
+      properties:
+        purchaseDate:
+          $ref: '#/components/schemas/ISODateTime'
+        quantity:
+          type: number
+          format: float
+          description: Number of shares, positive.
+        purchasePrice:
+          type: number
+          format: float
+          description: Per share price, positive, in the currency of the holding.
+      required:
+        - purchaseDate
+        - quantity
+        - purchasePrice
+    # Reference: product_spec.md#522-on-the-fly-computed-models
+    ComputedInfoLot:
+      type: object
+      properties:
+        currentPrice:
+          type: number
+          format: float
+        currentValue:
+          type: number
+          format: float
+        preTaxProfit:
+          type: number
+          format: float
+        capitalGainTax:
+          type: number
+          format: float
+        afterTaxProfit:
+          type: number
+          format: float
+      required:
+        - currentPrice
+        - currentValue
+        - preTaxProfit
+        - capitalGainTax
+        - afterTaxProfit
+    # Reference: product_spec.md#621-stored-data-models
+    RuleSet:
+      type: object
+      properties:
+        ruleSetId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        userId:
+          type: string
+          description: Firebase Auth UID of the owner.
+          readOnly: true
+        parentId:
+          type: string
+          description: The portfolioId or holdingId this ruleset belongs to.
+        parentType:
+          $ref: '#/components/schemas/ParentType'
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        createdAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        modifiedAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+      required:
+        - ruleSetId
+        - userId
+        - parentId
+        - parentType
+        - rules
+        - createdAt
+        - modifiedAt
+    # Reference: product_spec.md#621-stored-data-models
+    ParentType:
+      type: string
+      enum:
+        - PORTFOLIO
+        - HOLDING
+    # Reference: product_spec.md#621-stored-data-models
+    Rule:
+      type: object
+      properties:
+        ruleId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        ruleType:
+          $ref: '#/components/schemas/RuleType'
+        logicalOperator:
+          $ref: '#/components/schemas/LogicalOperator'
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        status:
+          $ref: '#/components/schemas/RuleStatus'
+      required:
+        - ruleId
+        - ruleType
+        - logicalOperator
+        - conditions
+        - status
+    # Reference: product_spec.md#621-stored-data-models
+    RuleType:
+      type: string
+      enum:
+        - BUY
+        - SELL
+    # Reference: product_spec.md#621-stored-data-models
+    LogicalOperator:
+      type: string
+      enum:
+        - AND
+        - OR
+      default: AND
+    # Reference: product_spec.md#621-stored-data-models
+    Condition:
+      type: object
+      properties:
+        conditionId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        type:
+          $ref: '#/components/schemas/ConditionType'
+        parameters:
+          type: object
+          description: Parameters for the condition (e.g., { "period" 200, "operator" "cross_below" }).
+          additionalProperties: true
+      required:
+        - conditionId
+        - type
+        - parameters
+    # Reference: product_spec.md#622-supported-conditions
+    ConditionType:
+      type: string
+      enum:
+        - DRAWDOWN_FROM_HIGH
+        - RSI_LEVEL
+        - PRICE_VS_SMA
+        - PRICE_VS_VWMA
+        - MACD_CROSSOVER
+        - VIX_LEVEL
+        - PROFIT_TARGET
+        - STOP_LOSS
+        - TRAILING_STOP_LOSS
+    # Reference: product_spec.md#621-stored-data-models
+    RuleStatus:
+      type: string
+      enum:
+        - ENABLED
+        - PAUSED
+    # Reference: product_spec.md#631-r_1000-rule-set-creation
+    RuleSetCreationRequest:
+      type: object
+      properties:
+        parentId:
+          type: string
+          description: The portfolioId or holdingId this ruleset belongs to.
+        parentType:
+          $ref: '#/components/schemas/ParentType'
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+      required:
+        - parentId
+        - parentType
+        - rules
+    # Reference: product_spec.md#633-r_3000-rule-set-update
+    RuleSetUpdateRequest:
+      type: object
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+      required:
+        - rules
+    # Reference: product_spec.md#72-data-models
+    Alert:
+      type: object
+      properties:
+        alertId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        userId:
+          type: string
+          description: Firebase Auth UID of the user who owns the holding.
+          readOnly: true
+        holdingId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        ruleSetId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        ruleId:
+          $ref: '#/components/schemas/UUID'
+          readOnly: true
+        triggeredAt:
+          $ref: '#/components/schemas/ISODateTime'
+          readOnly: true
+        isRead:
+          type: boolean
+          description: Indicates if the user has viewed the alert.
+          default: false
+        marketDataSnapshot:
+          $ref: '#/components/schemas/MarketDataSnapshot'
+        triggeredConditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggeredCondition'
+        taxInfo:
+          $ref: '#/components/schemas/TaxInfo'
+          nullable: true
+        notificationStatus:
+          $ref: '#/components/schemas/NotificationStatus'
+      required:
+        - alertId
+        - userId
+        - holdingId
+        - ruleSetId
+        - ruleId
+        - triggeredAt
+        - isRead
+        - marketDataSnapshot
+        - triggeredConditions
+        - notificationStatus
+    # Reference: product_spec.md#72-data-models
+    MarketDataSnapshot:
+      type: object
+      description: A snapshot of the key market data points for the holding's ticker at the time of the trigger.
+      properties:
+        closePrice:
+          type: number
+          format: float
+        rsi14:
+          type: number
+          format: float
+          nullable: true
+        sma200:
+          type: number
+          format: float
+          nullable: true
+      required:
+        - closePrice
+    # Reference: product_spec.md#72-data-models
+    TriggeredCondition:
+      type: object
+      description: Details exactly which conditions were met and their values.
+      properties:
+        type:
+          $ref: '#/components/schemas/ConditionType'
+        parameters:
+          type: object
+          description: Parameters for the condition (e.g., { "threshold" 30 }).
+          additionalProperties: true
+        actualValue:
+          type: number
+          format: float
+      required:
+        - type
+        - parameters
+        - actualValue
+    # Reference: product_spec.md#72-data-models
+    TaxInfo:
+      type: object
+      description: Optional, only for SELL alerts. Contains tax calculation details.
+      properties:
+        preTaxProfit:
+          type: number
+          format: float
+        capitalGainTax:
+          type: number
+          format: float
+        afterTaxProfit:
+          type: number
+          format: float
+        appliedTaxRate:
+          type: number
+          format: float
+      required:
+        - preTaxProfit
+        - capitalGainTax
+        - afterTaxProfit
+        - appliedTaxRate
+    # Reference: product_spec.md#72-data-models
+    NotificationStatus:
+      type: string
+      enum:
+        - PENDING
+        - SENT
+        - FAILED
+    # Reference: product_spec.md#743-a_3000-mark-alerts-as-read
+    AlertUpdateRequest:
+      type: object
+      properties:
+        alertId:
+          $ref: '#/components/schemas/UUID'
+          description: The ID of the alert to update.
+        isRead:
+          type: boolean
+          description: Set to true to mark the alert as read.
+          default: true
+      required:
+        - alertId
+        - isRead
+  ############ standard responses ###########
+  responses:
+    BadRequest:
+      description: Bad Request - The request was improperly formatted or contained invalid data.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized - Authentication is required and has failed or has not yet been provided.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden - The authenticated user does not have permission to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not Found - The requested resource could not be found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+

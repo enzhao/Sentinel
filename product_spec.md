@@ -152,7 +152,7 @@ The first pull of market data from Alpha Vantage for a new user is not triggered
 ## 1.7. General API and Technical Notes
 
 - **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
-- **API Design**: All API endpoints that operate on a user's specific data are nested under the `/api/users/me/` path. This ensures that all operations are clearly scoped to the authenticated user, enhancing security and clarity. For example, to get a portfolio, the endpoint is `/api/users/me/portfolios/{portfolioId}`.
+- **API Design**: The API is versioned in the URL path. All endpoints for the current version are nested under the `/api/v1/users/me/` path. This ensures a stable contract for clients and allows for future API evolution. For example, to get a portfolio, the endpoint is `/api/v1/users/me/portfolios/{portfolioId}`.
 - **Resource Endpoint Design:** The API employs a hybrid approach for modeling resource relationships to provide both clarity and efficiency.
     - **For listing child resources**, a nested endpoint is used to make the parent-child context explicit. For example, to list all holdings within a portfolio, the endpoint is `GET /api/users/me/portfolios/{portfolioId}/holdings`.
     - **For operating on a specific child resource** (retrieving, updating, or deleting it), a top-level endpoint is used for direct access. For example, to retrieve a single holding, the endpoint is `GET /api/users/me/holdings/{holdingId}`.
