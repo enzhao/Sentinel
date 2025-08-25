@@ -22,6 +22,7 @@ We adhere to the principles of the testing pyramid, which advocates for a balanc
  /-------------------
 /   Unit Tests      \
 ---------------------
+
 ```
 
 - **Unit Tests (Base of the Pyramid)**: These form the largest portion of our tests. They are fast, isolated, and verify the smallest pieces of our application (e.g., a single function or component).
@@ -77,8 +78,8 @@ The frontend testing strategy is designed to ensure a reliable and smooth user e
 Based on the `product_spec.md`, the following user journeys are critical and must be covered by integration tests:
 
 **1. The Full User Authentication and Onboarding Flow:**
-*   **What it tests:** `SignUpView` -> `auth` store -> `router` -> `LoginView` -> `AppBar` -> `PortfolioView`.
-*   **Scenario:**
+-  **What it tests:** `SignUpView` -> `auth` store -> `router` -> `LoginView` -> `AppBar` -> `PortfolioView`.
+-  **Scenario:**
     1.  A new user signs up successfully (mocking the backend response).
     2.  Verify the `auth` store is updated and the router redirects to the `LoginView`.
     3.  The user logs in (mocking the backend response).
@@ -86,16 +87,16 @@ Based on the `product_spec.md`, the following user journeys are critical and mus
     5.  Verify the `AppBar` updates to show user-specific controls (e.g., "Logout" button).
 
 **2. Core Portfolio Management Flow:**
-*   **What it tests:** `PortfolioView` -> `portfolio` store -> child components.
-*   **Scenario:**
+- **What it tests:** `PortfolioView` -> `portfolio` store -> child components.
+- **Scenario:**
     1.  Start as a logged-in user on the `PortfolioView`.
     2.  Mock the API call to fetch portfolio data and verify the view renders the holdings correctly.
     3.  Simulate adding a new holding via the UI.
     4.  Mock the "save" API call and verify the `PortfolioView` updates dynamically to show the new holding without a page refresh.
 
 **3. Strategy Rule Creation and Management Flow:**
-*   **What it tests:** `RulesView` -> `rules` store -> child components.
-*   **Scenario:**
+- **What it tests:** `RulesView` -> `rules` store -> child components.
+- **Scenario:**
     1.  A logged-in user navigates to the "Strategy Rules" page.
     2.  Mock the API call to fetch existing rules and verify they are displayed.
     3.  Simulate creating a new rule via the UI form.

@@ -47,7 +47,7 @@ After generating the diagrams, use this second script to automatically insert th
         python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md
         ```
     3.  The script will find the placeholders and replace them with the latest diagrams. It will then print a report summarizing which diagrams were updated or if any are out of sync.
-    
+
 > **Tip for Testing**: You can provide an optional third argument (`--output` or `-o`) to write the results to a new file instead of overwriting the original. This is useful for verifying the script's output before committing changes.
 > ```bash
 > python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md -o product_spec_test.md
@@ -73,7 +73,7 @@ Creating a new version, generating a changelog, and tagging the release is an au
 1.  Ensure you are on the `main` branch and have pulled the latest changes.
 2.  Run the release script from the project root:
     ```bash
-    npm run release
+    npm run release -- --release-as <major|minor|patch>
     ```
 3.  Push the new commit and the tag to GitHub:
     ```bash

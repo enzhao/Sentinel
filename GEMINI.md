@@ -11,7 +11,7 @@ backend/venv/bin/pytest --cov=src backend/tests/
 ```bash
 npm run release -- --release-as minor  # can also be major or patch
 ``` 
-Then,
+then,
 
 ```bash
 git push --follow-tags origin main
