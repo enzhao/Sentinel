@@ -7,6 +7,7 @@
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UNAUTHENTICATED_NAV
     [*] --> HomePage
     state "🏠 HomePage<br/><font size="2"><i>(VIEW_HOME_PAGE)</i></font>" as HomePage
     HomePage --> NavigatingToLogin : USER_CLICKS_LOGIN
@@ -21,6 +22,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_LOGIN
     [*] --> FormInput
     state "📝 FormInput<br/><font size="2"><i>(VIEW_LOGIN_FORM)</i></font>" as FormInput
     FormInput --> Submitting : USER_SUBMITS_LOGIN
@@ -42,6 +44,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_LOGOUT
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> ConfirmingLogout : USER_CLICKS_LOGOUT
@@ -61,6 +64,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_MANAGE_PORTFOLIO_RULES
     [*] --> EditingRules
     state "✏️ EditingRules<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as EditingRules
     EditingRules --> Submitting : USER_CLICKS_SAVE_RULES
@@ -82,6 +86,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_MANAGE_HOLDING_RULES
     [*] --> CheckingForOverride
     state "🔍 CheckingForOverride" as CheckingForOverride
     CheckingForOverride --> EditingSpecificRules : has_specific_rules
@@ -112,11 +117,11 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_CREATE_PORTFOLIO_MANUAL
     [*] --> DashboardView
     state "📊 DashboardView<br/><font size="2"><i>(VIEW_DASHBOARD)</i></font>" as DashboardView
     DashboardView --> CreatePortfolioView : USER_CLICKS_ADD_PORTFOLIO
-    state "👁️ CreatePortfolioView<br/><font size="2"><i>(VIEW_PORTFOLIO_FORM)</i></font>" as CreatePortfolioView
-    state "CreatePortfolioView" as CreatePortfolioView {
+    state "👁️ CreatePortfolioView" as CreatePortfolioView {
             state "✏️ EditingPortfolio" as EditingPortfolio
             EditingPortfolio --> AddingHolding : USER_CLICKS_ADD_HOLDING
             EditingPortfolio --> ValidateForm : USER_CLICKS_SAVE
@@ -143,13 +148,50 @@ stateDiagram-v2
     APIError --> CreatePortfolioView : USER_DISMISSES_ERROR
 ```
 
+## Flow: `FLOW_VIEW_PORTFOLIOS_LIST`
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_PORTFOLIOS_LIST
+    [*] --> ReadOnlyMode
+    state "ReadOnlyMode<br/><font size="2"><i>(VIEW_PORTFOLIOS_LIST)</i></font>" as ReadOnlyMode
+    ReadOnlyMode --> ManageMode : USER_CLICKS_EDIT_PORTFOLIOS
+    ReadOnlyMode --> PortfolioDetailView : USER_SELECTS_PORTFOLIO
+    state "ManageMode<br/><font size="2"><i>(VIEW_PORTFOLIOS_LIST)</i></font>" as ManageMode
+    ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
+    ManageMode --> PortfolioDetailView : USER_SELECTS_PORTFOLIO
+    ManageMode --> AddingPortfolio : USER_CLICKS_ADD_PORTFOLIO
+    ManageMode --> EditingPortfolio : USER_CLICKS_EDIT_PORTFOLIO_ITEM
+    ManageMode --> DeletingPortfolio : USER_CLICKS_DELETE_PORTFOLIO_ITEM
+    state "👁️ PortfolioDetailView" as PortfolioDetailView
+    state "➡️ VIEW_PORTFOLIO_DETAIL" as PortfolioDetailView_exit_action
+    PortfolioDetailView --> PortfolioDetailView_exit_action
+    PortfolioDetailView_exit_action --> [*]
+    state "➕ AddingPortfolio" as AddingPortfolio
+    state "➡️ subflow: FLOW_CREATE_PORTFOLIO_MANUAL" as AddingPortfolio_subflow_node
+    AddingPortfolio --> AddingPortfolio_subflow_node
+    AddingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    AddingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
+    state "✏️ EditingPortfolio" as EditingPortfolio
+    state "➡️ subflow: FLOW_UPDATE_PORTFOLIO_MANUAL" as EditingPortfolio_subflow_node
+    EditingPortfolio --> EditingPortfolio_subflow_node
+    EditingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    EditingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingPortfolio" as DeletingPortfolio
+    state "➡️ subflow: FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow_node
+    DeletingPortfolio --> DeletingPortfolio_subflow_node
+    DeletingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    DeletingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
+```
+
 ## Flow: `FLOW_VIEW_PORTFOLIO_DETAIL`
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_PORTFOLIO_DETAIL
     [*] --> ReadOnly
     state "ReadOnly<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ReadOnly
-    ReadOnly --> ManageMode : USER_CLICKS_EDIT
+    ReadOnly --> ManageMode : USER_CLICKS_EDIT_PORTFOLIO
     ReadOnly --> DeletingPortfolio : USER_CLICKS_DELETE
     ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
     ReadOnly --> ManagingPortfolioRules : USER_CLICKS_MANAGE_RULES
@@ -187,48 +229,11 @@ stateDiagram-v2
     SettingAsDefault --> ReadOnly : failure
 ```
 
-## Flow: `FLOW_VIEW_PORTFOLIO_DETAIL`
-
-```mermaid
-stateDiagram-v2
-    [*] --> ReadOnly
-    state "ReadOnly<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ReadOnly
-    ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
-    ReadOnly --> DeletingPortfolio : USER_CLICKS_DELETE
-    ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
-    note right of ReadOnly
-        activates: ReadOnlyMode in FLOW_VIEW_HOLDINGS_LIST
-    end note
-    state "ManageMode<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ManageMode
-    ManageMode --> ValidateForm : USER_CLICKS_SAVE
-    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
-    note right of ManageMode
-        activates: ManageMode in FLOW_VIEW_HOLDINGS_LIST
-    end note
-    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ValidateForm
-    ValidateForm --> Submitting : valid
-    ValidateForm --> FormError : invalid
-    state "⏳ Submitting<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Submitting
-    Submitting --> ReadOnly : success
-    Submitting --> APIError : failure
-    state "📝 FormError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as FormError
-    FormError --> ManageMode : USER_DISMISSES_ERROR
-    state "❌ APIError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as APIError
-    APIError --> ManageMode : USER_DISMISSES_ERROR
-    state "DeletingPortfolio<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as DeletingPortfolio
-    state "➡️ subflow: FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow_node
-    DeletingPortfolio --> DeletingPortfolio_subflow_node
-    DeletingPortfolio_subflow_node --> [*] : ✅ onCompletion
-    DeletingPortfolio_subflow_node --> ReadOnly : 🛑 onCancel
-    state "SettingAsDefault<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as SettingAsDefault
-    SettingAsDefault --> ReadOnly : success
-    SettingAsDefault --> ReadOnly : failure
-```
-
 ## Flow: `FLOW_UPDATE_PORTFOLIO_MANUAL`
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_PORTFOLIO_MANUAL
     [*] --> ReadOnly
     state "ReadOnly<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
@@ -254,6 +259,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_PORTFOLIO_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_PORTFOLIO
@@ -281,6 +287,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_IMPORT_TRANSACTIONS
     [*] --> Idle
     state "💤 Idle<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Idle
     Idle --> SelectingFile : USER_CLICKS_IMPORT
@@ -317,6 +324,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_ADD_HOLDING_MANUAL
     [*] --> HoldingListView
     state "👁️ HoldingListView<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as HoldingListView
     HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
@@ -350,6 +358,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_HOLDINGS_LIST
     [*] --> ReadOnlyMode
     state "ReadOnlyMode<br/><font size="2"><i>(VIEW_HOLDINGS_LIST)</i></font>" as ReadOnlyMode
     ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
@@ -391,6 +400,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_HOLDING_DETAIL
     [*] --> ReadOnly
     state "ReadOnly<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT
@@ -448,6 +458,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_HOLDING_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> Editing : USER_CLICKS_EDIT_HOLDING
@@ -474,6 +485,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_HOLDING_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_HOLDING
@@ -495,6 +507,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_MOVE_HOLDING_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> SelectingDestination : USER_CLICKS_MOVE_HOLDING
@@ -519,6 +532,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_CREATE_LOT_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> FormInput : USER_CLICKS_ADD_LOT
@@ -545,6 +559,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_LOTS_LIST
     [*] --> ReadOnly
     state "ReadOnly<br/><font size="2"><i>(VIEW_LOTS_LIST)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT_HOLDING
@@ -575,6 +590,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_LOT_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> Editing : USER_CLICKS_EDIT_LOT
@@ -601,6 +617,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_LOT_MANUAL
     [*] --> Idle
     state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_LOT
@@ -616,4 +633,38 @@ stateDiagram-v2
     Success_exit_action --> [*]
     state "❌ APIError<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_LOT_MODAL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
+```
+
+## Flow: `FLOW_SHOW_ALERTS_DROPDOWN`
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_SHOW_ALERTS_DROPDOWN
+    [*] --> ShowingDropdown
+    state "ShowingDropdown<br/><font size="2"><i>(VIEW_ALERTS_DROPDOWN_MODAL)</i></font>" as ShowingDropdown
+    ShowingDropdown --> ViewAll : USER_CLICKS_VIEW_ALL_ALERTS
+    state "🛑 (exit onCancel)" as ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL
+    ShowingDropdown --> ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL : USER_CLICKS_CLOSE_MODAL
+    ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL --> [*]
+    state "👁️ ViewAll" as ViewAll
+    state "➡️ VIEW_ALERTS_LIST" as ViewAll_exit_action
+    ViewAll --> ViewAll_exit_action
+    ViewAll_exit_action --> [*]
+```
+
+## Flow: `FLOW_VIEW_ALERTS`
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_ALERTS
+    [*] --> ViewingList
+    state "👁️ ViewingList<br/><font size="2"><i>(VIEW_ALERTS_LIST)</i></font>" as ViewingList
+    ViewingList --> ViewingDetail : USER_SELECTS_ALERT
+    state "(exit)" as ViewingList_exit_USER_CLICKS_BACK
+    ViewingList --> ViewingList_exit_USER_CLICKS_BACK : USER_CLICKS_BACK
+    ViewingList_exit_USER_CLICKS_BACK --> [*]
+    state "👁️ ViewingDetail<br/><font size="2"><i>(VIEW_ALERT_DETAIL)</i></font>" as ViewingDetail
+    ViewingDetail --> ViewingDetail : USER_CLICKS_PREVIOUS_ALERT
+    ViewingDetail --> ViewingDetail : USER_CLICKS_NEXT_ALERT
+    ViewingDetail --> ViewingList : USER_CLICKS_BACK_TO_LIST
 ```

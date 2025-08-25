@@ -3,35 +3,15 @@ import argparse
 import sys
 from pathlib import Path
 
-# --- NEW: Emoji mapping for different state types ---
 EMOJI_MAP = {
-    "home": "🏠",
-    "dashboard": "📊",
-    "view": "👁️",
-    "list": "📋",
-    "detail": "📄",
-    "form": "📝",
-    "input": "⌨️",
-    "edit": "✏️",
-    "add": "➕",
-    "submitting": "⏳",
-    "loading": "⏳",
-    "checking": "🔍",
-    "searching": "🔍",
-    "success": "✅",
-    "confirm": "🤔",
-    "select": "👆",
-    "error": "❌",
-    "delete": "🗑️",
-    "move": "🚚",
-    "import": "📥",
-    "review": "🧐",
-    "rules": "⚖️",
-    "idle": "💤",
+    "home": "🏠", "dashboard": "📊", "view": "👁️", "list": "📋", "detail": "📄",
+    "form": "📝", "input": "⌨️", "edit": "✏️", "add": "➕", "submitting": "⏳",
+    "loading": "⏳", "checking": "🔍", "searching": "🔍", "success": "✅",
+    "confirm": "🤔", "select": "👆", "error": "❌", "delete": "🗑️",
+    "move": "🚚", "import": "📥", "review": "🧐", "rules": "⚖️", "idle": "💤",
 }
 
 def get_emoji_for_state(state_name: str) -> str:
-    """Finds a suitable emoji for a given state name."""
     lower_name = state_name.lower()
     for keyword, emoji in EMOJI_MAP.items():
         if keyword in lower_name:
@@ -39,26 +19,22 @@ def get_emoji_for_state(state_name: str) -> str:
     return ""
 
 def build_view_map(all_flows_data: list) -> dict:
-    """Builds a map of (flowId, stateName) to viewId for easy lookup."""
     view_map = {}
     for flow in all_flows_data:
         if not flow: continue
         flow_id = flow.get('flowId')
         if flow_id:
-            for state in flow.get('states', []):
+            states_to_process = list(flow.get('states', []))
+            while states_to_process:
+                state = states_to_process.pop()
                 state_name = state.get('name')
                 if state_name and 'renders' in state:
                     view_map[(flow_id, state_name)] = state.get('renders')
-                # Recursively check for nested states
                 if 'states' in state:
-                    nested_map = build_view_map([{'states': state['states'], 'flowId': flow_id}])
-                    view_map.update(nested_map)
+                    states_to_process.extend(state['states'])
     return view_map
 
 def generate_mermaid_for_states(states: list, flow_id: str, view_map: dict) -> list[str]:
-    """
-    Recursively generates Mermaid state diagram lines for a list of states.
-    """
     lines = []
     
     for state in states:
@@ -66,20 +42,17 @@ def generate_mermaid_for_states(states: list, flow_id: str, view_map: dict) -> l
         emoji = get_emoji_for_state(state_name)
         view_id = view_map.get((flow_id, state_name), '')
         
-        # --- REVISED: Create a descriptive label with emoji and view ---
-        label_content = f'{emoji}{state_name}'
-        if view_id:
-            label_content += f'<br/><font size="2"><i>({view_id})</i></font>'
-        
-        # Define the state with its new label
-        lines.append(f'    state "{label_content}" as {state_name}')
-
         if 'states' in state:
-            lines.append(f'    state "{state_name}" as {state_name} {{')
+            lines.append(f'    state "{emoji}{state_name}" as {state_name} {{')
             nested_lines = generate_mermaid_for_states(state.get('states', []), flow_id, view_map)
             for line in nested_lines:
                 lines.append(f'        {line}')
             lines.append('    }')
+        else:
+            label_content = f'{emoji}{state_name}'
+            if view_id:
+                label_content += f'<br/><font size="2"><i>({view_id})</i></font>'
+            lines.append(f'    state "{label_content}" as {state_name}')
         
         if 'events' in state:
             for event, target_state in state['events'].items():
@@ -114,7 +87,6 @@ def generate_mermaid_for_states(states: list, flow_id: str, view_map: dict) -> l
             label = f"{action} {target}".strip()
             
             exit_node_id = f'{state_name}_exit_action'
-            # --- REVISED: Use emoji for navigation exit actions ---
             if action == 'NAVIGATE_TO' and target:
                 label = f'➡️ {target}'
 
@@ -146,10 +118,14 @@ def generate_mermaid_from_flow(flow_data: dict, all_flows_data: list, view_map: 
     if not flow_data:
         return "# Flow data is empty."
 
+    flow_id = flow_data.get('flowId')
     lines = ["stateDiagram-v2"]
+    # --- Add the flowId as a comment ---
+    if flow_id:
+        lines.append(f'    %% Flow ID: {flow_id}')
+        
     initial_state = flow_data.get('initialState')
     states = flow_data.get('states', [])
-    flow_id = flow_data.get('flowId')
 
     if initial_state:
         lines.append(f'    [*] --> {initial_state}')
@@ -179,13 +155,12 @@ def main():
         sys.exit(1)
 
     try:
-        with open(args.spec_file, 'r') as f:
+        with open(args.spec_file, 'r', encoding='utf-8') as f:
             all_flows = [flow for flow in yaml.safe_load_all(f) if flow]
     except yaml.YAMLError as e:
         print(f"Error parsing YAML file: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # --- NEW: Pre-build the view map for efficiency ---
     view_map = build_view_map(all_flows)
 
     if args.flow_id:
@@ -215,7 +190,7 @@ def main():
             markdown_content.append("```\n")
 
         output_path.parent.mkdir(exist_ok=True)
-        with open(output_path, 'w') as f:
+        with open(output_path, 'w', encoding='utf-8') as f:
             f.write("\n".join(markdown_content))
         
         print(f"✅ Successfully generated diagrams for all flows in '{output_path}'")

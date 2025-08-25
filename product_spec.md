@@ -249,25 +249,35 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_CREATE_PORTFOLIO_MANUAL
     [*] --> DashboardView
+    state "📊 DashboardView<br/><font size="2"><i>(VIEW_DASHBOARD)</i></font>" as DashboardView
     DashboardView --> CreatePortfolioView : USER_CLICKS_ADD_PORTFOLIO
-
-    state "Create Portfolio View" as CreatePortfolioView {
-        [*] --> EditingPortfolio
-        EditingPortfolio --> AddingHolding : USER_CLICKS_ADD_HOLDING
-        AddingHolding --> EditingPortfolio : onCompletion / onCancel
-        EditingPortfolio --> ValidateForm : USER_CLICKS_SAVE
-        EditingPortfolio --> DashboardView : USER_CLICKS_CANCEL
+    state "👁️ CreatePortfolioView" as CreatePortfolioView {
+            state "✏️ EditingPortfolio" as EditingPortfolio
+            EditingPortfolio --> AddingHolding : USER_CLICKS_ADD_HOLDING
+            EditingPortfolio --> ValidateForm : USER_CLICKS_SAVE
+            EditingPortfolio --> DashboardView : USER_CLICKS_CANCEL
+            state "➕ AddingHolding" as AddingHolding
+            state "➡️ subflow: FLOW_ADD_HOLDING_MANUAL" as AddingHolding_subflow_node
+            AddingHolding --> AddingHolding_subflow_node
+            AddingHolding_subflow_node --> EditingPortfolio : ✅ onCompletion
+            AddingHolding_subflow_node --> EditingPortfolio : 🛑 onCancel
     }
-
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_PORTFOLIO_FORM)</i></font>" as ValidateForm
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_PORTFOLIO_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
-
+    state "✅ Success" as Success
+    state "➡️ VIEW_DASHBOARD" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "📝 FormError<br/><font size="2"><i>(VIEW_PORTFOLIO_FORM)</i></font>" as FormError
     FormError --> CreatePortfolioView : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_PORTFOLIO_FORM)</i></font>" as APIError
     APIError --> CreatePortfolioView : USER_DISMISSES_ERROR
-    Success --> DashboardView : (exit flow)
 ```
 
 #### 3.1.2. Retrieval
@@ -285,27 +295,40 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_PORTFOLIOS_LIST
     [*] --> ReadOnlyMode
-    ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
+    state "ReadOnlyMode<br/><font size="2"><i>(VIEW_PORTFOLIOS_LIST)</i></font>" as ReadOnlyMode
+    ReadOnlyMode --> ManageMode : USER_CLICKS_EDIT_PORTFOLIOS
+    ReadOnlyMode --> PortfolioDetailView : USER_SELECTS_PORTFOLIO
+    state "ManageMode<br/><font size="2"><i>(VIEW_PORTFOLIOS_LIST)</i></font>" as ManageMode
     ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
-
-    ReadOnlyMode --> PortfolioDetailView : USER_CLICKS_PORTFOLIO_ITEM
-    ManageMode --> PortfolioDetailView : USER_CLICKS_PORTFOLIO_ITEM
-
-    state "Manage Mode" as ManageMode {
-        [*] --> Idle
-        Idle --> AddingPortfolio : USER_CLICKS_ADD_PORTFOLIO
-        AddingPortfolio --> Idle : onCompletion / onCancel
-
-        Idle --> EditingPortfolio : USER_CLICKS_EDIT_ITEM
-        EditingPortfolio --> Idle : onCompletion / onCancel
-
-        Idle --> DeletingPortfolio : USER_CLICKS_DELETE_ITEM
-        DeletingPortfolio --> Idle : onCompletion / onCancel
-    }
+    ManageMode --> PortfolioDetailView : USER_SELECTS_PORTFOLIO
+    ManageMode --> AddingPortfolio : USER_CLICKS_ADD_PORTFOLIO
+    ManageMode --> EditingPortfolio : USER_CLICKS_EDIT_PORTFOLIO_ITEM
+    ManageMode --> DeletingPortfolio : USER_CLICKS_DELETE_PORTFOLIO_ITEM
+    state "👁️ PortfolioDetailView" as PortfolioDetailView
+    state "➡️ VIEW_PORTFOLIO_DETAIL" as PortfolioDetailView_exit_action
+    PortfolioDetailView --> PortfolioDetailView_exit_action
+    PortfolioDetailView_exit_action --> [*]
+    state "➕ AddingPortfolio" as AddingPortfolio
+    state "➡️ subflow: FLOW_CREATE_PORTFOLIO_MANUAL" as AddingPortfolio_subflow_node
+    AddingPortfolio --> AddingPortfolio_subflow_node
+    AddingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    AddingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
+    state "✏️ EditingPortfolio" as EditingPortfolio
+    state "➡️ subflow: FLOW_UPDATE_PORTFOLIO_MANUAL" as EditingPortfolio_subflow_node
+    EditingPortfolio --> EditingPortfolio_subflow_node
+    EditingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    EditingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingPortfolio" as DeletingPortfolio
+    state "➡️ subflow: FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow_node
+    DeletingPortfolio --> DeletingPortfolio_subflow_node
+    DeletingPortfolio_subflow_node --> ManageMode : ✅ onCompletion
+    DeletingPortfolio_subflow_node --> ManageMode : 🛑 onCancel
 ```
 
 ##### 3.1.2.2. Single Retrieval (Portfolio Details View)
+
 From the dashboard, a user can select a single portfolio to navigate to the Portfolio Details View. This view displays the portfolio's metadata and the list of its holdings. From here, the user can manage the portfolio's details, its holdings, or set it as their default portfolio.
 
 ###### 3.1.2.2.1. User Journey Spec and Visual Representation
@@ -316,21 +339,45 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_PORTFOLIO_DETAIL
     [*] --> ReadOnly
-    ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
-    ManageMode --> ReadOnly : onCompletion / onCancel
-
+    state "ReadOnly<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ReadOnly
+    ReadOnly --> ManageMode : USER_CLICKS_EDIT_PORTFOLIO
     ReadOnly --> DeletingPortfolio : USER_CLICKS_DELETE
-    DeletingPortfolio --> ReadOnly : onCancel
-    DeletingPortfolio --> [*] : onCompletion
-
     ReadOnly --> SettingAsDefault : USER_CLICKS_SET_AS_DEFAULT
-    SettingAsDefault --> ReadOnly : success / failure
-
+    ReadOnly --> ManagingPortfolioRules : USER_CLICKS_MANAGE_RULES
     note right of ReadOnly
-      The embedded Holdings List is
-      activated by the parent view's state.
+        activates: ReadOnlyMode in FLOW_VIEW_HOLDINGS_LIST
     end note
+    state "⚖️ ManagingPortfolioRules" as ManagingPortfolioRules
+    state "➡️ subflow: FLOW_MANAGE_PORTFOLIO_RULES" as ManagingPortfolioRules_subflow_node
+    ManagingPortfolioRules --> ManagingPortfolioRules_subflow_node
+    ManagingPortfolioRules_subflow_node --> ReadOnly : ✅ onCompletion
+    ManagingPortfolioRules_subflow_node --> ReadOnly : 🛑 onCancel
+    state "ManageMode<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ManageMode
+    ManageMode --> ValidateForm : USER_CLICKS_SAVE
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
+    note right of ManageMode
+        activates: ManageMode in FLOW_VIEW_HOLDINGS_LIST
+    end note
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ValidateForm
+    ValidateForm --> Submitting : valid
+    ValidateForm --> FormError : invalid
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Submitting
+    Submitting --> ReadOnly : success
+    Submitting --> APIError : failure
+    state "📝 FormError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as FormError
+    FormError --> ManageMode : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as APIError
+    APIError --> ManageMode : USER_DISMISSES_ERROR
+    state "DeletingPortfolio<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as DeletingPortfolio
+    state "➡️ subflow: FLOW_DELETE_PORTFOLIO_MANUAL" as DeletingPortfolio_subflow_node
+    DeletingPortfolio --> DeletingPortfolio_subflow_node
+    DeletingPortfolio_subflow_node --> [*] : ✅ onCompletion
+    DeletingPortfolio_subflow_node --> ReadOnly : 🛑 onCancel
+    state "SettingAsDefault<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as SettingAsDefault
+    SettingAsDefault --> ReadOnly : success
+    SettingAsDefault --> ReadOnly : failure
 ```
 
 #### 3.1.3. Update
@@ -353,23 +400,26 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_PORTFOLIO_MANUAL
     [*] --> ReadOnly
+    state "ReadOnly<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_MANAGE_PORTFOLIO
+    state "ManageMode<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ManageMode
     ManageMode --> ValidateForm : USER_CLICKS_SAVE
     ManageMode --> ReadOnly : USER_CLICKS_CANCEL
-
+    note right of ManageMode
+        activates: ManageMode in FLOW_VIEW_HOLDINGS_LIST
+    end note
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ValidateForm
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
-
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Submitting
     Submitting --> ReadOnly : success
     Submitting --> APIError : failure
-
+    state "📝 FormError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as FormError
     FormError --> ManageMode : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as APIError
     APIError --> ManageMode : USER_DISMISSES_ERROR
-
-    note right of ManageMode
-      activates:<br>FLOW_VIEW_HOLDINGS_LIST<br>→ ManageMode
-    end note
 ```
 
 #### 3.1.4. Deletion
@@ -384,25 +434,28 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_PORTFOLIO_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_PORTFOLIO
-    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "🤔 ConfirmingDelete<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_PORTFOLIO_MODAL)</i></font>" as ConfirmingDelete
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
-
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_PORTFOLIO_MODAL)</i></font>" as Submitting
     Submitting --> SuccessRefresh : success_refresh
     Submitting --> SelectingNewDefault : success_prompt_new_default
     Submitting --> APIError : failure
-
-    state "User must select a new default" as SelectingNewDefault {
-        [*] --> AwaitingSelection
-        AwaitingSelection --> SubmittingNewDefault : USER_SELECTS_NEW_DEFAULT
-    }
-
+    state "👆 SelectingNewDefault<br/><font size="2"><i>(VIEW_SELECT_NEW_DEFAULT_MODAL)</i></font>" as SelectingNewDefault
+    SelectingNewDefault --> SubmittingNewDefault : USER_SELECTS_NEW_DEFAULT
+    state "⏳ SubmittingNewDefault<br/><font size="2"><i>(VIEW_SELECT_NEW_DEFAULT_MODAL)</i></font>" as SubmittingNewDefault
     SubmittingNewDefault --> SuccessRefresh : success
     SubmittingNewDefault --> APIError : failure
-
+    state "✅ SuccessRefresh" as SuccessRefresh
+    state "REFRESH_VIEW VIEW_DASHBOARD" as SuccessRefresh_exit_action
+    SuccessRefresh --> SuccessRefresh_exit_action
+    SuccessRefresh_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_PORTFOLIO_MODAL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
-    SuccessRefresh --> [*] : (exit flow)
 ```
 
 #### 3.1.5. Unified Transaction Import
@@ -417,29 +470,37 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_IMPORT_TRANSACTIONS
     [*] --> Idle
+    state "💤 Idle<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Idle
     Idle --> SelectingFile : USER_CLICKS_IMPORT
-    SelectingFile --> Idle : USER_CANCELS
+    state "👆 SelectingFile" as SelectingFile
     SelectingFile --> ValidatingFile : USER_SELECTS_FILE
-
+    SelectingFile --> Idle : USER_CANCELS
+    state "ValidatingFile<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ValidatingFile
     ValidatingFile --> Uploading : valid
     ValidatingFile --> FileError : invalid
-
+    state "⏳ Uploading<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as Uploading
     Uploading --> ReviewingChanges : success
     Uploading --> ParsingError : parsing_failed
     Uploading --> APIError : failure
-
+    state "👁️ ReviewingChanges<br/><font size="2"><i>(VIEW_IMPORT_REVIEW)</i></font>" as ReviewingChanges
     ReviewingChanges --> SubmittingConfirmation : USER_CLICKS_CONFIRM
     ReviewingChanges --> Idle : USER_CLICKS_CANCEL
-
+    state "⏳ SubmittingConfirmation<br/><font size="2"><i>(VIEW_IMPORT_REVIEW)</i></font>" as SubmittingConfirmation
     SubmittingConfirmation --> Success : success
     SubmittingConfirmation --> ReviewingChanges : validation_failed
     SubmittingConfirmation --> APIError : failure
-
+    state "✅ Success" as Success
+    state "REFRESH_VIEW VIEW_PORTFOLIO_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ FileError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as FileError
     FileError --> Idle : USER_DISMISSES_ERROR
+    state "❌ ParsingError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as ParsingError
     ParsingError --> Idle : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
-    Success --> [*] : (exit flow)
 ```
 
 ### 3.2. Portfolio and Cash Data Model
@@ -915,29 +976,33 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_ADD_HOLDING_MANUAL
     [*] --> HoldingListView
+    state "👁️ HoldingListView<br/><font size="2"><i>(VIEW_PORTFOLIO_DETAIL)</i></font>" as HoldingListView
     HoldingListView --> LookupInput : USER_CLICKS_ADD_HOLDING
-    LookupInput --> HoldingListView : USER_CLICKS_CANCEL
+    state "⌨️ LookupInput<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as LookupInput
     LookupInput --> SubmittingLookup : USER_SUBMITS_IDENTIFIER
-
+    LookupInput --> HoldingListView : USER_CLICKS_CANCEL
+    state "⏳ SubmittingLookup<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as SubmittingLookup
     SubmittingLookup --> ConfirmingHoldingCreation : success
     SubmittingLookup --> LookupError : failure
-
+    state "🤔 ConfirmingHoldingCreation<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as ConfirmingHoldingCreation
     ConfirmingHoldingCreation --> SubmittingHolding : USER_CONFIRMS_CREATION
     ConfirmingHoldingCreation --> HoldingListView : USER_CLICKS_CANCEL
-
+    state "⏳ SubmittingHolding<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as SubmittingHolding
     SubmittingHolding --> AddingLots : success
     SubmittingHolding --> APIError : failure
-
-    state "Adding Lots" as AddingLots {
-        [*] --> ReadyToAdd
-        ReadyToAdd --> InvokingLotCreation : USER_CLICKS_ADD_LOT (see Section 5.2.1.1.2)
-        InvokingLotCreation --> ReadyToAdd : onCompletion / onCancel
-    }
-    
+    state "➕ AddingLots<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as AddingLots
+    AddingLots --> AddingSingleLot : USER_CLICKS_ADD_LOT
     AddingLots --> HoldingListView : USER_CLICKS_FINISH
-
+    state "➕ AddingSingleLot" as AddingSingleLot
+    state "➡️ subflow: FLOW_CREATE_LOT_MANUAL" as AddingSingleLot_subflow_node
+    AddingSingleLot --> AddingSingleLot_subflow_node
+    AddingSingleLot_subflow_node --> AddingLots : ✅ onCompletion
+    AddingSingleLot_subflow_node --> AddingLots : 🛑 onCancel
+    state "❌ LookupError<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as LookupError
     LookupError --> LookupInput : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_INSTRUMENT_LOOKUP_MODAL)</i></font>" as APIError
     APIError --> LookupInput : USER_DISMISSES_ERROR
 ```
 
@@ -956,25 +1021,42 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_HOLDINGS_LIST
     [*] --> ReadOnlyMode
+    state "ReadOnlyMode<br/><font size="2"><i>(VIEW_HOLDINGS_LIST)</i></font>" as ReadOnlyMode
     ReadOnlyMode --> ManageMode : USER_CLICKS_MANAGE
-    ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
-
     ReadOnlyMode --> HoldingDetailView : USER_CLICKS_HOLDING_BODY
+    state "ManageMode<br/><font size="2"><i>(VIEW_HOLDINGS_LIST)</i></font>" as ManageMode
+    ManageMode --> ReadOnlyMode : USER_CLICKS_DONE
     ManageMode --> HoldingDetailView : USER_CLICKS_HOLDING_BODY
-
-    state "Manage Mode" as ManageMode {
-        [*] --> Idle
-        Idle --> AddingHolding : USER_CLICKS_ADD_HOLDING
-        Idle --> EditingHolding : USER_CLICKS_EDIT_HOLDING_ITEM
-        Idle --> DeletingHolding : USER_CLICKS_DELETE_HOLDING_ITEM
-        Idle --> MovingHolding : USER_CLICKS_MOVE_HOLDING_ITEM
-
-        AddingHolding --> Idle : onCompletion / onCancel
-        EditingHolding --> Idle : onCompletion / onCancel
-        DeletingHolding --> Idle : onCompletion / onCancel
-        MovingHolding --> Idle : onCompletion / onCancel
-    }
+    ManageMode --> AddingHolding : USER_CLICKS_ADD_HOLDING
+    ManageMode --> EditingHolding : USER_CLICKS_EDIT_HOLDING_ITEM
+    ManageMode --> DeletingHolding : USER_CLICKS_DELETE_HOLDING_ITEM
+    ManageMode --> MovingHolding : USER_CLICKS_MOVE_HOLDING_ITEM
+    state "👁️ HoldingDetailView" as HoldingDetailView
+    state "➡️ VIEW_HOLDING_DETAIL" as HoldingDetailView_exit_action
+    HoldingDetailView --> HoldingDetailView_exit_action
+    HoldingDetailView_exit_action --> [*]
+    state "➕ AddingHolding" as AddingHolding
+    state "➡️ subflow: FLOW_ADD_HOLDING_MANUAL" as AddingHolding_subflow_node
+    AddingHolding --> AddingHolding_subflow_node
+    AddingHolding_subflow_node --> ManageMode : ✅ onCompletion
+    AddingHolding_subflow_node --> ManageMode : 🛑 onCancel
+    state "✏️ EditingHolding" as EditingHolding
+    state "➡️ subflow: FLOW_UPDATE_HOLDING_MANUAL" as EditingHolding_subflow_node
+    EditingHolding --> EditingHolding_subflow_node
+    EditingHolding_subflow_node --> ManageMode : ✅ onCompletion
+    EditingHolding_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingHolding" as DeletingHolding
+    state "➡️ subflow: FLOW_DELETE_HOLDING_MANUAL" as DeletingHolding_subflow_node
+    DeletingHolding --> DeletingHolding_subflow_node
+    DeletingHolding_subflow_node --> ManageMode : ✅ onCompletion
+    DeletingHolding_subflow_node --> ManageMode : 🛑 onCancel
+    state "MovingHolding" as MovingHolding
+    state "➡️ subflow: FLOW_MOVE_HOLDING_MANUAL" as MovingHolding_subflow_node
+    MovingHolding --> MovingHolding_subflow_node
+    MovingHolding_subflow_node --> ManageMode : ✅ onCompletion
+    MovingHolding_subflow_node --> ManageMode : 🛑 onCancel
 ```
 
 ##### 4.1.2.2. Single Retrieval (Holding Detail View)
@@ -989,32 +1071,58 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_HOLDING_DETAIL
     [*] --> ReadOnly
+    state "ReadOnly<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT
     ReadOnly --> DeletingHolding : USER_CLICKS_DELETE
     ReadOnly --> MovingHolding : USER_CLICKS_MOVE
-    DeletingHolding --> ReadOnly : onCancel
-    DeletingHolding --> [*] : onCompletion (navigates away)
-    MovingHolding --> ReadOnly : onCancel
-    MovingHolding --> [*] : onCompletion (navigates away)
-    ReadOnly --> [*] : USER_CLICKS_BACK
-
-    state "Manage Mode" as ManageMode {
-        [*] --> Idle
-        Idle --> ReadOnly : USER_CLICKS_CANCEL
-        Idle --> SavingChanges : USER_CLICKS_SAVE
-        SavingChanges --> ReadOnly : success
-        SavingChanges --> Idle : failure
-
-        Idle --> AddingLot : USER_CLICKS_ADD_LOT
-        AddingLot --> Idle : onCompletion / onCancel
-
-        Idle --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
-        EditingLot --> Idle : onCompletion / onCancel
-
-        Idle --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
-        DeletingLot --> Idle : onCompletion / onCancel
-    }
+    state "(exit)" as ReadOnly_exit_USER_CLICKS_BACK
+    ReadOnly --> ReadOnly_exit_USER_CLICKS_BACK : USER_CLICKS_BACK
+    ReadOnly_exit_USER_CLICKS_BACK --> [*]
+    ReadOnly --> ManagingHoldingRules : USER_CLICKS_MANAGE_RULES
+    state "⚖️ ManagingHoldingRules" as ManagingHoldingRules
+    state "➡️ subflow: FLOW_MANAGE_HOLDING_RULES" as ManagingHoldingRules_subflow_node
+    ManagingHoldingRules --> ManagingHoldingRules_subflow_node
+    ManagingHoldingRules_subflow_node --> ReadOnly : ✅ onCompletion
+    ManagingHoldingRules_subflow_node --> ReadOnly : 🛑 onCancel
+    state "ManageMode<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as ManageMode
+    ManageMode --> SavingChanges : USER_CLICKS_SAVE
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL
+    ManageMode --> AddingLot : USER_CLICKS_ADD_LOT
+    ManageMode --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
+    ManageMode --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
+    note right of ManageMode
+        activates: ManageMode in FLOW_VIEW_LOTS_LIST
+    end note
+    state "SavingChanges<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as SavingChanges
+    SavingChanges --> ReadOnly : success
+    SavingChanges --> ManageMode : failure
+    state "➕ AddingLot<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as AddingLot
+    state "➡️ subflow: FLOW_CREATE_LOT_MANUAL" as AddingLot_subflow_node
+    AddingLot --> AddingLot_subflow_node
+    AddingLot_subflow_node --> ManageMode : ✅ onCompletion
+    AddingLot_subflow_node --> ManageMode : 🛑 onCancel
+    state "✏️ EditingLot<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as EditingLot
+    state "➡️ subflow: FLOW_UPDATE_LOT_MANUAL" as EditingLot_subflow_node
+    EditingLot --> EditingLot_subflow_node
+    EditingLot_subflow_node --> ManageMode : ✅ onCompletion
+    EditingLot_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingLot<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as DeletingLot
+    state "➡️ subflow: FLOW_DELETE_LOT_MANUAL" as DeletingLot_subflow_node
+    DeletingLot --> DeletingLot_subflow_node
+    DeletingLot_subflow_node --> ManageMode : ✅ onCompletion
+    DeletingLot_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingHolding<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as DeletingHolding
+    state "➡️ subflow: FLOW_DELETE_HOLDING_MANUAL" as DeletingHolding_subflow_node
+    DeletingHolding --> DeletingHolding_subflow_node
+    DeletingHolding_subflow_node --> [*] : ✅ onCompletion
+    DeletingHolding_subflow_node --> ReadOnly : 🛑 onCancel
+    state "MovingHolding<br/><font size="2"><i>(VIEW_HOLDING_DETAIL)</i></font>" as MovingHolding
+    state "➡️ subflow: FLOW_MOVE_HOLDING_MANUAL" as MovingHolding_subflow_node
+    MovingHolding --> MovingHolding_subflow_node
+    MovingHolding_subflow_node --> [*] : ✅ onCompletion
+    MovingHolding_subflow_node --> ReadOnly : 🛑 onCancel
 ```
 
 #### 4.1.3. Update
@@ -1031,20 +1139,31 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_HOLDING_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> Editing : USER_CLICKS_EDIT_HOLDING
-    Editing --> Idle : USER_CLICKS_CANCEL
+    state "✏️ Editing<br/><font size="2"><i>(VIEW_HOLDING_FORM)</i></font>" as Editing
     Editing --> ValidateForm : USER_CLICKS_SAVE
+    Editing --> Idle : USER_CLICKS_CANCEL
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_HOLDING_FORM)</i></font>" as ValidateForm
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_HOLDING_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "📝 FormError<br/><font size="2"><i>(VIEW_HOLDING_FORM)</i></font>" as FormError
     FormError --> Editing : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_HOLDING_FORM)</i></font>" as APIError
     APIError --> Editing : USER_DISMISSES_ERROR
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
 #### 4.1.4. Deletion
+
 An authenticated user can delete an entire holding. This is a destructive action that permanently removes the holding, all of its associated purchase lots, and any strategy rules linked to it.
 
 ##### 4.1.4.1. User Journey Spec and Visual Representation
@@ -1055,14 +1174,22 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_HOLDING_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_HOLDING
-    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "🤔 ConfirmingDelete<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_HOLDING_MODAL)</i></font>" as ConfirmingDelete
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_HOLDING_MODAL)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "REFRESH_VIEW VIEW_PORTFOLIO_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_HOLDING_MODAL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
-    Success --> [*] : REFRESH_VIEW
 ```
 
 #### 4.1.5. Move
@@ -1077,16 +1204,25 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_MOVE_HOLDING_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> SelectingDestination : USER_CLICKS_MOVE_HOLDING
-    SelectingDestination --> Idle : USER_CLICKS_CANCEL
+    state "👆 SelectingDestination<br/><font size="2"><i>(VIEW_MOVE_HOLDING_MODAL)</i></font>" as SelectingDestination
     SelectingDestination --> ConfirmingMove : USER_SELECTS_DESTINATION
-    ConfirmingMove --> SelectingDestination : USER_CLICKS_BACK
+    SelectingDestination --> Idle : USER_CLICKS_CANCEL
+    state "🤔 ConfirmingMove<br/><font size="2"><i>(VIEW_MOVE_HOLDING_MODAL)</i></font>" as ConfirmingMove
     ConfirmingMove --> Submitting : USER_CLICKS_CONFIRM_MOVE
+    ConfirmingMove --> SelectingDestination : USER_CLICKS_BACK
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_MOVE_HOLDING_MODAL)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "➡️ VIEW_PORTFOLIO_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_MOVE_HOLDING_MODAL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
-    Success --> [*] : NAVIGATE_TO_NEW_PORTFOLIO
 ```
 
 ### 4.2. Holding Data Model
@@ -1526,17 +1662,27 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_CREATE_LOT_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> FormInput : USER_CLICKS_ADD_LOT
-    FormInput --> Idle : USER_CLICKS_CANCEL
+    state "📝 FormInput<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as FormInput
     FormInput --> ValidateForm : USER_CLICKS_SAVE
+    FormInput --> Idle : USER_CLICKS_CANCEL
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as ValidateForm
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "📝 FormError<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as FormError
     FormError --> FormInput : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as APIError
     APIError --> FormInput : USER_DISMISSES_ERROR
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
 #### 5.1.2. Retrieval and Management
@@ -1553,22 +1699,31 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_VIEW_LOTS_LIST
     [*] --> ReadOnly
+    state "ReadOnly<br/><font size="2"><i>(VIEW_LOTS_LIST)</i></font>" as ReadOnly
     ReadOnly --> ManageMode : USER_CLICKS_EDIT_HOLDING
-
-    state "Manage Mode" as ManageMode {
-        [*] --> Idle
-        Idle --> ReadOnly : USER_CLICKS_CANCEL_OR_SAVE
-        
-        Idle --> AddingLot : USER_CLICKS_ADD_LOT
-        AddingLot --> Idle : onCompletion / onCancel
-
-        Idle --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
-        EditingLot --> Idle : onCompletion / onCancel
-
-        Idle --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
-        DeletingLot --> Idle : onCompletion / onCancel
-    }
+    state "ManageMode<br/><font size="2"><i>(VIEW_LOTS_LIST)</i></font>" as ManageMode
+    ManageMode --> ReadOnly : USER_CLICKS_SAVE_HOLDING
+    ManageMode --> ReadOnly : USER_CLICKS_CANCEL_HOLDING
+    ManageMode --> AddingLot : USER_CLICKS_ADD_LOT
+    ManageMode --> EditingLot : USER_CLICKS_EDIT_LOT_ITEM
+    ManageMode --> DeletingLot : USER_CLICKS_DELETE_LOT_ITEM
+    state "➕ AddingLot" as AddingLot
+    state "➡️ subflow: FLOW_CREATE_LOT_MANUAL" as AddingLot_subflow_node
+    AddingLot --> AddingLot_subflow_node
+    AddingLot_subflow_node --> ManageMode : ✅ onCompletion
+    AddingLot_subflow_node --> ManageMode : 🛑 onCancel
+    state "✏️ EditingLot" as EditingLot
+    state "➡️ subflow: FLOW_UPDATE_LOT_MANUAL" as EditingLot_subflow_node
+    EditingLot --> EditingLot_subflow_node
+    EditingLot_subflow_node --> ManageMode : ✅ onCompletion
+    EditingLot_subflow_node --> ManageMode : 🛑 onCancel
+    state "DeletingLot" as DeletingLot
+    state "➡️ subflow: FLOW_DELETE_LOT_MANUAL" as DeletingLot_subflow_node
+    DeletingLot --> DeletingLot_subflow_node
+    DeletingLot_subflow_node --> ManageMode : ✅ onCompletion
+    DeletingLot_subflow_node --> ManageMode : 🛑 onCancel
 ```
 
 #### 5.1.3. Manual Update of a Single Lot
@@ -1583,17 +1738,27 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_UPDATE_LOT_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> Editing : USER_CLICKS_EDIT_LOT
-    Editing --> Idle : USER_CLICKS_CANCEL
+    state "✏️ Editing<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as Editing
     Editing --> ValidateForm : USER_CLICKS_SAVE
+    Editing --> Idle : USER_CLICKS_CANCEL
+    state "📝 ValidateForm<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as ValidateForm
     ValidateForm --> Submitting : valid
     ValidateForm --> FormError : invalid
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "CLOSE_MODAL_AND_REFRESH_VIEW VIEW_HOLDING_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "📝 FormError<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as FormError
     FormError --> Editing : USER_DISMISSES_ERROR
+    state "❌ APIError<br/><font size="2"><i>(VIEW_LOT_FORM)</i></font>" as APIError
     APIError --> Editing : USER_DISMISSES_ERROR
-    Success --> [*] : CLOSE_MODAL_AND_REFRESH_VIEW
 ```
 
 #### 5.1.4. Deletion
@@ -1608,14 +1773,22 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
+    %% Flow ID: FLOW_DELETE_LOT_MANUAL
     [*] --> Idle
+    state "💤 Idle" as Idle
     Idle --> ConfirmingDelete : USER_CLICKS_DELETE_LOT
-    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "🤔 ConfirmingDelete<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_LOT_MODAL)</i></font>" as ConfirmingDelete
     ConfirmingDelete --> Submitting : USER_CLICKS_CONFIRM_DELETE
+    ConfirmingDelete --> Idle : USER_CLICKS_CANCEL_DELETE
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_LOT_MODAL)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "REFRESH_VIEW VIEW_HOLDING_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_CONFIRM_DELETE_LOT_MODAL)</i></font>" as APIError
     APIError --> Idle : USER_DISMISSES_ERROR
-    Success --> [*] : REFRESH_VIEW
 ```
 
 ### 5.2. Lot Data Model
@@ -1878,16 +2051,22 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PortfolioDetailView
-    PortfolioDetailView --> EditingRules : USER_CLICKS_MANAGE_RULES
-    EditingRules --> PortfolioDetailView : USER_CLICKS_CANCEL
+    %% Flow ID: FLOW_MANAGE_PORTFOLIO_RULES
+    [*] --> EditingRules
+    state "✏️ EditingRules<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as EditingRules
     EditingRules --> Submitting : USER_CLICKS_SAVE_RULES
-    
+    state "(exit)" as EditingRules_exit_USER_CLICKS_CANCEL
+    EditingRules --> EditingRules_exit_USER_CLICKS_CANCEL : USER_CLICKS_CANCEL
+    EditingRules_exit_USER_CLICKS_CANCEL --> [*]
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
-
+    state "✅ Success" as Success
+    state "REFRESH_VIEW VIEW_PORTFOLIO_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as APIError
     APIError --> EditingRules : USER_DISMISSES_ERROR
-    Success --> PortfolioDetailView : (exit flow and refresh)
 ```
 
 #### 6.1.2. Managing Holding-Level Rules (Override)
@@ -1905,31 +2084,31 @@ The complete and definitive specification for this user journey is defined in `d
 
 ```mermaid
 stateDiagram-v2
-    [*] --> HoldingDetailView
-    HoldingDetailView --> CheckingForOverride : USER_CLICKS_MANAGE_RULES
-
-    state "Checking for Override" as CheckingForOverride {
-        [*] --> DisplayingInheritedRules : has_inherited_rules
-        [*] --> EditingSpecificRules : has_specific_rules
-    }
-    
-    state "Displaying Inherited Rules" as DisplayingInheritedRules {
-      description: Shows portfolio rules (read-only)
-      [*] --> EditingSpecificRules : USER_CLICKS_CREATE_OVERRIDE
-      [*] --> HoldingDetailView : USER_CLICKS_BACK
-    }
-
-    state "Editing Specific Rules" as EditingSpecificRules {
-       description: Shows the holding's own rules
-       [*] --> HoldingDetailView : USER_CLICKS_CANCEL
-       [*] --> Submitting : USER_CLICKS_SAVE_RULES
-    }
-
+    %% Flow ID: FLOW_MANAGE_HOLDING_RULES
+    [*] --> CheckingForOverride
+    state "🔍 CheckingForOverride" as CheckingForOverride
+    CheckingForOverride --> EditingSpecificRules : has_specific_rules
+    CheckingForOverride --> DisplayingInheritedRules : has_inherited_rules
+    CheckingForOverride --> EditingSpecificRules : has_no_rules
+    state "⚖️ DisplayingInheritedRules<br/><font size="2"><i>(VIEW_INHERITED_RULES_INFO)</i></font>" as DisplayingInheritedRules
+    DisplayingInheritedRules --> EditingSpecificRules : USER_CLICKS_CREATE_OVERRIDE
+    state "(exit)" as DisplayingInheritedRules_exit_USER_CLICKS_BACK
+    DisplayingInheritedRules --> DisplayingInheritedRules_exit_USER_CLICKS_BACK : USER_CLICKS_BACK
+    DisplayingInheritedRules_exit_USER_CLICKS_BACK --> [*]
+    state "✏️ EditingSpecificRules<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as EditingSpecificRules
+    EditingSpecificRules --> Submitting : USER_CLICKS_SAVE_RULES
+    state "(exit)" as EditingSpecificRules_exit_USER_CLICKS_CANCEL
+    EditingSpecificRules --> EditingSpecificRules_exit_USER_CLICKS_CANCEL : USER_CLICKS_CANCEL
+    EditingSpecificRules_exit_USER_CLICKS_CANCEL --> [*]
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as Submitting
     Submitting --> Success : success
     Submitting --> APIError : failure
-
+    state "✅ Success" as Success
+    state "REFRESH_VIEW VIEW_HOLDING_DETAIL" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_RULE_SET_FORM)</i></font>" as APIError
     APIError --> EditingSpecificRules : USER_DISMISSES_ERROR
-    Success --> HoldingDetailView : (exit flow and refresh)
 ```
 
 ### 6.2. Rule Set Data Model
@@ -2346,37 +2525,50 @@ sequenceDiagram
 
 #### 7.1.2. Frontend Business Process: Alert Consumption
 
-This section describes the user-facing process for viewing and managing alerts within the application.
+This section describes the user-facing process for viewing and managing alerts within the application, which is a two-step journey. First, the user can view a quick summary of unread alerts, and from there, they can navigate to a full history view.
 
-##### 7.1.2.1. User Journey Spec and Visual Representation
+##### 7.1.2.1. Unread Alert Summary
 
 When a user logs in, a red dot on the app bar's alert icon indicates new alerts. Clicking the icon opens a modal with the latest unread alerts. From there, the user can navigate to a full history view, which allows them to inspect the details of any past alert.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_SHOW_ALERTS_DROPDOWN`**.
+
+- **User Journey Spec and Visual Representation**
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_SHOW_ALERTS_DROPDOWN
+    [*] --> ShowingDropdown
+    state "ShowingDropdown<br/><font size="2"><i>(VIEW_ALERTS_DROPDOWN_MODAL)</i></font>" as ShowingDropdown
+    ShowingDropdown --> ViewAll : USER_CLICKS_VIEW_ALL_ALERTS
+    state "🛑 (exit onCancel)" as ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL
+    ShowingDropdown --> ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL : USER_CLICKS_CLOSE_MODAL
+    ShowingDropdown_exit_USER_CLICKS_CLOSE_MODAL --> [*]
+    state "👁️ ViewAll" as ViewAll
+    state "➡️ VIEW_ALERTS_LIST" as ViewAll_exit_action
+    ViewAll --> ViewAll_exit_action
+    ViewAll_exit_action --> [*]
+```
+
+##### 7.1.2.2. Full Alert History
+
+From the unread alert summary or another entry point, the user can navigate to the full alert history page. This view lists all alerts, both read and unread. The user can select any alert from the list to view its full details. The detail view includes navigation to see the previous or next alert in the historical sequence.
 
 The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_VIEW_ALERTS`**.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AppWithAlerts
-    
-    state "App Bar" as AppWithAlerts {
-        [*] --> AlertsModal : USER_CLICKS_ALERT_ICON
-    }
-
-    state "Alerts Modal (Unread)" as AlertsModal {
-        [*] --> AlertsHistoryView : USER_CLICKS_VIEW_MORE
-        [*] --> AppWithAlerts : USER_CLICKS_DISMISS
-    }
-
-    state "Alerts History (All)" as AlertsHistoryView {
-        [*] --> AlertDetailView : USER_CLICKS_ALERT_ITEM
-        [*] --> AppWithAlerts : USER_CLICKS_BACK
-    }
-
-    state "Alert Detail" as AlertDetailView {
-        [*] --> AlertsHistoryView : USER_CLICKS_BACK_TO_LIST
-        AlertDetailView --> AlertDetailView : USER_CLICKS_PREVIOUS
-        AlertDetailView --> AlertDetailView : USER_CLICKS_NEXT
-    }
+    %% Flow ID: FLOW_VIEW_ALERTS
+    [*] --> ViewingList
+    state "👁️ ViewingList<br/><font size="2"><i>(VIEW_ALERTS_LIST)</i></font>" as ViewingList
+    ViewingList --> ViewingDetail : USER_SELECTS_ALERT
+    state "(exit)" as ViewingList_exit_USER_CLICKS_BACK
+    ViewingList --> ViewingList_exit_USER_CLICKS_BACK : USER_CLICKS_BACK
+    ViewingList_exit_USER_CLICKS_BACK --> [*]
+    state "👁️ ViewingDetail<br/><font size="2"><i>(VIEW_ALERT_DETAIL)</i></font>" as ViewingDetail
+    ViewingDetail --> ViewingDetail : USER_CLICKS_PREVIOUS_ALERT
+    ViewingDetail --> ViewingDetail : USER_CLICKS_NEXT_ALERT
+    ViewingDetail --> ViewingList : USER_CLICKS_BACK_TO_LIST
 ```
 
 ### 7.2. Data Models
@@ -2770,35 +2962,40 @@ A user who is not logged in will first see a public home page. The application's
 
 - **User Journey Spec and Visual Representation**
 
+The complete and definitive specifications for these user journeys are defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`s: **`FLOW_UNAUTHENTICATED_NAV`** and **`FLOW_LOGIN`**.
+
 ```mermaid
 stateDiagram-v2
-    direction LR
-
-    [*] --> Unauthenticated
-    
-    state "Unauthenticated" as Unauthenticated {
-        [*] --> HomePage
-        HomePage --> LoginForm : USER_CLICKS_LOGIN
-        LoginForm --> HomePage : USER_CLICKS_CANCEL
-    }
-
-    state "Login Process" as LoginForm {
-        [*] --> FormInput
-        FormInput --> Submitting : USER_SUBMITS_LOGIN
-        Submitting --> Success : success
-        Submitting --> AuthError : failure
-        AuthError --> FormInput : USER_DISMISSES_ERROR
-    }
-
-    state "Authenticated" as Authenticated {
-        [*] --> DashboardView
-    }
-
-    Success --> Authenticated : (exit to authenticated state)
-    Unauthenticated --> Authenticated : (on app load with valid token)
+    %% Flow ID: FLOW_UNAUTHENTICATED_NAV
+    [*] --> HomePage
+    state "🏠 HomePage<br/><font size="2"><i>(VIEW_HOME_PAGE)</i></font>" as HomePage
+    HomePage --> NavigatingToLogin : USER_CLICKS_LOGIN
+    state "NavigatingToLogin" as NavigatingToLogin
+    state "➡️ subflow: FLOW_LOGIN" as NavigatingToLogin_subflow_node
+    NavigatingToLogin --> NavigatingToLogin_subflow_node
+    NavigatingToLogin_subflow_node --> [*] : ✅ onCompletion
+    NavigatingToLogin_subflow_node --> HomePage : 🛑 onCancel
 ```
 
-- The complete and definitive specifications for these user journeys are defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`s: **`FLOW_UNAUTHENTICATED_NAV`** and **`FLOW_LOGIN`**.
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_LOGIN
+    [*] --> FormInput
+    state "📝 FormInput<br/><font size="2"><i>(VIEW_LOGIN_FORM)</i></font>" as FormInput
+    FormInput --> Submitting : USER_SUBMITS_LOGIN
+    state "🛑 (exit onCancel)" as FormInput_exit_USER_CLICKS_CANCEL
+    FormInput --> FormInput_exit_USER_CLICKS_CANCEL : USER_CLICKS_CANCEL
+    FormInput_exit_USER_CLICKS_CANCEL --> [*]
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_LOGIN_FORM)</i></font>" as Submitting
+    Submitting --> Success : success
+    Submitting --> AuthError : failure
+    state "✅ Success" as Success
+    state "➡️ VIEW_DASHBOARD" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ AuthError<br/><font size="2"><i>(VIEW_LOGIN_FORM)</i></font>" as AuthError
+    AuthError --> FormInput : USER_DISMISSES_ERROR
+```
 
 #### 8.1.2. Logout
 
@@ -2806,26 +3003,26 @@ An authenticated user will see a "Logout" action in the main application navigat
 
 - **User Journey Spec and Visual Representation**
 
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_LOGOUT`**.
+
 ```mermaid
 stateDiagram-v2
-    direction LR
-
-    [*] --> DashboardView
-    DashboardView --> ConfirmingLogout : USER_CLICKS_LOGOUT
-    
-    state "Logout Process" as ConfirmingLogout {
-        [*] --> AwaitingConfirmation
-        AwaitingConfirmation --> SubmittingLogout : USER_CONFIRMS_LOGOUT
-        SubmittingLogout --> Success : success
-    }
-    
-    ConfirmingLogout --> DashboardView : USER_CLICKS_CANCEL
-    Success --> HomePage
-
-    HomePage --> [*]
+    %% Flow ID: FLOW_LOGOUT
+    [*] --> Idle
+    state "💤 Idle" as Idle
+    Idle --> ConfirmingLogout : USER_CLICKS_LOGOUT
+    state "🤔 ConfirmingLogout<br/><font size="2"><i>(VIEW_CONFIRM_LOGOUT_MODAL)</i></font>" as ConfirmingLogout
+    ConfirmingLogout --> SubmittingLogout : USER_CONFIRMS_LOGOUT
+    ConfirmingLogout --> Idle : USER_CLICKS_CANCEL
+    state "⏳ SubmittingLogout<br/><font size="2"><i>(VIEW_CONFIRM_LOGOUT_MODAL)</i></font>" as SubmittingLogout
+    SubmittingLogout --> Success : success
+    SubmittingLogout --> Idle : failure
+    state "✅ Success" as Success
+    state "➡️ VIEW_HOME_PAGE" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
 ```
 
-- The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_LOGOUT`**.
 
 ### 8.2. Data Models
 
