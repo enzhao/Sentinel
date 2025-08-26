@@ -1,19 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import AppBar from '@/components/AppBar.vue';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
-
-const vuetify = createVuetify({
-  components,
-  directives,
-});
 
 describe('AppBar.vue', () => {
   const mountAppBar = (props: any) => mount(AppBar, {
     global: {
-      plugins: [vuetify],
+      plugins: [],
       stubs: {
         VAppBar: { template: '<header><slot name="prepend" /><slot /><slot name="append" /></header>' },
         VAppBarNavIcon: { template: '<button class="v-app-bar-nav-icon"><slot /></button>' },

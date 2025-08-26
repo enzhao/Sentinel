@@ -1,168 +1,56 @@
-from firebase_admin import firestore
+from datetime import datetime, timezone
 from typing import List, Optional
-from src.models import PortfolioDB, CreatePortfolioRequest, UpdatePortfolioRequest, AddHoldingRequest, HoldingDB
-from src.firebase_setup import db
-from src.services.backfill_service import backfill_service
-from fastapi import BackgroundTasks
+from uuid import uuid4
 
+from pydantic import UUID4
 
-portfolios_collection = db.collection('portfolios')
+from ..api.models import Portfolio, PortfolioCreationRequest, PortfolioSummary, Currency, CashReserve
+from ..firebase_setup import db
+from ..core.utils import convert_uuids_to_str
 
-
-# #############################################################################
-# PORTFOLIO SERVICE
-# #############################################################################
+portfolios_collection = db.collection("portfolios")
 
 class PortfolioService:
-    """
-    A service class to handle all Firestore interactions for portfolios.
-    """
-
-    @staticmethod
-    def create_portfolio(user_id: str, portfolio_data: CreatePortfolioRequest) -> Optional[PortfolioDB]:
+    def create_portfolio(self, user_id: str, portfolio_data: PortfolioCreationRequest) -> Portfolio:
         """
-        Creates a new portfolio document in Firestore for a given user.
-        Returns None if a portfolio with the same name already exists for the user.
+        Creates a new portfolio in Firestore.
+        Reference: product_spec.md#331-p_1000-portfolio-creation
         """
-        # Rule P_E_1103: Check for unique portfolio name for the user
-        existing_portfolios = PortfolioService.get_portfolios_by_user(user_id)
-        if any(p.name == portfolio_data.name for p in existing_portfolios):
-            return None
+        now = datetime.now(timezone.utc)
+        new_portfolio_id = uuid4()
 
-        new_portfolio = PortfolioDB(userId=user_id, **portfolio_data.model_dump())
-        portfolios_collection.document(new_portfolio.portfolioId).set(new_portfolio.model_dump())
+        new_portfolio = Portfolio(
+            portfolioId=new_portfolio_id,
+            userId=user_id,
+            name=portfolio_data.name,
+            description=portfolio_data.description,
+            defaultCurrency=portfolio_data.defaultCurrency,
+            cashReserve=portfolio_data.cashReserve,
+            ruleSetId=None, # New portfolios start without a rule set
+            createdAt=now,
+            modifiedAt=now
+        )
+        portfolios_collection.document(str(new_portfolio_id)).set(convert_uuids_to_str(new_portfolio.model_dump()))
         return new_portfolio
 
-    @staticmethod
-    def get_portfolios_by_user(user_id: str) -> List[PortfolioDB]:
+    def get_portfolio_by_id(self, portfolio_id: UUID4) -> Optional[Portfolio]:
         """
-        Retrieves a list of all portfolios for a given user.
+        Retrieves a single portfolio by its ID.
+        Reference: product_spec.md#3321-p_2000-single-portfolio-retrieval
         """
-        docs = portfolios_collection.where('userId', '==', user_id).stream()
-        return [PortfolioDB(**doc.to_dict()) for doc in docs]
+        portfolio_doc = portfolios_collection.document(str(portfolio_id)).get()
+        if portfolio_doc.exists:
+            return Portfolio(**portfolio_doc.to_dict())
+        return None
 
-    @staticmethod
-    def get_portfolio_by_id(portfolio_id: str, user_id: str) -> Optional[PortfolioDB]:
+    def get_portfolios_by_user(self, user_id: str) -> List[Portfolio]:
         """
-        Retrieves a single portfolio by its ID, ensuring it belongs to the user.
+        Retrieves all portfolios for a given user.
+        Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
         """
-        doc_ref = portfolios_collection.document(portfolio_id)
-        doc = doc_ref.get()
-        if not doc.exists:
-            return None
-        
-        portfolio = PortfolioDB(**doc.to_dict())
-        if portfolio.userId != user_id:
-            # This is an authorization check. The user is trying to access a portfolio
-            # that does not belong to them. We return None, and the API layer will
-            # handle the HTTP 403/404 response.
-            return None
-            
-        return portfolio
+        # For now, return full Portfolio objects. Later, this might return PortfolioSummary.
+        portfolio_docs = portfolios_collection.where("userId", "==", user_id).stream()
+        portfolios = [Portfolio(**doc.to_dict()) for doc in portfolio_docs]
+        return portfolios
 
-    @staticmethod
-    def update_portfolio(portfolio_id: str, user_id: str, update_data: UpdatePortfolioRequest) -> Optional[PortfolioDB]:
-        """
-        Updates a portfolio's details.
-        """
-        portfolio = PortfolioService.get_portfolio_by_id(portfolio_id, user_id)
-        if not portfolio:
-            return None
-
-        update_dict = update_data.model_dump(exclude_unset=True)
-        portfolios_collection.document(portfolio_id).update(update_dict)
-        
-        # Return the updated portfolio
-        updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
-        return PortfolioDB(**updated_portfolio_doc.to_dict())
-
-
-    @staticmethod
-    def delete_portfolio(portfolio_id: str, user_id: str) -> bool:
-        """
-        Deletes a portfolio, returning True if successful.
-        """
-        portfolio = PortfolioService.get_portfolio_by_id(portfolio_id, user_id)
-        if not portfolio:
-            return False
-        
-        portfolios_collection.document(portfolio_id).delete()
-        return True
-
-    @staticmethod
-    def add_holding(portfolio_id: str, user_id: str, holding_data: AddHoldingRequest, background_tasks: BackgroundTasks) -> Optional[PortfolioDB]:
-        """
-        Adds a new holding to a portfolio.
-        """
-        # Rule P_E_3104: Validate lot data
-        for lot in holding_data.lots:
-            if lot.quantity <= 0 or lot.purchasePrice <= 0:
-                raise ValueError("Lot quantity and purchase price must be positive.")
-
-        portfolio = PortfolioService.get_portfolio_by_id(portfolio_id, user_id)
-        if not portfolio:
-            return None
-
-        new_holding = HoldingDB(**holding_data.model_dump())
-        
-        # Use FieldValue to atomically add the new holding to the array
-        portfolios_collection.document(portfolio_id).update({
-            'holdings': firestore.ArrayUnion([new_holding.model_dump()])
-        })
-        
-        # Trigger a background task to backfill historical data for the new ticker
-        background_tasks.add_task(backfill_service.backfill_historical_data, new_holding.ticker)
-
-        updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
-        return PortfolioDB(**updated_portfolio_doc.to_dict())
-
-    @staticmethod
-    def delete_holding(portfolio_id: str, user_id: str, holding_id: str) -> Optional[PortfolioDB]:
-        """
-        Deletes a holding from a portfolio.
-        """
-        portfolio = PortfolioService.get_portfolio_by_id(portfolio_id, user_id)
-        if not portfolio:
-            return None
-
-        original_length = len(portfolio.holdings)
-        portfolio.holdings = [h for h in portfolio.holdings if h.holdingId != holding_id]
-
-        if len(portfolio.holdings) == original_length:
-            # No holding was found/deleted
-            return None
-
-        portfolios_collection.document(portfolio_id).update({"holdings": [h.model_dump() for h in portfolio.holdings]})
-        updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
-        return PortfolioDB(**updated_portfolio_doc.to_dict())
-
-    @staticmethod
-    def delete_lot(portfolio_id: str, user_id: str, holding_id: str, lot_id: str) -> Optional[PortfolioDB]:
-        """
-        Deletes a lot from a holding within a portfolio.
-        """
-        portfolio = PortfolioService.get_portfolio_by_id(portfolio_id, user_id)
-        if not portfolio:
-            return None
-
-        holding_found = False
-        lot_deleted = False
-        for holding in portfolio.holdings:
-            if holding.holdingId == holding_id:
-                holding_found = True
-                original_lot_count = len(holding.lots)
-                holding.lots = [lot for lot in holding.lots if lot.lotId != lot_id]
-                if len(holding.lots) < original_lot_count:
-                    lot_deleted = True
-                break
-        
-        if not holding_found or not lot_deleted:
-            return None
-
-        portfolios_collection.document(portfolio_id).update({"holdings": [h.model_dump() for h in portfolio.holdings]})
-        updated_portfolio_doc = portfolios_collection.document(portfolio_id).get()
-        return PortfolioDB(**updated_portfolio_doc.to_dict())
-
-
-# Instantiate the service for use in the API routers
 portfolio_service = PortfolioService()

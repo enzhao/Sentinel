@@ -1,49 +1,106 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
+import { createRouter, createWebHistory } from 'vue-router';
 import StandardLayout from '@/components/StandardLayout.vue';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
+import { useAuthStore } from '@/stores/auth';
+import { onAuthStateChanged } from 'firebase/auth';
+import { nextTick } from 'vue';
 
-const vuetify = createVuetify({
-  components,
-  directives,
-});
+// --- We only mock the lowest-level dependency ---
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(),
+  onAuthStateChanged: vi.fn(), // We will control this in each test
+  signOut: vi.fn(),
+}));
+
+// Mock the AppBar to isolate the layout component
+const AppBarStub = {
+  name: 'AppBar',
+  template: '<div></div>',
+  props: ['title', 'actions'],
+  emits: ['USER_CLICKS_LOGIN', 'USER_CLICKS_LOGOUT'],
+};
 
 describe('StandardLayout.vue', () => {
-  it('renders header, body, and fab slots', () => {
-    const wrapper = mount(StandardLayout, {
-      global: {
-        plugins: [vuetify],
-      },
-      slots: {
-        header: '<div class="test-header">Header Content</div>',
-        body: '<div class="test-body">Body Content</div>',
-        fab: '<div class="test-fab">FAB Content</div>',
-      },
-    });
+  const router = createRouter({
+    history: createWebHistory(),
+    routes: [
+      { path: '/login', name: 'login', component: {} },
+    ],
+  });
+  const onAuthStateChangedMock = onAuthStateChanged as vi.Mock;
 
-    expect(wrapper.find('.test-header').exists()).toBe(true);
-    expect(wrapper.find('.test-header').text()).toBe('Header Content');
-    expect(wrapper.find('.test-body').exists()).toBe(true);
-    expect(wrapper.find('.test-body').text()).toBe('Body Content');
-    expect(wrapper.find('.test-fab').exists()).toBe(true);
-    expect(wrapper.find('.test-fab').text()).toBe('FAB Content');
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
   });
 
-  it('renders without any slot content', () => {
-    const wrapper = mount(StandardLayout, {
+  const mountComponent = () => {
+    return mount(StandardLayout, {
       global: {
-        plugins: [vuetify],
+        plugins: [router],
+        stubs: { AppBar: AppBarStub },
       },
     });
+  };
 
-    // Expect the main app and main content to still exist
-    expect(wrapper.find('.v-application').exists()).toBe(true);
-    expect(wrapper.find('.v-main').exists()).toBe(true);
-    // Expect slot content not to be rendered if slots are empty
-    expect(wrapper.html()).not.toContain('Header Content');
-    expect(wrapper.html()).not.toContain('Body Content');
-    expect(wrapper.html()).not.toContain('FAB Content');
+  it('computes login action when user is not authenticated', async () => {
+    // ARRANGE: Firebase reports the user is logged out
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(null);
+    });
+    // Initialize the real store, which will use the mock above
+    const authStore = useAuthStore();
+    await authStore.init();
+
+    // ACT
+    const wrapper = mountComponent();
+    await nextTick();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    // ASSERT
+    expect(appBar.props('actions')).toEqual([{ label: 'Login', event: 'USER_CLICKS_LOGIN' }]);
+  });
+
+  it('computes logout action when user is authenticated', async () => {
+    // ARRANGE: Firebase reports the user is logged in
+    const mockUser = { uid: '123', email: 'test@test.com' };
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(mockUser);
+    });
+    const authStore = useAuthStore();
+    await authStore.init();
+
+    // ACT
+    const wrapper = mountComponent();
+    await nextTick();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    // ASSERT
+    expect(appBar.props('actions')).toEqual([{ label: 'Logout', event: 'USER_CLICKS_LOGOUT' }]);
+  });
+
+  it('navigates to login page on USER_CLICKS_LOGIN event', async () => {
+    const pushSpy = vi.spyOn(router, 'push');
+    const wrapper = mountComponent();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    await appBar.vm.$emit('USER_CLICKS_LOGIN');
+
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'login' });
+    pushSpy.mockRestore();
+  });
+
+  it('calls authStore.logout on USER_CLICKS_LOGOUT event', async () => {
+    const authStore = useAuthStore();
+    const logoutSpy = vi.spyOn(authStore, 'logout');
+    const wrapper = mountComponent();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    await appBar.vm.$emit('USER_CLICKS_LOGOUT');
+
+    expect(logoutSpy).toHaveBeenCalled();
   });
 });
+

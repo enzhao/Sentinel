@@ -3,7 +3,7 @@
 ## How to run backend tests:
 
 ```bash
-backend/venv/bin/pytest --cov=src backend/tests/
+venv/bin/pytest --cov=src backend/tests/
 ```
 
 ## How to do a release:

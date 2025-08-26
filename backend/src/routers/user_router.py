@@ -1,243 +1,125 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import UUID4
+from datetime import datetime, timezone
 from typing import List
-from src.auth import get_current_user
-from src.services.portfolio_service import portfolio_service
-from src.services.user_service import user_service
-from src.models import (
-    CreatePortfolioRequest,
-    Portfolio,
-    User,
-    UpdateUserSettingsRequest,
-    UpdatePortfolioRequest,
-    AddHoldingRequest,
-    InitializeUserRequest
-)
-from src.dependencies import require_idempotency_key
-from src.services.enrichment_service import enrichment_service
 
-router = APIRouter(
-    tags=["Users & Portfolios"],
-    dependencies=[Depends(get_current_user)]
-)
+from ..dependencies import get_current_user, require_idempotency_key
+from ..firebase_setup import db
+from ..api.models import User, UpdateUserSettingsRequest, Portfolio, Currency, CashReserve, SubscriptionStatus, NotificationPreferences, PortfolioCreationRequest, PortfolioSummary
+from ..core.internal_models import CurrentUser
+from ..core.utils import convert_uuids_to_str
+from ..services.portfolio_service import portfolio_service # Import portfolio_service
+from firebase_admin import auth
 
-# ======================================================================================
-# User Management Endpoints
-# ======================================================================================
+router = APIRouter()
 
-# @router.post("/users", status_code=status.HTTP_201_CREATED, response_model=User, summary="Create User and Default Portfolio")
-# def create_user_and_portfolio(
-#     request: InitializeUserRequest,
-#     current_user: dict = Depends(get_current_user),
-#     _idempotency_key: str = Depends(require_idempotency_key)
-# ):
-#     """
-#     Handles the one-time initialization of a new user after they have signed up
-#     via Firebase Authentication.
-
-#     This endpoint:
-#     1.  Verifies the user's ID token.
-#     2.  Checks if a user document already exists in Firestore. If so, it returns
-#         the existing user, enforcing idempotency.
-#     3.  If the user is new, it creates a `User` document in Firestore with their
-#         UID, email, and chosen username.
-#     4.  Creates a default portfolio for the new user (e.g., "My First Portfolio").
-#     5.  Links the default portfolio to the user by setting `defaultPortfolioId`.
-#     6.  Returns the newly created and fully initialized `User` object.
-#     """
-#     uid = current_user["uid"]
-#     email = current_user.get("email")
-
-#     # Idempotency check: If user already exists, return them.
-#     existing_user = user_service.get_user(uid)
-#     if existing_user:
-#         return existing_user
-
-#     # Create the user document in Firestore
-#     new_user = user_service.create_user(uid=uid, email=email, username=request.username)
-#     if not new_user:
-#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create user.")
-
-#     # Create the default portfolio
-#     default_portfolio_data = CreatePortfolioRequest(name="My First Portfolio")
-#     new_portfolio = portfolio_service.create_portfolio(
-#         user_id=uid,
-#         portfolio_data=default_portfolio_data
-#     )
-#     if not new_portfolio:
-#         # This case should ideally not be reached if user creation was successful
-#         # and portfolio name is not a duplicate for a new user.
-#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create default portfolio.")
-
-#     # Link the portfolio and update the user
-#     update_settings = UpdateUserSettingsRequest(defaultPortfolioId=new_portfolio.portfolioId)
-#     updated_user = user_service.update_user_settings(uid, update_settings)
-#     if not updated_user:
-#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to link default portfolio to user.")
-
-#     return updated_user
-
-@router.get("/users/me", response_model=User)
-def get_user_me(current_user: dict = Depends(get_current_user)):
+@router.get("/users/me", response_model=User, summary="Retrieve current user's profile and settings")
+async def get_current_user_profile(current_user: CurrentUser = Depends(get_current_user)):
     """
-    Get the current authenticated user's details.
+    Retrieves the full profile and settings for the currently authenticated user.
+    Reference: product_spec.md#833-u_3000-api-request-authorization
+    Reference: product_spec.md#932-us_2000-user-settings-retrieval
     """
-    user = user_service.get_user(current_user["uid"])
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
+    user_doc_ref = db.collection("users").document(current_user.uid)
+    user_doc = user_doc_ref.get()
 
-@router.put("/users/me/settings", response_model=User)
-def update_user_settings(
-    settings: UpdateUserSettingsRequest,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
-    """
-    Update the current user's settings, including their default portfolio.
-    """
-    uid = current_user["uid"]
-    try:
-        updated_user = user_service.update_user_settings(uid, settings)
-        if not updated_user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-        return updated_user
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-# ======================================================================================
-# Portfolio Management Endpoints (Nested under the user)
-# ======================================================================================
-
-@router.post("/users/me/portfolios", response_model=Portfolio, status_code=status.HTTP_201_CREATED)
-def create_portfolio(
-    portfolio_data: CreatePortfolioRequest,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
-    """
-    Create a new portfolio for the authenticated user.
-    """
-    new_portfolio_db = portfolio_service.create_portfolio(current_user["uid"], portfolio_data)
-    if not new_portfolio_db:
+    if not user_doc.exists:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"A portfolio with the name '{portfolio_data.name}' already exists."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found."
         )
-    return Portfolio(**new_portfolio_db.model_dump())
-
-@router.get("/users/me/portfolios", response_model=List[Portfolio])
-def get_all_portfolios(
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Retrieve a summary list of all of the user's portfolios.
-    """
-    portfolios_db = portfolio_service.get_portfolios_by_user(current_user["uid"])
-    enriched_portfolios = [enrichment_service.enrich_portfolio(p) for p in portfolios_db]
-    return enriched_portfolios
-
-@router.get("/users/me/portfolios/{portfolio_id}", response_model=Portfolio)
-def get_portfolio(
-    portfolio_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Retrieve the full, enriched details of a single portfolio.
-    """
-    portfolio_db = portfolio_service.get_portfolio_by_id(portfolio_id, current_user["uid"])
-    if not portfolio_db:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
     
-    enriched_portfolio = enrichment_service.enrich_portfolio(portfolio_db)
-    return enriched_portfolio
+    return User(**user_doc.to_dict())
 
-@router.put("/users/me/portfolios/{portfolio_id}", response_model=Portfolio)
-def update_portfolio(
-    portfolio_id: str,
-    update_data: UpdatePortfolioRequest,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
+@router.get("/users/me/settings", response_model=User, summary="Retrieve current user's settings")
+async def get_user_settings(current_user: CurrentUser = Depends(get_current_user)):
     """
-    Update a portfolio's name, cash reserves, or tax settings.
+    Retrieves the settings for the currently authenticated user.
+    Reference: product_spec.md#932-us_2000-user-settings-retrieval
     """
-    updated_portfolio_db = portfolio_service.update_portfolio(portfolio_id, current_user["uid"], update_data)
-    if not updated_portfolio_db:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
+    user_doc_ref = db.collection("users").document(current_user.uid)
+    user_doc = user_doc_ref.get()
+
+    if not user_doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User settings not found."
+        )
     
-    enriched_portfolio = enrichment_service.enrich_portfolio(updated_portfolio_db)
-    return enriched_portfolio
+    return User(**user_doc.to_dict())
 
-@router.delete("/users/me/portfolios/{portfolio_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_portfolio(
-    portfolio_id: str,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
+@router.put("/users/me/settings", response_model=User, summary="Update current user's settings")
+async def update_user_settings(
+    request: UpdateUserSettingsRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    idempotency_key: UUID4 = Depends(require_idempotency_key)
 ):
     """
-    Delete an entire portfolio.
+    Updates the settings for the currently authenticated user.
+    Reference: product_spec.md#933-us_3000-user-settings-update
     """
-    success = portfolio_service.delete_portfolio(portfolio_id, current_user["uid"])
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
-    return
+    user_doc_ref = db.collection("users").document(current_user.uid)
 
-# ======================================================================================
-# Holdings and Lots Management Endpoints (Nested under portfolio)
-# ======================================================================================
+    # Check if the defaultPortfolioId exists and belongs to the user
+    if request.defaultPortfolioId:
+        portfolio_doc_ref = db.collection("portfolios").document(str(request.defaultPortfolioId))
+        portfolio_doc = portfolio_doc_ref.get()
+        if not portfolio_doc.exists or portfolio_doc.to_dict().get("userId") != current_user.uid:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="US_E_3102: Invalid default portfolio specified."
+            )
 
-@router.post("/users/me/portfolios/{portfolio_id}/holdings", response_model=Portfolio)
-def add_holding_to_portfolio(
-    portfolio_id: str,
-    holding_data: AddHoldingRequest,
-    background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
+    update_data = request.model_dump(exclude_unset=True)
+    update_data["modifiedAt"] = datetime.now(timezone.utc)
+
+    user_doc_ref.update(convert_uuids_to_str(update_data))
+    
+    updated_user_doc = user_doc_ref.get()
+    return User(**updated_user_doc.to_dict())
+
+@router.post("/auth/logout", status_code=status.HTTP_200_OK, summary="Logout the current user and revoke refresh tokens")
+async def logout_user(current_user: CurrentUser = Depends(get_current_user)):
     """
-    Add a new holding with lots to a portfolio.
+    Logs out the current user by revoking their Firebase refresh tokens.
+    This invalidates all sessions for the user across all devices.
+    Reference: product_spec.md#834-u_4000-user-logout
     """
     try:
-        updated_portfolio_db = portfolio_service.add_holding(portfolio_id, current_user["uid"], holding_data, background_tasks)
-        if not updated_portfolio_db:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Portfolio not found")
-        
-        enriched_portfolio = enrichment_service.enrich_portfolio(updated_portfolio_db)
-        return enriched_portfolio
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        auth.revoke_refresh_tokens(current_user.uid)
+        return {"message": "U_I_4001: User logged out successfully."}
+    except FirebaseError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"U_E_4101: Failed to revoke refresh tokens: {e}"
+        )
 
-@router.delete("/users/me/portfolios/{portfolio_id}/holdings/{holding_id}", response_model=Portfolio)
-def delete_holding_from_portfolio(
-    portfolio_id: str,
-    holding_id: str,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
+@router.post("/users/me/portfolios", response_model=Portfolio, status_code=status.HTTP_201_CREATED, summary="Create a new portfolio for the current user")
+async def create_portfolio_for_user(
+    request: PortfolioCreationRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    idempotency_key: UUID4 = Depends(require_idempotency_key)
 ):
     """
-    Delete a holding from a portfolio.
+    Creates a new portfolio for the authenticated user.
+    Reference: product_spec.md#331-p_1000-portfolio-creation
     """
-    updated_portfolio_db = portfolio_service.delete_holding(portfolio_id, current_user["uid"], holding_id)
-    if not updated_portfolio_db:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found in the specified portfolio.")
-    
-    enriched_portfolio = enrichment_service.enrich_portfolio(updated_portfolio_db)
-    return enriched_portfolio
+    # Check for existing portfolio with the same name for the user
+    existing_portfolio = db.collection("portfolios").where("userId", "==", current_user.uid).where("name", "==", request.name).limit(1).get()
+    if existing_portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"P_E_1103: A portfolio with the name '{request.name}' already exists."
+        )
 
-@router.delete("/users/me/portfolios/{portfolio_id}/holdings/{holding_id}/lots/{lot_id}", response_model=Portfolio)
-def delete_lot_from_holding(
-    portfolio_id: str,
-    holding_id: str,
-    lot_id: str,
-    current_user: dict = Depends(get_current_user),
-    _idempotency_key: str = Depends(require_idempotency_key)
-):
+    new_portfolio = portfolio_service.create_portfolio(user_id=current_user.uid, portfolio_data=request)
+    return new_portfolio
+
+@router.get("/users/me/portfolios", response_model=List[Portfolio], summary="Retrieve a list of all portfolios for the current user")
+async def get_user_portfolios(current_user: CurrentUser = Depends(get_current_user)):
     """
-    Delete a lot from a holding within a portfolio.
+    Retrieves a summary list of all portfolios owned by the authenticated user.
+    Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
     """
-    updated_portfolio_db = portfolio_service.delete_lot(portfolio_id, current_user["uid"], holding_id, lot_id)
-    if not updated_portfolio_db:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot not found in the specified holding.")
-        
-    enriched_portfolio = enrichment_service.enrich_portfolio(updated_portfolio_db)
-    return enriched_portfolio
+    portfolios = portfolio_service.get_portfolios_by_user(user_id=current_user.uid)
+    return portfolios

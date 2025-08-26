@@ -12,6 +12,7 @@ export default mergeConfig(
       include: ['tests/unit/**/*.spec.ts'],
       globals: true,
       setupFiles: ['./vitest.setup.ts'],
+      css: true,
       server: {
         deps: {
           inline: ['vuetify'],

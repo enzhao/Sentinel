@@ -1,18 +1,17 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from .auth import get_current_user
-from .routers import user_router
-from .firebase_setup import db
-from .middleware import idempotency_middleware
-from . import messages  # Initialize the message manager
-
+from src.dependencies import get_current_user
+from src.routers.user_router import router as user_router
+from src.firebase_setup import db
+from src.middleware import idempotency_middleware
+import src.messages  # Initialize the message manager
 
 app = FastAPI()
 
 # The idempotency middleware should be one of the first to run.
 app.middleware("http")(idempotency_middleware)
 
-app.include_router(user_router.router, prefix="/api")
+app.include_router(user_router, prefix="/api/v1")
 
 # --- CORS Middleware Configuration ---
 origins = [
@@ -49,6 +48,5 @@ def get_dummy_message():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {e}")
 
-@app.get("/api/me")
-def get_user_profile(user: dict = Depends(get_current_user)):
-    return {"uid": user.get("uid"), "email": user.get("email")}
+
+

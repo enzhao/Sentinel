@@ -1,3 +1,5 @@
+import './firebase'
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
@@ -7,14 +9,14 @@ import i18n from './plugins/i18n' // import i18n
 import { useAuthStore } from './stores/auth'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
 app.use(vuetify)
-app.use(i18n) // use i18n
+app.use(i18n)
 
-// Initialize the auth store before mounting the app
-const authStore = useAuthStore()
-authStore.init().then(() => {
-  app.mount('#app')
-})
+app.mount('#app')
+
+const authStore = useAuthStore(pinia)
+authStore.init()

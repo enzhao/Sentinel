@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import TargetAudienceSection from '@/components/TargetAudienceSection.vue';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
-
-const vuetify = createVuetify({
-  components,
-  directives,
-});
 
 describe('TargetAudienceSection.vue', () => {
   const goodFit = {
@@ -24,7 +16,7 @@ describe('TargetAudienceSection.vue', () => {
     const title = 'Is Sentinel Right For You?';
     const wrapper = mount(TargetAudienceSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title,
@@ -59,7 +51,7 @@ describe('TargetAudienceSection.vue', () => {
 
     const wrapper = mount(TargetAudienceSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title,

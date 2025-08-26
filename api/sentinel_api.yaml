@@ -14,8 +14,23 @@ security:
 
 paths:
   /users/me/settings:
+    get:
+      # Reference: product_spec.md#932-us_2000-user-settings-retrieval
+      summary: Retrieve the settings for the currently authenticated user
+      operationId: getUserSettings
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Full User settings object is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     put:
-      # Reference: product_spec.md#3332-p_3400-set-default-portfolio
+      # Reference: product_spec.md#933-us_3000-user-settings-update
       summary: Update User Settings
       operationId: updateUserSettings
       tags:

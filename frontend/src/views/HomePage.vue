@@ -1,12 +1,5 @@
 <template>
   <StandardLayout>
-    <template #header>
-      <AppBar
-        title="Sentinel"
-        :actions="[{ label: 'Login', event: 'USER_CLICKS_LOGIN' }]"
-        @USER_CLICKS_LOGIN="handleLoginClick"
-      />
-    </template>
     <template #body>
       <MarketDataTicker :tickers="['^GSPC', '^IXIC', '^GDAXI', '^VIX']" />
       <HeroSection
@@ -54,20 +47,19 @@
 </template>
 
 <script setup lang="ts">
+// --- All this logic is no longer needed here! ---
+// import AppBar from '@/components/AppBar.vue';
+// import { useRouter } from 'vue-router';
+// import { useAuthStore } from '@/stores/auth';
+
 import StandardLayout from '@/components/StandardLayout.vue';
-import AppBar from '@/components/AppBar.vue';
 import MarketDataTicker from '@/components/MarketDataTicker.vue';
 import HeroSection from '@/components/HeroSection.vue';
 import KeyFeaturesSection from '@/components/KeyFeaturesSection.vue';
 import ProblemSolutionSection from '@/components/ProblemSolutionSection.vue';
 import TargetAudienceSection from '@/components/TargetAudienceSection.vue';
-import { useRouter } from 'vue-router';
 
-const router = useRouter();
-
-const handleLoginClick = () => {
-  router.push('/login'); // Assuming a login route exists
-};
+// The script is now clean and focused only on the components this page uses.
 </script>
 
 <style scoped>

@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import MarketDataTicker from '@/components/MarketDataTicker.vue';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
-
-const vuetify = createVuetify({
-  components,
-  directives,
-});
 
 describe('MarketDataTicker.vue', () => {
   beforeEach(() => {
@@ -22,7 +14,7 @@ describe('MarketDataTicker.vue', () => {
   it('renders ticker data correctly on mount', async () => {
     const wrapper = mount(MarketDataTicker, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         tickers: ['^GSPC', '^IXIC'],
@@ -44,7 +36,7 @@ describe('MarketDataTicker.vue', () => {
   it('updates ticker data on interval', async () => {
     const wrapper = mount(MarketDataTicker, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         tickers: ['^GSPC'],
@@ -69,7 +61,7 @@ describe('MarketDataTicker.vue', () => {
   it('handles changes in tickers prop', async () => {
     const wrapper = mount(MarketDataTicker, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         tickers: ['^GSPC'],
@@ -93,7 +85,7 @@ describe('MarketDataTicker.vue', () => {
     const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
     const wrapper = mount(MarketDataTicker, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         tickers: ['^GSPC'],

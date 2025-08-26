@@ -2,17 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import KeyFeaturesSection from '@/components/KeyFeaturesSection.vue';
-import { VContainer, VRow, VCol, VCard, VIcon } from 'vuetify/components';
-
-const vuetify = createVuetify({
-  components: {
-    VContainer,
-    VRow,
-    VCol,
-    VCard,
-    VIcon,
-  },
-});
 
 describe('KeyFeaturesSection.vue', () => {
   const features = [
@@ -37,7 +26,7 @@ describe('KeyFeaturesSection.vue', () => {
   it('renders all features correctly', () => {
     const wrapper = mount(KeyFeaturesSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         features,
@@ -72,7 +61,7 @@ describe('KeyFeaturesSection.vue', () => {
   it('renders without features', () => {
     const wrapper = mount(KeyFeaturesSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         features: [],
@@ -95,7 +84,7 @@ describe('KeyFeaturesSection.vue', () => {
 
     const wrapper = mount(KeyFeaturesSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         features: invalidFeatures,

@@ -2,17 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import ProblemSolutionSection from '@/components/ProblemSolutionSection.vue';
-import { VContainer, VRow, VCol, VCard, VIcon } from 'vuetify/components';
-
-const vuetify = createVuetify({
-  components: {
-    VContainer,
-    VRow,
-    VCol,
-    VCard,
-    VIcon,
-  },
-});
 
 describe('ProblemSolutionSection.vue', () => {
   const items = [
@@ -39,7 +28,7 @@ describe('ProblemSolutionSection.vue', () => {
   it('renders title and all items correctly', () => {
     const wrapper = mount(ProblemSolutionSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title: 'For the Busy, Hands-On Investor',
@@ -78,7 +67,7 @@ describe('ProblemSolutionSection.vue', () => {
   it('renders no cards if items is empty', () => {
     const wrapper = mount(ProblemSolutionSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title: 'Empty Case',
@@ -93,7 +82,7 @@ describe('ProblemSolutionSection.vue', () => {
   it('handles invalid items gracefully', () => {
     const wrapper = mount(ProblemSolutionSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title: 'Test Invalid Items',

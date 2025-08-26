@@ -1,7 +1,6 @@
 import HomePage from '../views/HomePage.vue'
-import LoginView from '../views/LoginView.vue'
-import PortfolioView from '../views/PortfolioView.vue'
-import AboutView from '../views/AboutView.vue'
+import LoginForm from '../views/LoginForm.vue'
+import DashboardView from '../views/DashboardView.vue'
 
 const routes = [
   {
@@ -11,20 +10,16 @@ const routes = [
     meta: { requiresAuth: false } // Public homepage does not require authentication
   },
   {
-    path: '/about',
-    name: 'about',
-    component: AboutView
-  },
-  {
     path: '/login',
     name: 'login',
-    component: LoginView
+    component: LoginForm,
+    meta: { requiresAuth: false } // Login page does not require authentication
   },
   {
-    path: '/portfolio',
-    name: 'portfolio',
-    component: PortfolioView,
-    meta: { requiresAuth: true }
+    path: '/dashboard',
+    name: 'dashboard',
+    component: DashboardView,
+    meta: { requiresAuth: true } // Dashboard requires authentication
   }
 ]
 

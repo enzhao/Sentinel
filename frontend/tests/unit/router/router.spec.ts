@@ -1,65 +1,104 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { createPinia, setActivePinia } from 'pinia'
-import { createSentinelRouter } from '@/router'
-import { useAuthStore } from '@/stores/auth'
-import type { Router } from 'vue-router'
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { createSentinelRouter } from '@/router';
+import { useAuthStore } from '@/stores/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: vi.fn(() => ({
-    isAuthenticated: false,
-    loading: false,
-    init: vi.fn().mockResolvedValue(undefined),
-  })),
-}))
+// This is the only mock we need.
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(),
+  onAuthStateChanged: vi.fn(),
+  signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
+}));
 
-describe('Router', () => {
-  let router: Router
+describe('Auth Router Guards', () => {
+  let router: ReturnType<typeof createSentinelRouter>;
+  const onAuthStateChangedMock = onAuthStateChanged as vi.Mock;
 
   beforeEach(() => {
-    setActivePinia(createPinia())
-    // Reset mocks before each test
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+    setActivePinia(createPinia());
+    router = createSentinelRouter();
+  });
 
-  it('redirects to portfolio if logged in and trying to access home', async () => {
-    vi.mocked(useAuthStore).mockReturnValue({
-      isAuthenticated: true,
-      loading: false,
-      init: vi.fn().mockResolvedValue(undefined),
-    } as any)
-    router = createSentinelRouter()
-    
-    router.push('/')
-    await router.isReady()
+  it('redirects unauthenticated user from protected route to login', async () => {
+    // ARRANGE: Firebase reports the user is logged out.
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(null);
+    });
 
-    expect(router.currentRoute.value.name).toBe('portfolio')
-  })
+    // ACT: Try to navigate to a protected route.
+    await router.push({ name: 'dashboard' });
+    await router.isReady();
 
-  it('redirects to login if not logged in and trying to access a protected route', async () => {
-    vi.mocked(useAuthStore).mockReturnValue({
-      isAuthenticated: false,
-      loading: false,
-      init: vi.fn().mockResolvedValue(undefined),
-    } as any)
-    router = createSentinelRouter()
+    // ASSERT: We ended up on the login page.
+    expect(router.currentRoute.value.name).toBe('login');
+  });
 
-    router.push('/portfolio')
-    await router.isReady()
+  it('allows unauthenticated user to access public home page', async () => {
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(null);
+    });
 
-    expect(router.currentRoute.value.name).toBe('login')
-  })
+    await router.push({ name: 'home' });
+    await router.isReady();
 
-  it('redirects to portfolio if logged in and trying to access login', async () => {
-    vi.mocked(useAuthStore).mockReturnValue({
-      isAuthenticated: true,
-      loading: false,
-      init: vi.fn().mockResolvedValue(undefined),
-    } as any)
-    router = createSentinelRouter()
+    expect(router.currentRoute.value.name).toBe('home');
+  });
 
-    router.push('/login')
-    await router.isReady()
+  it('allows unauthenticated user to access login page', async () => {
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(null);
+    });
 
-    expect(router.currentRoute.value.name).toBe('portfolio')
-  })
-})
+    await router.push({ name: 'login' });
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe('login');
+  });
+
+  it('redirects authenticated user from login page to dashboard', async () => {
+    // ARRANGE: Firebase reports the user is logged in.
+    const mockUser = { uid: '123', email: 'test@test.com' };
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(mockUser);
+    });
+
+    // ACT: Try to navigate to the login page while authenticated.
+    await router.push({ name: 'login' });
+    await router.isReady();
+
+    // ASSERT: We were redirected to the dashboard.
+    expect(router.currentRoute.value.name).toBe('dashboard');
+  });
+
+  it('redirects authenticated user from home page to dashboard', async () => {
+    // ARRANGE: Firebase reports the user is logged in.
+    const mockUser = { uid: '123', email: 'test@test.com' };
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(mockUser);
+    });
+
+    // ACT: Try to navigate to the home page while authenticated.
+    await router.push({ name: 'home' });
+    await router.isReady();
+
+    // ASSERT: We were redirected to the dashboard.
+    expect(router.currentRoute.value.name).toBe('dashboard');
+});
+
+  it('allows authenticated user to access protected dashboard', async () => {
+    // ARRANGE: Firebase reports the user is logged in.
+    const mockUser = { uid: '123', email: 'test@test.com' };
+    onAuthStateChangedMock.mockImplementation((auth, callback) => {
+      callback(mockUser);
+    });
+
+    await router.push({ name: 'dashboard' });
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe('dashboard');
+  });
+});
+

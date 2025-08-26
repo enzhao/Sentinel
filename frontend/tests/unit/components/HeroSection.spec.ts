@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import HeroSection from '@/components/HeroSection.vue';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
-
-const vuetify = createVuetify({
-  components,
-  directives,
-});
 
 describe('HeroSection.vue', () => {
   it('renders title and subtitle correctly', () => {
@@ -16,7 +8,7 @@ describe('HeroSection.vue', () => {
     const subtitle = 'Test Subtitle';
     const wrapper = mount(HeroSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title,
@@ -31,7 +23,7 @@ describe('HeroSection.vue', () => {
   it('emits USER_CLICKS_GET_STARTED event when button is clicked', async () => {
     const wrapper = mount(HeroSection, {
       global: {
-        plugins: [vuetify],
+        plugins: [],
       },
       props: {
         title: 'Test Title',

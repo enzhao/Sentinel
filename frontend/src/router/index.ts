@@ -2,6 +2,8 @@ import { createRouter as createVueRouter, createWebHistory, type Router } from '
 import routes from './routes'
 import { useAuthStore } from '@/stores/auth'
 
+// Reference: product_spec.md Chapter 8, docs/specs/ui_flows_spec.yaml FLOW_LOGIN, FLOW_LOGOUT, FLOW_UNAUTHENTICATED_NAV
+
 // Exporting a function to create a new router instance.
 // This is useful for testing to ensure tests are isolated.
 export const createSentinelRouter = (): Router => {
@@ -25,10 +27,10 @@ export const createSentinelRouter = (): Router => {
       return next({ name: 'login' })
     }
 
-    // 2. If the user is logged in, prevent them from accessing the home, login,
-    //    or signup pages, and redirect them to their portfolio.
-    if (isAuthenticated && ['home', 'login', 'signup'].includes(to.name as string)) {
-      return next({ name: 'portfolio' })
+    // 2. If the user is logged in, prevent them from accessing the home or login
+    //    pages, and redirect them to the dashboard.
+    if (isAuthenticated && ['home', 'login'].includes(to.name as string)) {
+      return next({ name: 'dashboard' })
     }
 
     // 3. Otherwise, allow the navigation to proceed.
@@ -42,4 +44,3 @@ export const createSentinelRouter = (): Router => {
 const router = createSentinelRouter()
 
 export default router
-

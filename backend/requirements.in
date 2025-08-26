@@ -1,6 +1,7 @@
 fastapi
 pydantic
 pydantic-settings
+pydantic[email]
 google-cloud-firestore
 firebase-admin
 httpx

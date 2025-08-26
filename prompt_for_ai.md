@@ -33,13 +33,13 @@ I expect you to adopt an iterative, vertical slice, feature-driven approach. I w
 1. **Plan:** Outline the specific backend and frontend components to be built, and the tests to be written.
 2. **Reference to the product_spec.md:** Always refer to the product_spec.md for detailed requirements and specifications for each feature. All generated code must contain references back to the relevant sections in product_spec.md for traceability in their comments or docstrings.
 3. **Implement Backend:** Implement the API endpoints, business logic, and data models.
-4. **Test Backend:** Write and run unit and integration tests for the backend components using the command `backend/venv/bin/pytest --cov=src backend/tests/`. If any tests fail, fix the issues before proceeding.
+4. **Test Backend:** Write and run unit and integration tests for the backend components using the command `ENV=local venv/bin/pytest --cov=src backend/tests/`. If any tests fail, fix the issues before proceeding.
 5. **Implement Frontend:** Implement the UI views and components, integrating with the newly built backend.
-6. **Test Frontend:** Write and run unit tests and integration tests for the frontend components using the command `npm run test:unit` in the `frontend` directory. If any tests fail, fix the issues before proceeding.
+6. **Test Frontend:** Write and run unit tests and integration tests for the frontend components using the command `npm --prefix frontend run test:unit`. If any tests fail, fix the issues before proceeding.
 7. **End to End Testing:** Write and perform end-to-end testing of the entire feature to ensure it works as expected. If any tests fail, fix the issues before proceeding.
 8. **Verify:** Run all project-specific build, linting, and type-checking commands.
 
-There might exist outdated code in both backend and frontend for the features working on, feel free to modify or completely re-implement the code, and reoranize the code from scratch according to the product_spec.md. 
+The existing code in both backend and frontend for already implemented features are very important, do not rewrite them, and always ask for my permission if you want to modify them. Thanks! 
 
 ### Handling Inter-Feature Dependencies 
 
@@ -72,7 +72,7 @@ The AI should prioritize features based on their foundational nature. A logical 
 ### Functional Features
 
 - [x] Public Homepage (see product_spec.md Chapter 8, and the view with id VIEW_HOME_PAGE in the file docs/specs/views_spec.yaml). 
-- [ ] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
+- [x] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
 - [ ] User Settings Management (see product_spec.md Chapter 9).
 - [ ] Portfolio Management (see product_spec.md Chapter 3). 
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)

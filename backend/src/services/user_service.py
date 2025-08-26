@@ -1,51 +1,37 @@
+from firebase_admin import auth
+from firebase_admin.exceptions import FirebaseError
+from ..firebase_setup import db
+from ..api.models import User, Portfolio
+from datetime import datetime, timezone
 from typing import Optional
-from src.models import UserDB, UpdateUserSettingsRequest
-from src.firebase_setup import db
-from src.services.portfolio_service import portfolio_service # To validate portfolio ownership
-
-users_collection = db.collection('users')
+from uuid import UUID
 
 class UserService:
-    @staticmethod
-    def get_user(uid: str) -> Optional[UserDB]:
-        """
-        Retrieves a user document from Firestore.
-        """
-        doc = users_collection.document(uid).get()
-        if doc.exists:
-            return UserDB(**doc.to_dict())
+    def create_user_document(self, uid: str, email: str, username: str, default_portfolio_id: UUID) -> User:
+        user_data = {
+            "uid": uid,
+            "email": email,
+            "username": username,
+            "defaultPortfolioId": str(default_portfolio_id),
+            "subscriptionStatus": "FREE",
+            "notificationPreferences": {"email": True, "push": False},
+            "createdAt": datetime.now(timezone.utc),
+            "modifiedAt": datetime.now(timezone.utc),
+        }
+        db.collection("users").document(uid).set(user_data)
+        return User(**user_data)
+
+    def get_user_by_uid(self, uid: str) -> Optional[User]:
+        user_doc = db.collection("users").document(uid).get()
+        if user_doc.exists:
+            return User(**user_doc.to_dict())
         return None
 
-    @staticmethod
-    def create_user(uid: str, email: str, username: str) -> UserDB:
-        """
-        Creates a new user document in Firestore.
-        """
-        new_user = UserDB(uid=uid, email=email, username=username)
-        users_collection.document(uid).set(new_user.model_dump())
-        return new_user
+    def update_user_default_portfolio(self, uid: str, default_portfolio_id: UUID):
+        user_doc_ref = db.collection("users").document(uid)
+        user_doc_ref.update({
+            "defaultPortfolioId": str(default_portfolio_id),
+            "modifiedAt": datetime.now(timezone.utc)
+        })
 
-    @staticmethod
-    def update_user_settings(uid: str, settings: UpdateUserSettingsRequest) -> Optional[UserDB]:
-        """
-        Updates a user's settings.
-        """
-        # Ensure the user exists
-        user = UserService.get_user(uid)
-        if not user:
-            return None
-
-        # If changing default portfolio, validate that the user owns it
-        if settings.defaultPortfolioId:
-            portfolio = portfolio_service.get_portfolio_by_id(settings.defaultPortfolioId, uid)
-            if not portfolio:
-                # User does not own this portfolio or it doesn't exist
-                raise ValueError("Invalid defaultPortfolioId")
-
-        update_data = settings.model_dump(exclude_unset=True)
-        users_collection.document(uid).update(update_data)
-
-        return UserService.get_user(uid)
-
-# Instantiate the service
 user_service = UserService()
