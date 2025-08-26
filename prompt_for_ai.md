@@ -45,7 +45,7 @@ There might exist outdated code in both backend and frontend for the features wo
 
 If inter-feature dependencies present in the product_spec.md, please follow this approach: API Contract First with Minimal Backend Implementation and Frontend Mocking. To be specific:
 
-1. Strict Adherence to API Contracts (see api/sentinel_openapi.yaml)
+1. Strict Adherence to API Contracts (see api/sentinel_api.yaml)
 
 2. Minimal Backend Implementation for Dependencies: For the dependent feature (e.g., "Holdings List" when working on "Portfolio Detail"), implement just enough backend functionality to satisfy the immediate needs of the parent feature.
 

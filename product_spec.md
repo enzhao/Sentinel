@@ -3133,18 +3133,6 @@ stateDiagram-v2
 
 ### 8.2. Data Models
 
-- **`User` (Firestore Document):**
-  - A top-level collection (`users`) stores application-specific user data.
-  - The document ID for each user is their Firebase `uid`.
-  - `uid`: String (Firebase Auth UID).
-  - `username`: String (User-defined, for display purposes).
-  - `email`: String (Copied from Firebase Auth for convenience).
-  - `defaultPortfolioId`: String (The `portfolioId` of the user's default portfolio).
-  - `subscriptionStatus`: String (e.g., "FREE", "PREMIUM", default: "FREE").
-  - `notificationPreferences`: Object (e.g., `{ "email": true, "push": false }`).
-  - `createdAt`: ISODateTime.
-  - `modifiedAt`: ISODateTime.
-
 - **`Firebase User` (Managed by Firebase Authentication Service):**
   - `uid`: Unique user identifier provided by Firebase. This is the primary key linking the user to their data in Firestore.
   - `email`: The user's email address.
@@ -3156,7 +3144,9 @@ stateDiagram-v2
 ### 8.3. Business Rules
 
 #### 8.3.1. U_1000: User Provisioning (Backend Script)
-- **Description**: Creates a new user account in Firebase Authentication and initializes their corresponding application data in Firestore. For security and cost-management reasons, this is not a public-facing endpoint. The app author runs a backend script (`util/create_user.py`) to provision new users.
+
+- **Description**: Creates a new user account *identity* in Firebase Authentication. For security and cost-management reasons, this is not a public-facing endpoint and is run via a backend script. The script takes the new user's email, password, and username as arguments and calls the Firebase Admin SDK to create the user in the authentication service. Upon success, this process also triggers the creation of the user's application data and settings document, as detailed in **Chapter 9, rule `US_1000`**.
+
 - **Process**: The script takes the new user's email, password, and username as arguments. It first calls the Firebase Admin SDK to create the user in the authentication service. Upon success, it uses the returned `uid` to create the `User` document in Firestore, create a default `Portfolio` document, and link the two by setting the `defaultPortfolioId` on the new user document.
 - **Sequence Diagram for User Provisioning (Backend Script)**
 
@@ -3165,29 +3155,19 @@ sequenceDiagram
     participant AppAuthor as App Author
     participant Script as Backend Script (util/create_user.py)
     participant FirebaseAuth as Firebase Auth
-    participant DB as Database (Firestore)
+    participant SettingsCreation as User Settings Creation Process
 
-    AppAuthor->>Script: 1. Run script with user details (email, password, username)
+    AppAuthor->>Script: 1. Run script with user details (email, password)
     activate Script
 
-    Script->>FirebaseAuth: 2. Create user (Admin SDK)
+    Script->>FirebaseAuth: 2. Create user identity (Admin SDK)
     activate FirebaseAuth
     FirebaseAuth-->>Script: 3. Return new user object with UID
     deactivate FirebaseAuth
 
-    Note over Script, DB: Begin transaction to create user profile
-    Script->>DB: 4. Create User document (using UID)
-    activate DB
-    DB-->>Script: 5. Confirm User created
-    
-    Script->>DB: 6. Create default Portfolio document
-    DB-->>Script: 7. Confirm Portfolio created (returns portfolioId)
-    
-    Script->>DB: 8. Update User document with defaultPortfolioId
-    DB-->>Script: 9. Confirm User updated
-    deactivate DB
+    Script->>SettingsCreation: 4. Trigger User Settings Creation (see US_1000)
 
-    Script-->>AppAuthor: 10. Log success message
+    Script-->>AppAuthor: 5. Log success message
     deactivate Script
 ```
 
@@ -3363,8 +3343,44 @@ A user's settings document is deleted automatically by the system as part of the
 
 #### 9.3.1. US_1000: User Settings Creation
 
-- **Description**: This rule is part of the overall `U_1000: User Provisioning` process. After a user is created in Firebase Authentication, the backend creates a corresponding `User` document in the `users` collection of Firestore. This document stores their initial settings, including a link to their newly created default portfolio.
-- **Success Response**: A new `User` document is created in Firestore.
+#### 9.3.1. US_1000: User Settings Creation
+
+- **Description**: This rule is triggered by the successful completion of the `U_1000: User Provisioning` process. After a user identity is created in Firebase Authentication, the backend immediately creates a corresponding `User` document in the `users` collection. This process also includes creating a default portfolio for the user and linking its ID in the new `User` document.
+- **Process**: Upon receiving the new user's `uid` from the authentication service, the backend initiates a transaction to create a default portfolio document in the `portfolios` collection. Once the portfolio is created and its `portfolioId` is obtained, the backend creates the `User` document with the provided email, username, and the newly created `defaultPortfolioId`. This ensures that every user has a valid settings object and a default portfolio from the moment their account is created.
+- **Success Response**: A new `User` document and a new `Portfolio` document are created in Firestore.
+- **Sequence Diagram for User Settings Creation**:
+
+```mermaid
+sequenceDiagram
+    participant Provisioning as User Provisioning Process (U_1000)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database (Firestore)
+
+    Provisioning->>Sentinel: 1. Trigger settings creation for new UID
+    activate Sentinel
+
+    Note over Sentinel, DB: Backend begins a transaction to ensure atomicity.
+    Sentinel->>DB: 2. Create default Portfolio document
+    activate DB
+    DB-->>Sentinel: 3. Confirm Portfolio created (returns portfolioId)
+    deactivate DB
+
+    Sentinel->>DB: 4. Create User document (with defaultPortfolioId)
+    activate DB
+    DB-->>Sentinel: 5. Confirm User document created
+    deactivate DB
+
+    Sentinel-->>Provisioning: 6. Acknowledge successful creation
+    deactivate Sentinel
+``` 
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| US_I_1001 | Settings creation succeeds | The `U_1000` process provides a valid, new Firebase Auth UID. | Sentinel Internal | A new `User` document is created, containing the ID of a new, default `Portfolio`. | N/A (System Log) |
+| US_E_1101 | Settings creation fails | The database fails to create the required documents. | Sentinel to DB | The transaction is rolled back. An error is logged for system administrators. | N/A (System Log) |
+
 
 #### 9.3.2. US_2000: User Settings Retrieval
 
