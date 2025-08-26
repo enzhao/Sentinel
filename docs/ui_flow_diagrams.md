@@ -60,6 +60,55 @@ stateDiagram-v2
     Success_exit_action --> [*]
 ```
 
+## Flow: `FLOW_APP_SHELL`
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_APP_SHELL
+    [*] --> Active
+    state "Active" as Active
+    Active --> NavigatingToSettings : USER_CLICKS_SETTINGS
+    Active --> LoggingOut : USER_CLICKS_LOGOUT
+    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
+    state "ShowingAlertsDropdown" as ShowingAlertsDropdown
+    state "➡️ subflow: FLOW_SHOW_ALERTS_DROPDOWN" as ShowingAlertsDropdown_subflow_node
+    ShowingAlertsDropdown --> ShowingAlertsDropdown_subflow_node
+    ShowingAlertsDropdown_subflow_node --> Active : ✅ onCompletion
+    ShowingAlertsDropdown_subflow_node --> Active : 🛑 onCancel
+    state "NavigatingToSettings" as NavigatingToSettings
+    state "➡️ subflow: FLOW_MANAGE_USER_SETTINGS" as NavigatingToSettings_subflow_node
+    NavigatingToSettings --> NavigatingToSettings_subflow_node
+    NavigatingToSettings_subflow_node --> Active : ✅ onCompletion
+    NavigatingToSettings_subflow_node --> Active : 🛑 onCancel
+    state "LoggingOut" as LoggingOut
+    state "➡️ subflow: FLOW_LOGOUT" as LoggingOut_subflow_node
+    LoggingOut --> LoggingOut_subflow_node
+    LoggingOut_subflow_node --> [*] : ✅ onCompletion
+    LoggingOut_subflow_node --> Active : 🛑 onCancel
+```
+
+## Flow: `FLOW_MANAGE_USER_SETTINGS`
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_MANAGE_USER_SETTINGS
+    [*] --> Editing
+    state "✏️ Editing<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as Editing
+    Editing --> Submitting : USER_CLICKS_SAVE
+    state "(exit)" as Editing_exit_USER_CLICKS_CANCEL
+    Editing --> Editing_exit_USER_CLICKS_CANCEL : USER_CLICKS_CANCEL
+    Editing_exit_USER_CLICKS_CANCEL --> [*]
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as Submitting
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "NAVIGATE_BACK (previous view)" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as APIError
+    APIError --> Editing : USER_DISMISSES_ERROR
+```
+
 ## Flow: `FLOW_MANAGE_PORTFOLIO_RULES`
 
 ```mermaid

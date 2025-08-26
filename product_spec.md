@@ -35,9 +35,10 @@ The specification is organized as follows:
 - **Chapter 6: Strategy Rule Management**: Describes the creation, modification, and retrieval of buy and sell rules for a specific holding.
 - **Chapter 7: Market Monitoring and Notification**: Outlines the automated monitoring process, rule triggering, and notification delivery.
 - **Chapter 8: User Authentication and Authorization**: Covers user identity and access control.
-- **Chapter 9: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
+- **Chapter 9: User Settings Management**: Details the management of user-specific application settings.
+- **Chapter 10: Technical Specifications**: Specifies security, data sources, and other non-functional requirements.
 
-Each functional chapter (3-8) is structured to provide a multi-layered view of the system, from high-level process to detailed implementation logic:
+Each functional chapter (3-9) is structured to provide a multi-layered view of the system, from high-level process to detailed implementation logic:
 
 1. **Business Process (e.g., Section 3.1)**: Describes the "how" from a user's perspective for each major operation (e.g., Create, Update).
   - **Visual Representation**: A Mermaid state diagram illustrating the user flow.
@@ -130,17 +131,17 @@ flowchart LR
     - For authenticated users, the bar also provides access to user-specific actions, such as logging out, and includes an alert icon. A red dot will appear on this icon to indicate when new, unread alerts have been generated since the user's last session.
 
 
-## 1.6. Key Process Overviews
+### 1.6. Key Process Overviews
 
 This section provides high-level summaries of critical, cross-chapter business processes to clarify the end-to-end system behavior.
 
-### 1.6.1. Initial Data Seeding
+#### 1.6.1. Initial Data Seeding
 
 Upon the initial deployment of the Sentinel application to a new environment, a one-time data seeding script must be executed. This process is essential to bootstrap the `marketData` collection and ensure the system is operational before the first scheduled daily sync (`M_1000`) occurs.
 
-**Process**: The seeding script will perform a historical data backfill (`H_5000`) for every ticker listed in the backend configuration for **system-required tickers (as defined in Section 9.2.1)**. This ensures that data required for context-aware rules (e.g., the `VIX_LEVEL` rule) is available from day one.
+**Process**: The seeding script will perform a historical data backfill (`H_5000`) for every ticker listed in the backend configuration for **system-required tickers (as defined in Section 10.2.1)**. This ensures that data required for context-aware rules (e.g., the `VIX_LEVEL` rule) is available from day one.
 
-### 1.6.2. First-Time User Data Pull
+#### 1.6.2. First-Time User Data Pull
 The first pull of market data from Alpha Vantage for a new user is not triggered by their signup, but rather by their first action of adding a holding with a ticker that is new to the system's cache.
 
 **Process**:
@@ -149,16 +150,42 @@ The first pull of market data from Alpha Vantage for a new user is not triggered
 3.  When this holding is created, the system checks if data for "VOO" exists in the `marketData` collection. If not, it triggers an asynchronous backfill job (see **Section 4.3.1.2**).
 4.  This backfill job is the process that calls the Alpha Vantage API to fetch at least one year of historical data for the new ticker, which is then saved to the database (see **Section 4.3.6**).
 
-## 1.7. General API and Technical Notes
+#### 1.6.3. Global UI Event Handling and the Application Shell
 
-- **Idempotency-Key**: Required for `POST`/`PUT`/`DELETE` operations, a client-side UUID v4 to ensure idempotent behavior. Keys expire after 24 hours.
-- **API Design**: The API is versioned in the URL path. All endpoints for the current version are nested under the `/api/v1/users/me/` path. This ensures a stable contract for clients and allows for future API evolution. For example, to get a portfolio, the endpoint is `/api/v1/users/me/portfolios/{portfolioId}`.
-- **Resource Endpoint Design:** The API employs a hybrid approach for modeling resource relationships to provide both clarity and efficiency.
-    - **For listing child resources**, a nested endpoint is used to make the parent-child context explicit. For example, to list all holdings within a portfolio, the endpoint is `GET /api/users/me/portfolios/{portfolioId}/holdings`.
-    - **For operating on a specific child resource** (retrieving, updating, or deleting it), a top-level endpoint is used for direct access. For example, to retrieve a single holding, the endpoint is `GET /api/users/me/holdings/{holdingId}`.
-    - This hybrid model ensures that the relationship is clear when fetching collections, while allowing individual, significant resources to be addressed directly and efficiently.
+To ensure a clean separation of concerns and avoid repetitive logic, the application's frontend architecture is built around a main "shell" state machine (`FLOW_APP_SHELL`) that is active for the entire duration of an authenticated user's session.
 
-- A comprehensive list of all API endpoints is maintained in the `docs/api_endpoints.md` file for developer reference.
+This shell is responsible for managing persistent UI elements, primarily the main application bar (`VIEW_APP_BAR`), and acts as the single, centralized handler for global user events dispatched from it. This includes actions that are not specific to any one feature, such as:
+
+- Opening the alert summary (`USER_CLICKS_ALERTS_ICON`)
+- Navigating to the user settings page (`USER_CLICKS_SETTINGS`)
+- Initiating the logout process (`USER_CLICKS_LOGOUT`)
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_APP_SHELL
+    [*] --> Active
+    state "Active" as Active
+    Active --> NavigatingToSettings : USER_CLICKS_SETTINGS
+    Active --> LoggingOut : USER_CLICKS_LOGOUT
+    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
+    state "ShowingAlertsDropdown" as ShowingAlertsDropdown
+    state "➡️ subflow: FLOW_SHOW_ALERTS_DROPDOWN" as ShowingAlertsDropdown_subflow_node
+    ShowingAlertsDropdown --> ShowingAlertsDropdown_subflow_node
+    ShowingAlertsDropdown_subflow_node --> Active : ✅ onCompletion
+    ShowingAlertsDropdown_subflow_node --> Active : 🛑 onCancel
+    state "NavigatingToSettings" as NavigatingToSettings
+    state "➡️ subflow: FLOW_MANAGE_USER_SETTINGS" as NavigatingToSettings_subflow_node
+    NavigatingToSettings --> NavigatingToSettings_subflow_node
+    NavigatingToSettings_subflow_node --> Active : ✅ onCompletion
+    NavigatingToSettings_subflow_node --> Active : 🛑 onCancel
+    state "LoggingOut" as LoggingOut
+    state "➡️ subflow: FLOW_LOGOUT" as LoggingOut_subflow_node
+    LoggingOut --> LoggingOut_subflow_node
+    LoggingOut_subflow_node --> [*] : ✅ onCompletion
+    LoggingOut_subflow_node --> Active : 🛑 onCancel
+```
+
+By centralizing this logic, individual feature flows (e.g., `FLOW_VIEW_PORTFOLIO_DETAIL`) remain focused on their specific tasks and do not need to handle global navigation concerns.
 
 ---
 
@@ -3269,21 +3296,159 @@ sequenceDiagram
 
 ---
 
-## 9. Technical Specifications
+## 9. User Settings Management
 
-### 9.1. Security
+This chapter details the management of user-specific settings. Unlike other features, the "User Settings" entity is created and deleted by the system as part of the user lifecycle. The primary user-facing interaction is updating these settings. The user's settings are stored in their `User` document in the `users` collection.
+
+### 9.1. Business Process
+
+The management of user settings follows a modified CRUD (Create, Retrieve, Update, Delete) pattern, where creation and deletion are system-initiated.
+
+#### 9.1.1. Creation (System-Initiated)
+A user's settings document is not created manually by the user. Instead, it is created automatically on the backend as the final step of the user provisioning process. This ensures that every user has a valid settings object from the moment their account is created.
+
+#### 9.1.2. Retrieval
+When a user navigates to the settings page, the application fetches their current settings from the backend to populate the view with their saved preferences, such as their default portfolio and notification toggles.
+
+#### 9.1.3. Update (User-Initiated)
+This is the primary user-facing process for this feature. An authenticated user can access a dedicated settings page from the main application bar's user menu to manage their default portfolio and notification preferences. After making changes, the user can save them to update their profile or cancel to discard them.
+
+##### 9.1.3.1. User Journey Spec and Visual Representation
+
+The following diagram illustrates the user journey for managing their settings.
+
+The complete and definitive specification for this user journey is defined in `docs/specs/ui_flows_spec.yaml` under the `flowId`: **`FLOW_MANAGE_USER_SETTINGS`**.
+
+```mermaid
+stateDiagram-v2
+    %% Flow ID: FLOW_MANAGE_USER_SETTINGS
+    [*] --> Editing
+    state "✏️ Editing<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as Editing
+    Editing --> Submitting : USER_CLICKS_SAVE
+    state "(exit)" as Editing_exit_USER_CLICKS_CANCEL
+    Editing --> Editing_exit_USER_CLICKS_CANCEL : USER_CLICKS_CANCEL
+    Editing_exit_USER_CLICKS_CANCEL --> [*]
+    state "⏳ Submitting<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as Submitting
+    Submitting --> Success : success
+    Submitting --> APIError : failure
+    state "✅ Success" as Success
+    state "NAVIGATE_BACK (previous view)" as Success_exit_action
+    Success --> Success_exit_action
+    Success_exit_action --> [*]
+    state "❌ APIError<br/><font size="2"><i>(VIEW_USER_SETTINGS)</i></font>" as APIError
+    APIError --> Editing : USER_DISMISSES_ERROR
+```
+
+#### 9.1.4. Deletion (System-Initiated)
+
+A user's settings document is deleted automatically by the system as part of the overall account deletion process. A user cannot delete their settings object directly.
+
+### 9.2. Data Model
+
+#### 9.2.1. Primary Stored Models
+
+- **`User` (Firestore Document):**
+  - A top-level collection (`users`) stores application-specific user data, which serves as the settings object.
+  - The document ID for each user is their Firebase `uid`.
+  - `uid`: String (Firebase Auth UID).
+  - `username`: String (User-defined, for display purposes).
+  - `email`: String (Copied from Firebase Auth for convenience).
+  - `defaultPortfolioId`: String (The `portfolioId` of the user's default portfolio).
+  - `subscriptionStatus`: String (e.g., "FREE", "PREMIUM", default: "FREE").
+  - `notificationPreferences`: Object (e.g., `{ "email": true, "push": false }`).
+  - `createdAt`: ISODateTime.
+  - `modifiedAt`: ISODateTime.
+
+### 9.3. Business Rules
+
+#### 9.3.1. US_1000: User Settings Creation
+
+- **Description**: This rule is part of the overall `U_1000: User Provisioning` process. After a user is created in Firebase Authentication, the backend creates a corresponding `User` document in the `users` collection of Firestore. This document stores their initial settings, including a link to their newly created default portfolio.
+- **Success Response**: A new `User` document is created in Firestore.
+
+#### 9.3.2. US_2000: User Settings Retrieval
+
+- **Description**: Retrieves the settings for the currently authenticated user. This is typically called when the user opens the settings page.
+- **Success Response**: The user's `User` document is returned.
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| US_I_2001 | Retrieval succeeds | User is authenticated. | Response Sentinel to User | Full `User` settings object is returned. | US_I_2001 |
+| US_E_2101 | User unauthorized | User is not authenticated. | Request User to Sentinel | Retrieval rejected with HTTP 401. | US_E_2101 |
+
+**Messages**:
+- **US_I_2001**: "User settings retrieved successfully."
+- **US_E_2101**: "User is not authenticated."
+
+#### 9.3.3. US_3000: User Settings Update
+
+- **Description**: Updates the settings for the currently authenticated user based on the data submitted from the settings page. 
+- **Endpoint**: `PUT /api/v1/users/me/settings`.
+- **Success Response**: The `User` document is updated in Firestore.
+- **Sequence Diagram for User Settings Update**
+
+```mermaid
+sequenceDiagram
+    participant User as User (Frontend)
+    participant Sentinel as Sentinel Backend
+    participant DB as Database
+
+    User->>Sentinel: 1. PUT /api/v1/users/me/settings<br> (updateData, ID Token, Idempotency-Key)
+    activate Sentinel
+
+    Sentinel->>Sentinel: 2. Verify ID Token & Authorize User
+    Sentinel->>Sentinel: 3. Validate incoming updateData
+
+    alt Validation & Authorization OK
+        Sentinel->>DB: 4. Update User Document in DB
+        activate DB
+        DB-->>Sentinel: 5. Confirm Update Success
+        deactivate DB
+        Sentinel-->>User: 6. Return HTTP 200 OK (Success)
+    else Validation or Authorization Fails
+        Sentinel-->>User: Return HTTP 4xx Error (e.g., 400, 403)
+    end
+    
+    deactivate Sentinel
+```
+
+- **Sub-Rules**:
+
+| Rule ID | Rule Name | Condition | Check Point | Success Outcome | Message Keys |
+|:---|:---|:---|:---|:---|:---|
+| US_I_3001 | Update succeeds | User is authenticated, and all provided data is valid (e.g., `defaultPortfolioId` belongs to the user). | Response Sentinel to User | The `User` document is updated with new settings. | US_I_3001 |
+| US_I_3002 | Idempotency key is replayed | `Idempotency-Key` matches a previous successful update request. | Request User to Sentinel | The response from the original successful request is returned; no new update is performed. | N/A |
+| US_E_3101 | User unauthorized | User is not authenticated. | Request User to Sentinel | Update rejected with HTTP 401. | US_E_3101 |
+| US_E_3102 | Invalid `defaultPortfolioId` | The provided `defaultPortfolioId` does not exist or does not belong to the user. | Sentinel internal | Update rejected with HTTP 403. | US_E_3102 |
+| US_E_3103 | Idempotency key missing/invalid | `Idempotency-Key` header is missing or not a valid UUID. | Request User to Sentinel | Update rejected. | US_E_3103 |
+
+**Messages**:
+- **US_I_3001**: "User settings updated successfully."
+- **US_E_3101**: "User is not authenticated."
+- **US_E_3102**: "Invalid default portfolio specified."
+- **US_E_3103**: "A valid Idempotency-Key header is required for this operation."
+
+#### 9.3.4. US_4000: User Settings Deletion
+
+- **Description**: Deletes the user's settings. This is a backend process triggered as part of a full account deletion workflow and cannot be initiated directly by the user.
+- **Success Response**: The user's `User` document is deleted from Firestore.
+
+---
+
+## 10. Technical Specifications
+
+### 10.1. Security
 
 - **Encryption**: TLS for data in transit, Firestore encryption at rest.
 - **Authentication**: Google Cloud Identity Platform (OAuth2, MFA).
 - **Authorization**: User-specific data access enforced. No direct, unauthenticated access to the shared `marketData` collection is possible via the API.
 - **Privacy**: Minimal PII (email only), clear privacy policy.
 - **Idempotency Handling**:
-    - **Mechanism**: To prevent duplicate operations (e.g., from network retries), all state-changing requests (`POST`, `PUT`, `DELETE`) require a client-generated `Idempotency-Key` header containing a valid **UUID version 4**.
-    - **Technical Implementation**: The backend will use a dedicated Firestore collection named `idempotencyKeys`.
-        - The `Idempotency-Key` from the request will be used as the document ID in this collection.
-        - Upon receiving a request, the backend will first check if a document with this ID exists.
-        - If it exists, the stored response will be returned immediately without re-processing the request.
-        - If it does not exist, the backend will create a new document, process the business logic, store the result (status code and response body) in the document, and then return the response.
+    To prevent duplicate operations from events like network retries, all state-changing requests (`POST`, `PUT`, `DELETE`) require a client-generated `Idempotency-Key` header containing a valid **UUID version 4**. Keys expire after 24 hours.
+
+    - **Mechanism**: The backend will use a dedicated Firestore collection named `idempotencyKeys`. The `Idempotency-Key` from the request will be used as the document ID. If a request with an existing key is received, the stored response is returned immediately without re-processing.
+    - **Technical Implementation**: Upon receiving a request, the backend checks if a document with the key's ID exists. If not, it creates a new document, processes the business logic, stores the result (status code and response body) in the document, and then returns the response.
     - **Data Model (`idempotencyKeys` document):**
         ```json
         {
@@ -3298,7 +3463,18 @@ sequenceDiagram
         ```
     - **Cleanup**: A Time-to-Live (TTL) policy will be enabled on this collection in Firestore to automatically delete keys after 24 hours, using the `expireAt` field.
 
-### 9.2. Data Sources
+### 10.2. API Design Principles
+
+- **API Versioning and Path**: The API is versioned in the URL path. All endpoints for the current version are nested under the `/api/v1/users/me/` path. This ensures a stable contract for clients and allows for future API evolution. For example, to get a portfolio, the endpoint is `/api/v1/users/me/portfolios/{portfolioId}`.
+
+- **Resource Endpoint Design:** The API employs a hybrid approach for modeling resource relationships to provide both clarity and efficiency.
+    - **For listing child resources**, a nested endpoint is used to make the parent-child context explicit. For example, to list all holdings within a portfolio, the endpoint is `GET /api/v1/users/me/portfolios/{portfolioId}/holdings`.
+    - **For operating on a specific child resource** (retrieving, updating, or deleting it), a top-level endpoint is used for direct access. For example, to retrieve a single holding, the endpoint is `GET /api/v1/users/me/holdings/{holdingId}`.
+    - This hybrid model ensures that the relationship is clear when fetching collections, while allowing individual, significant resources to be addressed directly and efficiently.
+
+- A comprehensive list of all API endpoints is maintained in the `docs/api_endpoints.md` file for developer reference.
+
+### 10.3. Data Sources
 
 - **Market Data Provider**: Alpha Vantage.
 - **Instrument Identifier Lookup**: An external service is required to resolve financial instrument identifiers (e.g., search for an ISIN to find all corresponding Tickers). A potential provider for this is **OpenFIGI**.
@@ -3307,7 +3483,7 @@ sequenceDiagram
     2.  **On-Demand Backfill**: When a user adds a ticker that is new to the system, a one-time job fetches at least one year (366 days) of historical data for that ticker.
 - **Data Points**: The system fetches raw daily OHLCV (Open, High, Low, Close, Volume) data from the provider. All technical indicators required for rule evaluation—including but not limited to SMA, VWMA, RSI, ATR, and MACD—are calculated internally by the Sentinel backend.
 
-#### 9.2.1. System-Required Tickers
+#### 10.3.1. System-Required Tickers
 
 To support rules based on broad market indicators (e.g., market volatility via the VIX), the system maintains a list of "system-required" proxy tickers. The data for these tickers is treated as essential global context and is not tied to any single user's portfolio. The primary proxy ticker for the MVP is `VIXY` (or a similar VIX-tracking ETF), which serves as the data source for the `VIX` rule condition.
 
@@ -3315,13 +3491,13 @@ To support rules based on broad market indicators (e.g., market volatility via t
 
 **Configuration**: The list of system-required tickers will be maintained in the backend configuration to allow for future expansion.
 
-### 9.3. Tax Configuration
+### 10.4. Tax Configuration
 
 To provide accurate, asset-specific tax calculations without requiring user input, Sentinel uses a static, application-level configuration file. This file defines the tax rules for each supported asset class. The backend loads this configuration on startup and uses it to apply the correct tax logic during all relevant computations.
 
 For the MVP, this will be a YAML file stored in the backend service's codebase.
 
-#### 9.3.1. Configuration Structure
+#### 10.4.1. Configuration Structure
 
 The configuration is a map where each key is a valid `assetClass` (e.g., `EQUITY`, `CRYPTO`). The value for each key is a list of one or more tax rules, which are evaluated in order. The first rule whose condition is met will be applied.
 
@@ -3332,7 +3508,7 @@ Each rule object contains the following fields:
 - `condition` (String, Optional): A machine-readable condition that determines if the rule applies. If omitted, the rule is always applied.
   - The condition is a simple string expression, e.g., `holdingDurationDays > 365`. The backend is responsible for parsing this and evaluating it against the lot's data.
 
-#### 9.3.2. Example Configuration (`tax_config.yaml`)
+#### 10.3.2. Example Configuration (`tax_config.yaml`)
 
 ```yaml
 EQUITY:
@@ -3349,14 +3525,15 @@ CRYPTO:
 COMMODITY:
   - description: "Standard capital gains tax for commodities."
     taxRate: 26.375
+``` 
 
-### 9.4. Non-Functional Requirements
+### 10.5. Non-Functional Requirements
 
 - **Performance**: API response time < 500ms, daily monitoring completes in < 10 min.
 - **Scalability**: Cloud Run/Firestore scale automatically.
 - **Availability**: 99.9% uptime via GCP.
 
-#### 9.4.1. Time-Series Data Handling Rationale
+#### 10.5.1. Time-Series Data Handling Rationale
 
 To meet the **Performance** and **Scalability** non-functional requirements, a specific architectural approach has been chosen for handling historical time-series data (e.g., daily performance snapshots).
 

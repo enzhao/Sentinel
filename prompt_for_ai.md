@@ -71,8 +71,9 @@ The AI should prioritize features based on their foundational nature. A logical 
 
 ### Functional Features
 
-- [ ] Public Homepage (see product_spec.md Chapter 8, and the view with id VIEW_HOME_PAGE in the file docs/specs/views_spec.yaml). 
+- [x] Public Homepage (see product_spec.md Chapter 8, and the view with id VIEW_HOME_PAGE in the file docs/specs/views_spec.yaml). 
 - [ ] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
+- [ ] User Settings Management (see product_spec.md Chapter 9).
 - [ ] Portfolio Management (see product_spec.md Chapter 3). 
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)
 - [ ] Lot Management (CRUD, see product_spec.md Chapter 5)

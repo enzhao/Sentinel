@@ -8,24 +8,27 @@ data:
     type: "String"
   - name: "leadingAction"
     type: "Object"
-  - name: "actions"
-    type: "Array<Object>"
-  # NEW: Data to control the alert icon's state (e.g., showing a badge)
   - name: "alertInfo"
-    type: "Object" # e.g., { hasUnread: true }
+    type: "Object"
+    description: "{ hasUnread: true }"
+  - name: "userMenu"
+    type: "Object"
+    description: "Defines the avatar and a list of menu items, e.g., { avatarUrl: '...', items: [{ label: 'Settings', event: '...' }] }"
 
 components:
   - type: "AppBar"
     bindings:
       title: "title"
       leadingAction: "leadingAction"
-      actions: "actions"
-    # NEW: Dedicated property for the alert icon and its state
     alertAction:
       icon: "notifications"
       event: "USER_CLICKS_ALERTS_ICON"
       bindings:
         badgeVisible: "alertInfo.hasUnread"
+    userMenu:
+      bindings:
+        avatarUrl: "userMenu.avatarUrl"
+        items: "userMenu.items"
 ---
 # NEW: The small modal that shows a summary of recent, unread alerts.
 viewId: VIEW_ALERTS_DROPDOWN_MODAL
@@ -60,6 +63,75 @@ components:
           events:
             onClick:
               name: "USER_CLICKS_VIEW_ALL_ALERTS"
+---
+# The view for managing user-specific settings.
+viewId: VIEW_USER_SETTINGS
+title: "Settings"
+requiresAuth: true
+description: "A view for editing user settings like default portfolio and notification preferences."
+
+data:
+  - name: "userSettings"
+    type: "User" # The User object contains the relevant settings fields.
+    description: "The current settings for the user."
+  - name: "portfolios"
+    type: "Array<PortfolioSummary>" # A list of portfolios to choose from for the default.
+    description: "A list of the user's portfolios."
+
+components:
+  - type: "StandardLayout"
+    slots:
+      header:
+        - type: "VIEW_APP_BAR"
+          bindings:
+            title: "Settings"
+            leadingAction:
+              icon: "arrow_back"
+              event: "USER_CLICKS_CANCEL" # The back button can act as a cancel
+            actions:
+              - icon: "logout"
+                event: "USER_CLICKS_LOGOUT"
+      body:
+        - type: "SettingsForm" # A semantic container for the form
+          slots:
+            # Section for Portfolio Settings
+            - type: "FormSection"
+              props:
+                title: "Portfolio Settings"
+              components:
+                - type: "SelectField"
+                  props:
+                    label: "Default Portfolio on Login"
+                  bindings:
+                    items: "portfolios" # The list of available portfolios
+                    # This binds the selected portfolio's ID to the settings object
+                    value: "userSettings.defaultPortfolioId"
+            
+            # Section for Notification Preferences
+            - type: "FormSection"
+              props:
+                title: "Notification Preferences" #
+              components:
+                - type: "Switch"
+                  props:
+                    label: "Email Notifications"
+                  bindings:
+                    value: "userSettings.notificationPreferences.email" #
+                - type: "Switch"
+                  props:
+                    label: "Push Notifications"
+                  bindings:
+                    value: "userSettings.notificationPreferences.push" #
+
+      footer:
+        - type: "FormActions"
+          actions:
+            - label: "Cancel"
+              event: "USER_CLICKS_CANCEL"
+              variant: "text"
+            - label: "Save Changes"
+              event: "USER_CLICKS_SAVE"
+              variant: "contained"
 ---
 # The public-facing home page for unauthenticated users.
 viewId: VIEW_HOME_PAGE

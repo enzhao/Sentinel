@@ -49,7 +49,7 @@ states:
     events:
       USER_DISMISSES_ERROR: FormInput
 ---
-# Flow for logging out an authenticated user.
+# Flow for logging out an authenticated user. invoked globally by the FLOW_APP_SHELL
 flowId: FLOW_LOGOUT
 requiresAuth: true
 initialState: Idle
@@ -80,6 +80,93 @@ states:
     exitAction:
       action: NAVIGATE_TO
       target: VIEW_HOME_PAGE
+---
+# ===========================================================================
+# Main Application Shell Flow
+# ===========================================================================
+# This is the top-level state machine that runs for the entire authenticated
+# user session. It acts as a central hub for handling global events that
+# are not tied to a specific feature flow.
+#
+# Responsibilities:
+#   - Listen for events dispatched from persistent UI elements, such as the
+#     user menu (settings, logout) and the alert icon in the VIEW_APP_BAR.
+#    
+#   - Invoke the appropriate subflows (e.g., FLOW_MANAGE_USER_SETTINGS,
+#     FLOW_LOGOUT, FLOW_SHOW_ALERTS_DROPDOWN) in response to these events.
+#    
+#
+# This pattern ensures that global navigation logic is defined in a single,
+# consistent place, adhering to the DRY (Don't Repeat Yourself) principle
+# and keeping the feature-specific flows clean and focused.
+# ===========================================================================
+
+flowId: FLOW_APP_SHELL
+requiresAuth: true
+initialState: Active
+states:
+  - name: Active
+    description: "The main application shell is active, managing global state and events."
+    events:
+      USER_CLICKS_SETTINGS: NavigatingToSettings
+      USER_CLICKS_LOGOUT: LoggingOut
+      USER_CLICKS_ALERTS_ICON: ShowingAlertsDropdown
+
+  - name: ShowingAlertsDropdown
+    description: "Invoking the alert summary dropdown subflow."
+    subflow:
+      flowId: FLOW_SHOW_ALERTS_DROPDOWN
+      onCompletion: Active
+      onCancel: Active
+
+  - name: NavigatingToSettings
+    description: "Invoking the user settings management subflow from the main shell."
+    subflow:
+      flowId: FLOW_MANAGE_USER_SETTINGS
+      onCompletion: Active
+      onCancel: Active
+
+  - name: LoggingOut
+    description: "Invoking the logout confirmation subflow from the main shell."
+    subflow:
+      flowId: FLOW_LOGOUT
+      onCompletion: (exit flow)
+      onCancel: Active
+---
+# Flow for managing user settings (default portfolio, notifications).  
+# It is intended to be invoked as a subflow by the FLOW_APP_SHELL, ensuring it can be accessed globally.
+
+flowId: FLOW_MANAGE_USER_SETTINGS
+requiresAuth: true
+initialState: Editing
+states:
+  - name: Editing
+    renders: VIEW_USER_SETTINGS
+    description: "The user is viewing and can edit their application settings."
+    events:
+      USER_CLICKS_SAVE: Submitting
+      USER_CLICKS_CANCEL: (exit flow)
+
+  - name: Submitting
+    renders: VIEW_USER_SETTINGS
+    description: "Submitting the updated user settings to the backend."
+    entryAction:
+      service: "PUT /api/users/me/settings" #
+      transitions:
+        success: Success
+        failure: APIError
+
+  - name: Success
+    description: "The settings were saved successfully."
+    exitAction:
+      action: NAVIGATE_BACK # Or REFRESH_PREVIOUS_VIEW
+      target: (previous view)
+
+  - name: APIError
+    renders: VIEW_USER_SETTINGS
+    description: "An error occurred while saving the user settings."
+    events:
+      USER_DISMISSES_ERROR: Editing
 ---
 # Flow for managing portfolio-level trading rules
 flowId: FLOW_MANAGE_PORTFOLIO_RULES
@@ -1076,7 +1163,7 @@ states:
       action: NAVIGATE_TO
       target: VIEW_ALERTS_LIST
 ---
-# NEW: Flow to manage the alert history list and detail views.
+# Flow to manage the alert history list and detail views.
 flowId: FLOW_VIEW_ALERTS
 requiresAuth: true
 initialState: ViewingList
