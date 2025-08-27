@@ -88,9 +88,6 @@ htmlcov/
 # Ignore Firebase debug logs
 firebase-debug.log*
 
-# Ignore emulator config file, as it's generated locally
-firebase.json
-
 # Service account keys
 **/serviceAccountKey.json
 
