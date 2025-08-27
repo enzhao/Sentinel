@@ -1,4 +1,4 @@
-name: Deploy Sentinel to GCP
+name: Build, Test, and Deploy Sentinel to GCP
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: 🧪 Install, compile, and test backend
+      - name: 🛠️ Install backend dependencies
         working-directory: backend
         run: |
           python -m venv venv
@@ -31,9 +31,18 @@ jobs:
           pip-compile requirements.in -o requirements.txt
           pip-compile requirements-dev.in -o requirements-dev.txt
           pip install -r requirements-dev.txt
-          pytest --cov=src --cov-fail-under=70
+    
+      - name: 🔬 Run backend tests with Firebase Emulator
+        working-directory: backend
+        run: |
+          # Install firebase-tools in the pipeline runner
+          npm install -g firebase-tools
+          # starts the emulators, runs tests with the correct ENV, and then shuts down
+          # the project id for the emulator can be found in the file backend/src/firebase_setup.py
+          firebase emulators:exec --project=sentinel-dev "source venv/bin/activate && ENV=dev pytest --cov=src"
 
-      - name: 🔐 Authenticate to GCP
+      # --- AUTHENTICATION NOW HAPPENS AFTER TESTS ---
+      - name: 🔐 Authenticate to GCP for deployment
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'

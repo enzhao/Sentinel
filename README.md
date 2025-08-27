@@ -31,46 +31,79 @@ For a full breakdown of the project's vision, features, and architecture, please
 
 > **Note for Developers:** For detailed information on testing, commit conventions, the release process, and other development workflows, please see the **[Developer Guide](./docs/developer_guide.md)**.
 
-### 3.1. Cloud & Project Setup
+### 3.1. Prerequisites
 
-Before running the application locally, you must set up the required Google Cloud and Firebase services. Follow the step-by-step guide here:
+1. **Cloud & Project Setup**: Before running the application locally, you must set up the required Google Cloud and Firebase services. Follow the step-by-step guide here:
 
 ➡️ **[./docs/google_cloud_setup.md](./docs/google_cloud_setup.md)**
 
-### 3.2. Local Development
+2. **Firebase CLI:** Install the Firebase command-line tools, which are required to run the local emulators.
 
-After completing the cloud setup, follow these steps to run the application on your local machine.
+```sh
+npm install -g firebase-tools
+```
 
-#### 3.2.1 Backend Setup
+### 3.2. Local Development with the Firebase Emulator
 
-1.  **Prerequisites:**
-    * Ensure you have `pyenv` and `pip-tools` installed.
-    * Place your `serviceAccountKey.json` file in the `/backend` directory.
-    * Create your `backend/.env` file from the example and add your Alpha Vantage API key.
-2.  **Run the Build Script:** From the project root, run the setup script:
-    ```bash
-    chmod +x run_local_backend.sh
-    ./run_local_backend.sh
-    ```
-3.  **Run the Server:** After setup, you can run the server at any time:
-    ```bash
-    # Make sure your virtual environment is activated
-    source backend/venv/bin/activate
-    uvicorn src.main:app --reload
-    ```
-    ✅ The backend API should now be running at `http://127.0.0.1:8000`.
+Our primary development workflow uses the Firebase Emulator Suite. This runs a local version of Firebase on your machine, allowing for fast, safe, and free development.
 
-#### 3.2.2. Frontend Setup
-1.  Open a **new terminal** and navigate to the frontend directory: `cd frontend`
-2.  Install dependencies: `npm install`
-3.  Run the frontend server: `npm run dev`
-    ✅ The frontend application should now be running at `http://localhost:5173`.
+1. **Initialize Emulators (First Time Only):**
+
+From the project root, run `firebase login` and then initialize the emulators.
+
+```sh
+firebase init emulators
+``` 
+
+Select **Auth** and **Firestore** and use the default ports.
+
+2. **Start the Emulators:**
+
+Open a terminal and run the following command from the project root. Keep this terminal running.
+
+```sh
+firebase emulators:start
+``` 
+✅ The emulators and a UI for viewing local data are now running.
+
+3. **Run the Backend:**
+
+Open a **new terminal**. Navigate to the backend, set the environment, and run the server.
+
+```sh
+cd backend
+# Make sure your virtual environment is activated
+source venv/bin/activate
+ENV=dev uvicorn src.main:app --reload
+``` 
+✅ The backend API should now be running at http://127.0.0.1:8000 and connected to the emulators.
+
+4. **Run the Frontend:**
+
+Open a **third terminal**. Navigate to the frontend and run the dev server.
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+✅ The frontend application should now be running at http://localhost:5173 and connected to the emulators.
 
 ---
 
 ## 4. Testing
 
-The overall testing strategy is documented in [`docs/testing_strategy.md`](docs/testing_strategy.md). To run the backend test suite, activate the virtual environment and run `pytest`.
+All automated tests (both local and in the CI/CD pipeline) run against the Firebase Emulator Suite for high-fidelity validation. For more details, see the [`docs/testing_strategy.md`](docs/testing_strategy.md). 
+
+To run the test suites:
+
+```sh
+# From the backend directory
+ENV=dev pytest
+
+# From the frontend directory
+npm run test:unit
+```
 
 ---
 
@@ -79,4 +112,6 @@ The overall testing strategy is documented in [`docs/testing_strategy.md`](docs/
 The application is deployed automatically via GitHub Actions on every push to the `main` branch.
 -   The **backend** is deployed to **Google Cloud Run**.
 -   The **frontend** is deployed to **Firebase Hosting**.
+
+
 

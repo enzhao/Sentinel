@@ -1,138 +1,162 @@
-# Sentinel Developer Guide 🚀
+# Sentinel Developer Guide 👩‍💻
 
-This guide provides essential information for developers working on the Sentinel project. It covers key development processes, workflows, and architectural strategies to ensure consistency and quality.
+Welcome to the Sentinel project! This guide provides essential information for developers, covering the local environment setup, core development workflows, project standards, and deployment procedures to ensure consistency and quality across the board.
 
-## 1. Core Development Processes ⚙️
+## 1. Getting Started: Local Development Environment 💼
 
-### 1.1. Testing Strategy 🧪
+To manage different configurations effectively, we use a consistent environment naming scheme across both the frontend and backend.
 
-A comprehensive testing strategy is crucial for maintaining the stability and reliability of the application. Our approach includes unit, integration, and end-to-end tests for both the frontend and backend.
+### 1.1. Environment Overview
 
-For complete details, please see the **[Testing Strategy Document](./testing_strategy.md)**.
+- **`dev`**: This is the primary environment for all local development and automated testing. It is configured to connect to the **Firebase Emulator Suite**.
+- **`local-prod`**: This is a special-purpose environment used to connect your local backend to the **live, cloud-hosted Firebase database**. It should only be used for specific tasks like data validation or migration and requires a `serviceAccountKey.json` file.
+- **`production`**: This refers to the live, deployed environment running on Google Cloud.
 
-### 1.2. Message Handling 💬
+### 1.2. Standard Workflow (`dev` mode)
 
-To ensure a consistent user experience, all user-facing text (including errors, confirmations, and UI labels) is managed through a centralized, spec-driven system. All messages are derived from `product_spec.md`.
+This is the standard workflow for all typical development tasks.
 
-For instructions on how to add, update, and manage messages, please see the **[Message Handling Strategy Document](./message_handling.md)**.
-
-### 1.3. Specification-Driven UI Workflows 🎨
-
-The project uses a specification-driven approach for the UI, where formal YAML documents define the structure and behavior of the frontend.
-
-- `docs/specs/views_spec.yaml`: Defines the static structure of all UI views.
-- `docs/specs/ui_flows_spec.yaml`: Defines the user interaction state machines (flows).
-
-#### 1.3.1. Step 1: Generating UI Flow Diagrams
-
-To visualize the flow definitions, we use a script to automatically generate Mermaid code from the `ui_flows_spec.yaml` file.
-
-1.  Ensure your utility virtual environment is active (`source util_env/bin/activate`).
-2.  Run the script from the project root:
+1.  **Start the Emulators**: In your first terminal, navigate to the project root and start the Firebase emulators. Keep this process running.
     ```bash
-    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml
+    firebase emulators:start
     ```
-3.  This will generate the source-of-truth diagrams in `docs/ui_flow_diagrams.md`.
+2.  **Start the Backend**: In a second terminal, activate the virtual environment and start the FastAPI server in `dev` mode.
+    ```bash
+    cd backend
+    source venv/bin/activate
+    ENV=dev uvicorn src.main:app --reload
+    ```
+3.  **Start the Frontend**: In a third terminal, start the Vite development server. The environment is automatically set to `dev` by the `frontend/.env.development` file.
+    ```bash
+    cd frontend
+    npm run dev
+    ```
 
-#### 1.3.2. Step 2: Synchronizing Diagrams into the Product Spec
+### 1.3. Connecting to Production Data (`local-prod` mode)
 
-After generating the diagrams, use this second script to automatically insert them into the main `product_spec.md`. **Never edit the Mermaid diagrams in the product spec manually**.
+**Warning**: Use this mode with extreme caution, as you will be interacting with live production data.
 
--   **Prerequisite**: The `product_spec.md` file must contain placeholder comments where the diagrams should be inserted (e.g., ```mermaid).
+1.  Place your `serviceAccountKey.json` file in the `/backend` directory.
+2.  Start the backend server using the `local-prod` environment variable.
+    ```bash
+    cd backend
+    source venv/bin/activate
+    ENV=local-prod uvicorn src.main:app --reload
+    ```
 
--   **Usage**:
-    1.  Ensure your utility virtual environment is active.
-    2.  Run the script from the project root, providing the source diagrams file and the target spec file.
-        ```bash
-        python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md
-        ```
-    3.  The script will find the placeholders and replace them with the latest diagrams. It will then print a report summarizing which diagrams were updated or if any are out of sync.
+## 2. The Core Development Process 🔄
 
-> **Tip for Testing**: You can provide an optional third argument (`--output` or `-o`) to write the results to a new file instead of overwriting the original. This is useful for verifying the script's output before committing changes.
-> ```bash
-> python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md -o product_spec_test.md
-> ```
+This section outlines the standardized processes for building features, committing code, and creating releases.
 
-> **Caution**: This script relies on the specific formatting of the placeholder comments in `product_spec.md` and the `## Flow: ...` headings in `docs/ui_flow_diagrams.md`. Significant changes to these formats may break the script. If the script fails, ensure these structures have not been altered.
+### 2.1. Spec-Driven Development for New Features
 
----
+All new development must follow a spec-driven process to ensure the project remains robust and maintainable.
 
-## 2. Development Workflow 🔄
+1.  **Update the Product Spec**: Before writing code, define the new business requirements in `product_spec.md`. This document serves as the human-readable source of truth.
+2.  **Update the OpenAPI Spec**: Translate the business requirements into a formal API contract by editing `api/sentinel-invest-backend.yaml`. This is the machine-readable source of truth for the API.
+3.  **Regenerate the API Skeleton**: Use an OpenAPI generator to create or update the boilerplate code for API routers and models from the YAML spec.
+    ```bash
+    npx @openapitools/openapi-generator-cli generate -i api/sentinel-invest-backend.yaml -g python-fastapi -o api/generated_backend_fastapi
+    ```
+4.  **Implement the Business Logic**: With the API skeleton generated, write the required business logic within the `services` directory (e.g., `portfolio_service.py`).
+5.  **Write Tests**: Create comprehensive unit and integration tests for the new logic to ensure correctness and reliability.
 
-This project uses a standardized workflow to ensure a clean, understandable, and automated version history.
+### 2.2. Commit Message Standards
 
-### 2.1. Commit Messages
+All commit messages are required to follow the [**Conventional Commits**](https://www.conventionalcommits.org/) specification. This is enforced automatically by a `commit-msg` hook. The standard format is: `<type>(<scope>): <subject>`.
 
-All commit messages must follow the [**Conventional Commits**](https://www.conventionalcommits.org/) specification. This is enforced automatically by a `commit-msg` hook. The basic format is:
-`<type>(<scope>): <subject>`
+### 2.3. Creating a Release
 
-### 2.2. Creating a Release
-
-Creating a new version, generating a changelog, and tagging the release is an automated process.
+The process for versioning, generating a changelog, and tagging a release is automated.
 
 1.  Ensure you are on the `main` branch and have pulled the latest changes.
-2.  Run the release script from the project root:
+2.  Run the release script from the project root, specifying the version type.
     ```bash
     npm run release -- --release-as <major|minor|patch>
     ```
-3.  Push the new commit and the tag to GitHub:
+3.  Push the new commit and its associated tag to GitHub.
     ```bash
     git push --follow-tags origin main
     ```
 
----
+## 3. Project Standards & Strategies 📜
 
-## 3. Advanced Workflows 🛠️
+### 3.1. Testing Strategy 🧪
 
-### 3.1. Managing Backend Dependencies
+All automated tests are executed in the `dev` environment against the Firebase Emulator Suite. This approach guarantees high-fidelity, fast, and isolated test runs. For complete details, refer to the **[Testing Strategy Document](./testing_strategy.md)**.
 
--   To add or remove a package, edit the `backend/requirements.in` file.
--   After editing, run `pip-compile backend/requirements.in` to update `backend/requirements.txt`.
--   Then, run `pip-sync` to update your local virtual environment.
+### 3.2. User-Facing Message Handling 💬
 
-### 3.2. Local Docker Testing
+To maintain a consistent user experience, all user-facing text (including errors, confirmations, and UI labels) is managed via a centralized, spec-driven system. All messages are derived from `product_spec.md`. For detailed instructions, see the **[Message Handling Strategy Document](./message_handling.md)**.
 
-To test the production container locally, run the following commands from the project root:
+### 3.3. Specification-Driven UI Workflows 🎨
 
-1.  **Build the image:**
+The project's frontend is built using a specification-driven approach, where formal YAML documents define the UI's structure and behavior.
+* `docs/specs/views_spec.yaml`: Defines the static structure of all UI views.
+* `docs/specs/ui_flows_spec.yaml`: Defines the user interaction state machines, or "flows".
+
+## 4. Common Tasks & Advanced Workflows 🛠️
+
+This section covers specific procedures for managing dependencies, testing with Docker, and updating UI diagrams.
+
+### 4.1. Updating UI Flow Diagrams
+
+#### Step 1: Generate UI Flow Diagrams
+To visualize UI flows, a script automatically generates Mermaid diagram code from the `ui_flows_spec.yaml` file.
+
+1.  Activate the utility virtual environment (`source util_env/bin/activate`).
+2.  From the project root, run the generation script:
+    ```bash
+    python util/generate_ui_flow_visuals_mermaid.py docs/specs/ui_flows_spec.yaml
+    ```
+3.  This script outputs the source-of-truth diagrams into `docs/ui_flow_diagrams.md`.
+
+#### Step 2: Synchronize Diagrams into the Product Spec
+A second script automatically inserts the newly generated diagrams into the main `product_spec.md` file. **Never edit the Mermaid diagrams in the product spec manually**.
+
+* **Prerequisite**: Ensure the `product_spec.md` file contains the placeholder comments (e.g., ```mermaid) where diagrams are to be inserted.
+* **Usage**:
+    1.  Activate the utility virtual environment.
+    2.  Run the update script from the project root:
+        ```bash
+        python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md
+        ```
+    3.  The script will replace the placeholders and print a summary report.
+
+> **Tip for Testing**: You can use the `--output` (`-o`) flag to write the results to a new file for verification before overwriting the original.
+> ```bash
+> python util/update_flow_diagrams_in_product_spec.py docs/ui_flow_diagrams.md product_spec.md -o product_spec_test.md
+> ```
+
+### 4.2. Managing Backend Dependencies
+
+* To add or remove a Python package, modify the `backend/requirements.in` file.
+* After editing, run `pip-compile backend/requirements.in` to update the locked `backend/requirements.txt` file.
+* Finally, run `pip-sync` to align your local virtual environment with the locked requirements file.
+
+### 4.3. Local Docker Testing
+
+To test the production container on your local machine, follow these steps from the project root:
+
+1.  **Build the image**:
     ```bash
     docker build -t sentinel-backend ./backend
     ```
-2.  **Run the container:**
+2.  **Run the container**:
     ```bash
     docker run --rm -p 8000:8000 -e ENV=local -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json sentinel-backend
     ```
----
 
-## 4. Cloud and Deployment Notes ☁️
+## 5. Cloud Deployment & Operations ☁️
 
-### 4.1. Cloud Run Security
+### 5.1. Cloud Run Security
 
-For security, public access to the backend API on Google Cloud Run is disabled by default in the deployment workflow. To test the live cloud instance, you must temporarily enable public access:
+By default, public access to the backend API on Google Cloud Run is disabled for security. To test a live cloud instance, you must temporarily enable public access:
 1.  Navigate to **Cloud Run** in the Google Cloud Console.
 2.  Select the `sentinel-invest-backend` service.
-3.  Go to the **Security** tab and allow public (unauthenticated) access.
+3.  Go to the **Security** tab and choose to allow public (unauthenticated) access.
 
-### 4.2. Instance Configuration
+### 5.2. Cloud Run Instance Configuration
 
-To manage costs, the Cloud Run service is configured with a **maximum of 1 instance**. This setting can be adjusted in the service's main configuration tab if higher concurrency is needed.
-
----
-
-## 5. Future Development Workflow 🛣️
-
-To ensure the project remains robust and maintainable, we are transitioning to a spec-driven development process. All future development should follow these steps:
-
-1.  **Update the Product Spec**: Before writing any code, define the new business requirements or changes in `product_spec.md`. This is the human-readable source of truth.
-
-2.  **Update the OpenAPI Spec**: Manually translate the business requirements from the product spec into a formal API contract by editing `api/sentinel-invest-backend.yaml`. This file is the machine-readable source of truth for the API.
-
-3.  **Regenerate the API Skeleton**: Use an OpenAPI generator tool to create or update the boilerplate for the API routers and models from the YAML spec.
-    ```bash
-    npx @openapitools/openapi-generator-cli generate -i api/sentinel-invest-backend.yaml -g python-fastapi -o api/generated_backend_fastapi
-    ```
-
-4.  **Implement the Business Logic**: With the API skeleton in place, write or modify the business logic in the `services` directory (e.g., `portfolio_service.py`). The generated API endpoints will call these services.
-
-5.  **Write Tests**: Create unit and integration tests for the new business logic to ensure it is correct and robust.
+To manage costs, the Cloud Run service is configured to use a **maximum of 1 instance**. If higher concurrency is required, this setting can be adjusted in the service's main configuration tab.
 

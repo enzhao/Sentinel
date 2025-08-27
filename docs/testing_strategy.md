@@ -42,7 +42,7 @@ The backend testing strategy focuses on verifying the correctness of the API, bu
     - Business logic within service functions (e.g., `portfolio_service.py`).
     - Utility functions and data model validation.
     - Individual FastAPI dependencies.
-- **Method**: External dependencies like the database or external APIs are mocked using libraries like `unittest.mock`.
+- **Method**: External dependencies like the external APIs are mocked using libraries like `unittest.mock`. But the database calls should run against the **Firebase Emulator Suite** (Firestore and Auth), to avoid problems with heavy mocking. 
 - **Location**: `backend/tests/unit/`
 
 ### 3.2. Backend Integration Tests
@@ -51,7 +51,7 @@ The backend testing strategy focuses on verifying the correctness of the API, bu
 - **Scope**:
     - **API Endpoint Tests**: Verifying that API endpoints (e.g., `/api/users/me`, `/api/portfolios`) correctly process requests, trigger the appropriate business logic, and return the expected responses. These tests confirm that the web layer is correctly integrated with the service layer.
     - **End-to-End Flow Tests**: Verifying a complete data flow through the system, such as a user signing up and their data being correctly persisted in the database.
-- **Method**: These tests use a real, but separate, test database (`.env.test`) to ensure data isolation. They make HTTP requests to a test instance of the FastAPI application. Authentication is typically mocked at the API boundary to test endpoint logic without depending on live external services.
+- **Method**: All integration tests are run against the **Firebase Emulator Suite** (Firestore and Auth). This provides high-fidelity testing against the same software that runs in production, without the cost or flakiness of a live network connection. A fixture automatically clears the emulator's data before each test to ensure perfect isolation.
 - **Location**: `backend/tests/integration/` (e.g., `test_user_api.py`, `test_portfolio_api.py`, `test_user_integration.py`)
 
 ---
@@ -70,7 +70,7 @@ The frontend testing strategy is designed to ensure a reliable and smooth user e
 ### 4.2. Frontend Integration Tests
 
 - **Purpose**: To verify that several different frontend units work together correctly as a group. They test the "integration" or communication between different parts of the frontend application, simulating a real user workflow.
-- **Method**: These tests use the **real** components, the **real** Pinia stores, and the **real** Vue router, all working together. The only thing that is mocked is the backend API to avoid making real network requests and to control the test conditions.
+- **Method**: These tests use the **real** components, the **real** Pinia stores, and the **real** Vue router, all working together. The frontend application connects to the **Firebase Emulator Suite**, allowing for full-stack testing of the frontend against a realistic, but local and controllable, backend.
 - **Goal**: To catch bugs that occur at the seams between units, such as incorrect event handling, state management issues, or routing problems that unit tests would miss.
 
 #### Key Integration Test Scenarios for Sentinel:
@@ -104,7 +104,7 @@ Based on the `product_spec.md`, the following user journeys are critical and mus
 
 ### 4.3. End-to-End (E2E) Tests
 
-- **Purpose**: To validate a complete user flow through the entire live system, from the browser interacting with the Vue.js frontend, through the FastAPI backend, to the database.
+- **Purpose**: To validate a complete user flow through the entire live system, from the browser interacting with the Vue.js frontend, through the FastAPI backend, to the emulated database.
 - **Scope**: A small, critical set of "happy path" scenarios, such as:
     1.  A user can sign up, log in, create a portfolio, add a holding, and log out.
 - **Method**: These tests will be written using a framework like Playwright. They run against a deployed staging environment that mirrors production. They use real, dedicated test user credentials to perform a full, realistic login. They are the slowest and most brittle tests, so they are used sparingly.
@@ -113,10 +113,10 @@ Based on the `product_spec.md`, the following user journeys are critical and mus
 
 - **Backend**:
     - **Test Runner**: `pytest`
-    - **Mocking**: `unittest.mock`
+    - **Test Environment**: Firebase Emulator Suite
     - **HTTP Client for Tests**: `TestClient` from FastAPI
 - **Frontend**:
     - **Test Runner**: `vitest`
     - **Component Testing**: `@vue/test-utils`
-    - **Mocking (API)**: Mock Service Worker (`msw`) or similar.
-    - **E2E Testing**: Playwright (planned)
+    - **Test Environment**: JSDOM with Firebase Emulator Suite
+- **E2E Testing**: Playwright (planned)
