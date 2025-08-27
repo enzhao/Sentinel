@@ -866,7 +866,9 @@ components:
         subscriptionStatus:
           $ref: '#/components/schemas/SubscriptionStatus'
         notificationPreferences:
-          $ref: '#/components/schemas/NotificationPreferences'
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
         createdAt:
           $ref: '#/components/schemas/ISODateTime'
           readOnly: true
@@ -889,24 +891,27 @@ components:
         defaultPortfolioId:
           $ref: '#/components/schemas/UUID'
         notificationPreferences:
-          $ref: '#/components/schemas/NotificationPreferences'
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
       required:
         - defaultPortfolioId
-    # Reference: product_spec.md#82-data-models
+    # Reference: product_spec.md#921-primary-stored-models
+    NotificationChannel:
+      type: string
+      enum:
+        - EMAIL
+        - PUSH
+      description: Supported notification channels.
+    # Reference: product_spec.md#921-primary-stored-models
     NotificationPreferences:
-      type: object
-      properties:
-        email:
-          type: boolean
-          description: Whether to send email notifications.
-          default: true
-        push:
-          type: boolean
-          description: Whether to send push notifications.
-          default: false
-      required:
-        - email
-        - push
+      type: array
+      items:
+        $ref: '#/components/schemas/NotificationChannel'
+      description: A list of enabled notification channels.
+      example:
+        - EMAIL
+        - PUSH
     # Reference: product_spec.md#82-data-models
     SubscriptionStatus:
       type: string

@@ -16,6 +16,11 @@ class SubscriptionStatus(str, Enum):
     FREE = "FREE"
     PREMIUM = "PREMIUM"
 
+class NotificationChannel(str, Enum):
+    """ Reference: product_spec.md#921-primary-stored-models """
+    EMAIL = "EMAIL"
+    PUSH = "PUSH"
+
 class Currency(str, Enum):
     """ Reference: product_spec.md#321-primary-stored-models """
     EUR = "EUR"
@@ -91,9 +96,8 @@ class Error(BaseModel):
 # #############################################################################
 
 class NotificationPreferences(BaseModel):
-    """ Reference: product_spec.md#82-data-models """
-    email: bool = True
-    push: bool = False
+    """ Reference: product_spec.md#921-primary-stored-models """
+    __root__: List[NotificationChannel]
 
 class User(BaseModel):
     """ Reference: product_spec.md#82-data-models """

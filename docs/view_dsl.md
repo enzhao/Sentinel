@@ -82,6 +82,18 @@ Each object in the `components` array represents a single UI element.
 - `slots` (Object, Optional): Used by "Layout Components" to define named regions where other components are placed.
     - **Key:** The name of the slot (e.g., `header`, `body`, `fab`).
     - **Value:** An array of component objects to be rendered inside that slot.
+- `MultiSelect` (Object, Optional): A component for selecting multiple options from a predefined list.
+    - `type` (String, Required): Must be `"MultiSelect"`.
+    - `props` (Object, Required):
+        - `label` (String, Required): The label for the multi-select input.
+        - `options` (Array<String>, Required): The list of available options to choose from.
+    - `bindings` (Object, Required):
+        - `selected` (String, Required): Binds to a data property that holds the currently selected options (e.g., `"user.notificationPreferences"`).
+    - `events` (Object, Required):
+        - `onUpdate` (Object, Required):
+            - `name` (String, Required): The event name dispatched when the selection changes (e.g., `USER_UPDATES_NOTIFICATION_PREFERENCES`).
+            - `payload` (Object, Required):
+                - `value` (String, Required): The new array of selected options (e.g., `"$event.value"`).
 
 ## 4. Core Patterns: Composition and Layout
 

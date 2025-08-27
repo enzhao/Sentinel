@@ -3327,6 +3327,10 @@ A user's settings document is deleted automatically by the system as part of the
 
 #### 9.2.1. Primary Stored Models
 
+- **`NotificationChannel` (Enum):**
+  - `EMAIL`: For email notifications.
+  - `PUSH`: For mobile push notifications.
+
 - **`User` (Firestore Document):**
   - A top-level collection (`users`) stores application-specific user data, which serves as the settings object.
   - The document ID for each user is their Firebase `uid`.
@@ -3335,7 +3339,7 @@ A user's settings document is deleted automatically by the system as part of the
   - `email`: String (Copied from Firebase Auth for convenience).
   - `defaultPortfolioId`: String (The `portfolioId` of the user's default portfolio).
   - `subscriptionStatus`: String (e.g., "FREE", "PREMIUM", default: "FREE").
-  - `notificationPreferences`: Object (e.g., `{ "email": true, "push": false }`).
+  - `notificationPreferences`: Array of `NotificationChannel` (A list of enabled notification channels. Example: `["EMAIL", "PUSH"]`).
   - `createdAt`: ISODateTime.
   - `modifiedAt`: ISODateTime.
 

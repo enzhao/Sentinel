@@ -110,18 +110,19 @@ components:
             # Section for Notification Preferences
             - type: "FormSection"
               props:
-                title: "Notification Preferences" #
+                title: "Notification Preferences"
               components:
-                - type: "Switch"
+                - type: "MultiSelect"
                   props:
-                    label: "Email Notifications"
+                    label: "Notification Channels"
+                    options: ["EMAIL", "PUSH"]
                   bindings:
-                    value: "userSettings.notificationPreferences.email" #
-                - type: "Switch"
-                  props:
-                    label: "Push Notifications"
-                  bindings:
-                    value: "userSettings.notificationPreferences.push" #
+                    selected: "userSettings.notificationPreferences"
+                  events:
+                    onUpdate:
+                      name: "USER_UPDATES_NOTIFICATION_PREFERENCES"
+                      payload:
+                        value: "$event.value"
 
       footer:
         - type: "FormActions"
