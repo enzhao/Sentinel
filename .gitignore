@@ -41,6 +41,9 @@ frontend/playwright-report/
 !.env.example
 !backend/.env.example
 !backend/.env.test
+!frontend/.env.development
+!frontend/.env.test
+!frontend/.env.prod-template
 
 # TypeScript
 # Ignore compiled TypeScript files if they are not in a build directory
@@ -85,8 +88,13 @@ htmlcov/
 # Ignore Firebase debug logs
 firebase-debug.log*
 
+# Ignore emulator config file, as it's generated locally
+firebase.json
+
 # Service account keys
 **/serviceAccountKey.json
 
 
 util/create_user.py
+
+
