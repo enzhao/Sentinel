@@ -1,9 +1,12 @@
 import json
+import os
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from firebase_admin import auth
 
-from .services.idempotency_service import idempotency_service
+# We will create our dependencies manually inside the middleware
+from .firebase_setup import get_db_client
+from .services.idempotency_service import IdempotencyService
 
 async def idempotency_middleware(request: Request, call_next):
     # Only apply to state-changing methods
@@ -26,15 +29,30 @@ async def idempotency_middleware(request: Request, call_next):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Authorization header is missing."},
             )
-        # Verify the token to get the user's UID
-        decoded_token = auth.verify_id_token(token)
-        user_id = decoded_token["uid"]
+        
+        # --- THIS IS THE FIX ---
+        # Add the same logic from get_current_user to handle test tokens
+        if os.environ.get("ENV") in ["dev", "test"]:
+            user_id = token
+        else:
+            # In production, verify the actual JWT from the client
+            decoded_token = auth.verify_id_token(token)
+            user_id = decoded_token["uid"]
+        # --- END OF FIX ---
+
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": f"Invalid authentication credentials: {e}"},
         )
     # --- End User Verification ---
+
+    # --- Dependency Injection for Middleware ---
+    # We create the service instance manually here because Depends() doesn't work
+    # in middleware signatures in the same way as in endpoints.
+    db_client = get_db_client()
+    idempotency_service = IdempotencyService(db_client)
+    # --- End Dependency Injection ---
 
     # 1. Check for a stored response
     stored_response_data = idempotency_service.get_idempotent_response(idempotency_key, user_id)
@@ -48,22 +66,24 @@ async def idempotency_middleware(request: Request, call_next):
     # 2. If no stored response, proceed with the actual endpoint
     response = await call_next(request)
 
-    # 3. Store the new response before returning it
-    # A response body can only be read once, so we need to handle it carefully
-    response_body = b""
-    async for chunk in response.body_iterator:
-        response_body += chunk
-    
-    response_data_to_store = {
-        "status_code": response.status_code,
-        "body": response_body.decode(),
-    }
-    idempotency_service.store_idempotent_response(idempotency_key, user_id, response_data_to_store)
+    # 3. Store the new response before returning it, but only for success codes
+    if 200 <= response.status_code < 300:
+        response_body = b""
+        async for chunk in response.body_iterator:
+            response_body += chunk
+        
+        response_data_to_store = {
+            "status_code": response.status_code,
+            "body": response_body.decode(),
+        }
+        idempotency_service.store_idempotent_response(idempotency_key, user_id, response_data_to_store)
 
-    # We need to construct a new response because the body of the original
-    # has been consumed by the iterator.
-    return JSONResponse(
-        status_code=response.status_code,
-        content=json.loads(response_body.decode()) if response_body else None,
-        headers=dict(response.headers),
-    )
+        # We need to construct a new response because the body of the original
+        # has been consumed by the iterator.
+        return JSONResponse(
+            status_code=response.status_code,
+            content=json.loads(response_body.decode()) if response_body else None,
+            headers=dict(response.headers),
+        )
+
+    return response

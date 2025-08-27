@@ -40,6 +40,7 @@ frontend/playwright-report/
 # Allow example and test .env files as they contain no secrets.
 !.env.example
 !backend/.env.example
+!backend/.env.dev
 !backend/.env.test
 !frontend/.env.development
 !frontend/.env.test

@@ -4,7 +4,7 @@ These models are used for request and response validation.
 """
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, RootModel
 from enum import Enum
 
 # #############################################################################
@@ -95,9 +95,9 @@ class Error(BaseModel):
 # USER MODELS
 # #############################################################################
 
-class NotificationPreferences(BaseModel):
+class NotificationPreferences(RootModel):
     """ Reference: product_spec.md#921-primary-stored-models """
-    __root__: List[NotificationChannel]
+    root: List[NotificationChannel]
 
 class User(BaseModel):
     """ Reference: product_spec.md#82-data-models """
@@ -164,7 +164,7 @@ class PortfolioSummary(BaseModel):
 
 class PortfolioUpdateRequest(BaseModel):
     """ Reference: product_spec.md#3331-p_3000-portfolio-update-manual """
-    name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=127)
     description: Optional[str] = Field(None, max_length=500)
     defaultCurrency: Currency
     cashReserve: CashReserve

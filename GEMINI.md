@@ -35,7 +35,7 @@ I expect you to adopt an iterative, vertical slice, feature-driven approach. I w
 1. **Plan:** Outline the specific backend and frontend components to be built, and the tests to be written.
 2. **Reference to the product_spec.md:** Always refer to the product_spec.md for detailed requirements and specifications for each feature. All generated code must contain references back to the relevant sections in product_spec.md for traceability in their comments or docstrings.
 3. **Implement Backend:** Implement the API endpoints, business logic, and data models.
-4. **Test Backend:** Ensure the Firebase Emulators are running. Write and run unit and integration tests for the backend components using the command `ENV=local venv/bin/pytest --cov=src backend/tests/`. If any tests fail, fix the issues before proceeding.
+4. **Test Backend:** Ensure the Firebase Emulators are running. Write and run unit and integration tests for the backend components using the command `ENV=dev venv/bin/pytest --cov=src backend/tests/`. If any tests fail, fix the issues before proceeding.
 5. **Implement Frontend:** Implement the UI views and components, integrating with the newly built backend.
 6. **Test Frontend:** Ensure the Firebase Emulators are running. Write and run unit tests and integration tests for the frontend components using the command `npm --prefix frontend run test:unit`. If any tests fail, fix the issues before proceeding.
 7. **End to End Testing:** Write and perform end-to-end testing of the entire feature to ensure it works as expected. If any tests fail, fix the issues before proceeding.

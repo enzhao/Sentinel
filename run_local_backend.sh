@@ -14,7 +14,7 @@ else
 fi
 
 # Set up the environment variables
-export ENV=local
+export ENV=dev
 echo "Setting environment to $ENV"
 
 echo "🔍 Running tests..."

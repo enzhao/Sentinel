@@ -4,7 +4,8 @@ These models represent the internal data structure and may differ from the API m
 """
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from uuid import UUID
 from enum import Enum
 
 # Import enums from the api models to avoid duplication
@@ -32,18 +33,23 @@ class CurrentUser(BaseModel):
 # #############################################################################
 # INTERNAL DB MODELS
 # #############################################################################
-
 class UserDB(BaseModel):
     """ Represents a user document in the 'users' collection. """
     """ Reference: product_spec.md#82-data-models """
     uid: str = Field(..., description="Firebase Auth UID, the document ID.")
     username: str
     email: str
-    defaultPortfolioId: Optional[str] = None # UUID as string
+    defaultPortfolioId: Optional[UUID] = None # Changed to UUID
     subscriptionStatus: SubscriptionStatus = SubscriptionStatus.FREE
     notificationPreferences: List[NotificationChannel] = Field(default_factory=lambda: [NotificationChannel.EMAIL])
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     modifiedAt: datetime = Field(default_factory=datetime.utcnow)
+    
+    @field_validator("notificationPreferences", mode="before")
+    def validate_notification_preferences(cls, value):
+        if isinstance(value, list):
+            return [NotificationChannel(v) if isinstance(v, str) else v for v in value]
+        return value
 
 class CashReserveDB(BaseModel):
     """ Reference: product_spec.md#321-primary-stored-models """
@@ -53,13 +59,13 @@ class CashReserveDB(BaseModel):
 class PortfolioDB(BaseModel):
     """ Represents a portfolio document in the 'portfolios' collection. """
     """ Reference: product_spec.md#321-primary-stored-models """
-    portfolioId: str = Field(..., description="Unique UUID, the document ID.")
+    portfolioId: UUID = Field(..., description="Unique UUID, the document ID.") # Changed to UUID
     userId: str = Field(..., description="Firebase Auth UID of the owner.")
     name: str
     description: Optional[str] = None
     defaultCurrency: Currency
     cashReserve: CashReserveDB
-    ruleSetId: Optional[str] = None # UUID as string
+    ruleSetId: Optional[UUID] = None # Changed to UUID
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     modifiedAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -80,7 +86,7 @@ class DailyPortfolioSnapshotDB(BaseModel):
 class LotDB(BaseModel):
     """ Represents a lot object embedded in a holding's 'lots' array. """
     """ Reference: product_spec.md#521-primary-stored-models """
-    lotId: str # UUID as string
+    lotId: UUID # Changed to UUID
     purchaseDate: datetime
     quantity: float
     purchasePrice: float
@@ -90,8 +96,8 @@ class LotDB(BaseModel):
 class HoldingDB(BaseModel):
     """ Represents a holding document in the 'holdings' collection. """
     """ Reference: product_spec.md#421-primary-stored-models """
-    holdingId: str = Field(..., description="Unique UUID, the document ID.")
-    portfolioId: str = Field(..., description="UUID of the parent portfolio.")
+    holdingId: UUID = Field(..., description="Unique UUID, the document ID.") # Changed to UUID
+    portfolioId: UUID = Field(..., description="UUID of the parent portfolio.") # Changed to UUID
     userId: str = Field(..., description="Firebase Auth UID of the owner.")
     ticker: str
     ISIN: Optional[str] = None
@@ -101,7 +107,7 @@ class HoldingDB(BaseModel):
     currency: Currency
     annualCosts: Optional[float] = None
     lots: List[LotDB] = []
-    ruleSetId: Optional[str] = None # UUID as string
+    ruleSetId: Optional[UUID] = None # Changed to UUID
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     modifiedAt: datetime = Field(default_factory=datetime.utcnow)
 
@@ -133,14 +139,14 @@ class DailyHoldingSnapshotDB(BaseModel):
 class ConditionDB(BaseModel):
     """ Represents a condition object embedded in a rule. """
     """ Reference: product_spec.md#621-stored-data-models """
-    conditionId: str # UUID as string
+    conditionId: UUID # Changed to UUID
     type: ConditionType
     parameters: Dict[str, Any]
 
 class RuleDB(BaseModel):
     """ Represents a rule object embedded in a RuleSet. """
     """ Reference: product_spec.md#621-stored-data-models """
-    ruleId: str # UUID as string
+    ruleId: UUID # Changed to UUID
     ruleType: RuleType
     logicalOperator: LogicalOperator = LogicalOperator.AND
     conditions: List[ConditionDB]
@@ -149,9 +155,9 @@ class RuleDB(BaseModel):
 class RuleSetDB(BaseModel):
     """ Represents a ruleset document in the 'rulesets' collection. """
     """ Reference: product_spec.md#621-stored-data-models """
-    ruleSetId: str = Field(..., description="Unique UUID, the document ID.")
+    ruleSetId: UUID = Field(..., description="Unique UUID, the document ID.") # Changed to UUID
     userId: str = Field(..., description="Firebase Auth UID of the owner.")
-    parentId: str = Field(..., description="The portfolioId or holdingId this ruleset belongs to.")
+    parentId: UUID = Field(..., description="The portfolioId or holdingId this ruleset belongs to.") # Changed to UUID
     parentType: ParentType
     rules: List[RuleDB]
     createdAt: datetime = Field(default_factory=datetime.utcnow)
@@ -179,11 +185,11 @@ class TaxInfoDB(BaseModel):
 class AlertDB(BaseModel):
     """ Represents an alert document in the 'alerts' collection. """
     """ Reference: product_spec.md#72-data-models """
-    alertId: str = Field(..., description="Unique UUID, the document ID.")
+    alertId: UUID = Field(..., description="Unique UUID, the document ID.") # Changed to UUID
     userId: str
-    holdingId: str
-    ruleSetId: str
-    ruleId: str
+    holdingId: UUID # Changed to UUID
+    ruleSetId: UUID # Changed to UUID
+    ruleId: UUID # Changed to UUID
     triggeredAt: datetime
     isRead: bool = False
     marketDataSnapshot: MarketDataSnapshotDB
@@ -199,4 +205,3 @@ class IdempotencyKeyDB(BaseModel):
     createdAt: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the original request.")
     response: Dict[str, Any] = Field(..., description="The JSON response body of the original request.")
     status_code: int = Field(..., description="The HTTP status code of the original request.")
-

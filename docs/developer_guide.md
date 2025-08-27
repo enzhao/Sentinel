@@ -144,7 +144,7 @@ To test the production container on your local machine, follow these steps from 
     ```
 2.  **Run the container**:
     ```bash
-    docker run --rm -p 8000:8000 -e ENV=local -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json sentinel-backend
+    docker run --rm -p 8000:8000 -e ENV=dev -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json sentinel-backend
     ```
 
 ## 5. Cloud Deployment & Operations ☁️

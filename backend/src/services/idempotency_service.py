@@ -1,13 +1,13 @@
 import datetime
 from typing import Optional, Dict, Any
-from ..firebase_setup import db
 
 class IdempotencyService:
     """
     Handles the storage and retrieval of idempotent responses in Firestore.
     """
-    def __init__(self):
-        self.collection = db.collection('idempotencyKeys')
+    def __init__(self, db_client):
+        self.db = db_client
+        self.collection = self.db.collection('idempotencyKeys')
 
     def get_idempotent_response(self, idempotency_key: str, user_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -43,5 +43,4 @@ class IdempotencyService:
         }
         doc_ref.set(doc_data)
 
-# Instantiate the service for use in the middleware
-idempotency_service = IdempotencyService()
+

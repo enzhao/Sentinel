@@ -38,23 +38,6 @@ tasks:
       - echo "✅ Message files generated."
     silent: false
 
-  generate-openapi:
-    desc: "Generates the OpenAPI spec (api/sentinel-invest-backend.yaml) from the FastAPI app."
-    cmds:
-      - echo "🐍 Generating OpenAPI specification from the application code..."
-      - backend/venv/bin/python util/generate_openapi.py
-      - echo "✅ OpenAPI specification generated successfully."
-    silent: false
-
-  backend:setup-venv:
-    desc: "Creates the Python virtual environment in the backend directory."
-    dir: backend
-    cmds:
-      - echo "🐍 Creating Python virtual environment..."
-      - python3 -m venv venv
-      - echo "✅ Virtual environment created at backend/venv."
-    silent: false
-
   backend:compile-deps:
     desc: "Generates requirements.txt from .in files using pip-compile."
     dir: backend
@@ -104,7 +87,7 @@ tasks:
       - echo "🚀 Running backend container..."
       - >
         docker run --rm -p 8000:8000 
-        -e ENV=local 
+        -e ENV=dev 
         -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json 
         -v $(pwd)/backend/.env:/app/.env 
         sentinel-backend

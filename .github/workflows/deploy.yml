@@ -39,7 +39,7 @@ jobs:
           npm install -g firebase-tools
           # starts the emulators, runs tests with the correct ENV, and then shuts down
           # the project id for the emulator can be found in the file backend/src/firebase_setup.py
-          firebase emulators:exec --project=sentinel-dev "source venv/bin/activate && ENV=dev pytest --cov=src"
+          firebase emulators:exec --project=sentinel-invest "source venv/bin/activate && ENV=dev pytest --cov=src"
 
       # --- AUTHENTICATION NOW HAPPENS AFTER TESTS ---
       - name: 🔐 Authenticate to GCP for deployment

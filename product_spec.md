@@ -3347,8 +3347,6 @@ A user's settings document is deleted automatically by the system as part of the
 
 #### 9.3.1. US_1000: User Settings Creation
 
-#### 9.3.1. US_1000: User Settings Creation
-
 - **Description**: This rule is triggered by the successful completion of the `U_1000: User Provisioning` process. After a user identity is created in Firebase Authentication, the backend immediately creates a corresponding `User` document in the `users` collection. This process also includes creating a default portfolio for the user and linking its ID in the new `User` document.
 - **Process**: Upon receiving the new user's `uid` from the authentication service, the backend initiates a transaction to create a default portfolio document in the `portfolios` collection. Once the portfolio is created and its `portfolioId` is obtained, the backend creates the `User` document with the provided email, username, and the newly created `defaultPortfolioId`. This ensures that every user has a valid settings object and a default portfolio from the moment their account is created.
 - **Success Response**: A new `User` document and a new `Portfolio` document are created in Firestore.

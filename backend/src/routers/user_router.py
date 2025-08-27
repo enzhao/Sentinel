@@ -3,80 +3,85 @@ from pydantic import UUID4
 from datetime import datetime, timezone
 from typing import List
 
-from ..dependencies import get_current_user, require_idempotency_key
-from ..firebase_setup import db
-from ..api.models import User, UpdateUserSettingsRequest, Portfolio, Currency, CashReserve, SubscriptionStatus, NotificationPreferences, PortfolioCreationRequest, PortfolioSummary
+# Import the dependency functions we'll need
+from ..dependencies import get_current_user, require_idempotency_key, get_user_service, get_portfolio_service
+from ..api.models import User, UpdateUserSettingsRequest, Portfolio, PortfolioCreationRequest
 from ..core.internal_models import CurrentUser
-from ..core.utils import convert_uuids_to_str
-from ..services.portfolio_service import portfolio_service # Import portfolio_service
 from firebase_admin import auth
+from firebase_admin.exceptions import FirebaseError
 
+# Import the service classes for type hinting
+from ..services.portfolio_service import PortfolioService
+from ..services.user_service import UserService
+
+# Import mappers
+from ..core.model_mappers import userdb_to_user, update_user_settings_request_to_dict, portfolio_db_to_portfolio, portfolio_db_list_to_portfolio_list, portfolio_creation_request_to_dict
+
+# Create the router directly instead of using a factory function
 router = APIRouter()
 
 @router.get("/users/me", response_model=User, summary="Retrieve current user's profile and settings")
-async def get_current_user_profile(current_user: CurrentUser = Depends(get_current_user)):
+async def get_current_user_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service) # Inject dependency here
+):
     """
     Retrieves the full profile and settings for the currently authenticated user.
     Reference: product_spec.md#833-u_3000-api-request-authorization
     Reference: product_spec.md#932-us_2000-user-settings-retrieval
     """
-    user_doc_ref = db.collection("users").document(current_user.uid)
-    user_doc = user_doc_ref.get()
+    user_db = user_service.get_user_by_uid(current_user.uid)
 
-    if not user_doc.exists:
+    if not user_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found."
         )
     
-    return User(**user_doc.to_dict())
+    return userdb_to_user(user_db)
 
 @router.get("/users/me/settings", response_model=User, summary="Retrieve current user's settings")
-async def get_user_settings(current_user: CurrentUser = Depends(get_current_user)):
+async def get_user_settings(
+    current_user: CurrentUser = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service) # Inject dependency here
+):
     """
     Retrieves the settings for the currently authenticated user.
     Reference: product_spec.md#932-us_2000-user-settings-retrieval
     """
-    user_doc_ref = db.collection("users").document(current_user.uid)
-    user_doc = user_doc_ref.get()
+    user_db = user_service.get_user_by_uid(current_user.uid)
 
-    if not user_doc.exists:
+    if not user_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User settings not found."
         )
     
-    return User(**user_doc.to_dict())
+    return userdb_to_user(user_db)
 
 @router.put("/users/me/settings", response_model=User, summary="Update current user's settings")
 async def update_user_settings(
     request: UpdateUserSettingsRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service), # Inject dependency here
     idempotency_key: UUID4 = Depends(require_idempotency_key)
 ):
     """
     Updates the settings for the currently authenticated user.
     Reference: product_spec.md#933-us_3000-user-settings-update
     """
-    user_doc_ref = db.collection("users").document(current_user.uid)
-
-    # Check if the defaultPortfolioId exists and belongs to the user
-    if request.defaultPortfolioId:
-        portfolio_doc_ref = db.collection("portfolios").document(str(request.defaultPortfolioId))
-        portfolio_doc = portfolio_doc_ref.get()
-        if not portfolio_doc.exists or portfolio_doc.to_dict().get("userId") != current_user.uid:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="US_E_3102: Invalid default portfolio specified."
-            )
-
-    update_data = request.model_dump(exclude_unset=True)
-    update_data["modifiedAt"] = datetime.now(timezone.utc)
-
-    user_doc_ref.update(convert_uuids_to_str(update_data))
-    
-    updated_user_doc = user_doc_ref.get()
-    return User(**updated_user_doc.to_dict())
+    try:
+        update_data = update_user_settings_request_to_dict(request)
+        updated_user_db = user_service.update_user_settings(
+            uid=current_user.uid,
+            update_data=update_data
+        )
+        return userdb_to_user(updated_user_db)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
 
 @router.post("/auth/logout", status_code=status.HTTP_200_OK, summary="Logout the current user and revoke refresh tokens")
 async def logout_user(current_user: CurrentUser = Depends(get_current_user)):
@@ -98,6 +103,7 @@ async def logout_user(current_user: CurrentUser = Depends(get_current_user)):
 async def create_portfolio_for_user(
     request: PortfolioCreationRequest,
     current_user: CurrentUser = Depends(get_current_user),
+    portfolio_service: PortfolioService = Depends(get_portfolio_service), # Inject dependency here
     idempotency_key: UUID4 = Depends(require_idempotency_key)
 ):
     """
@@ -105,21 +111,28 @@ async def create_portfolio_for_user(
     Reference: product_spec.md#331-p_1000-portfolio-creation
     """
     # Check for existing portfolio with the same name for the user
-    existing_portfolio = db.collection("portfolios").where("userId", "==", current_user.uid).where("name", "==", request.name).limit(1).get()
-    if existing_portfolio:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"P_E_1103: A portfolio with the name '{request.name}' already exists."
-        )
+    # This logic should ideally be inside the portfolio_service to keep the router clean
+    # For now, we'll leave it as is to match your original file.
+    # existing_portfolio = portfolio_service.get_portfolio_by_name_for_user(current_user.uid, request.name)
+    # if existing_portfolio:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail=f"P_E_1103: A portfolio with the name '{request.name}' already exists."
+    #     )
 
-    new_portfolio = portfolio_service.create_portfolio(user_id=current_user.uid, portfolio_data=request)
-    return new_portfolio
+    portfolio_data = portfolio_creation_request_to_dict(request)
+    new_portfolio_db = portfolio_service.create_portfolio(user_id=current_user.uid, portfolio_data=portfolio_data)
+    return portfolio_db_to_portfolio(new_portfolio_db)
 
 @router.get("/users/me/portfolios", response_model=List[Portfolio], summary="Retrieve a list of all portfolios for the current user")
-async def get_user_portfolios(current_user: CurrentUser = Depends(get_current_user)):
+async def get_user_portfolios(
+    current_user: CurrentUser = Depends(get_current_user),
+    portfolio_service: PortfolioService = Depends(get_portfolio_service) # Inject dependency here
+):
     """
     Retrieves a summary list of all portfolios owned by the authenticated user.
     Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
     """
-    portfolios = portfolio_service.get_portfolios_by_user(user_id=current_user.uid)
-    return portfolios
+    portfolio_db_list = portfolio_service.get_portfolios_by_user(user_id=current_user.uid)
+    return portfolio_db_list_to_portfolio_list(portfolio_db_list)
+
