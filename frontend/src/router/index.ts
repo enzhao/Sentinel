@@ -27,9 +27,9 @@ export const createSentinelRouter = (): Router => {
       return next({ name: 'login' })
     }
 
-    // 2. If the user is logged in, prevent them from accessing the home or login
-    //    pages, and redirect them to the dashboard.
-    if (isAuthenticated && ['home', 'login'].includes(to.name as string)) {
+    // 2. If the user is logged in, prevent them from accessing the login page,
+    //    and redirect them to the dashboard. The home page is now accessible.
+    if (isAuthenticated && to.name === 'login') {
       return next({ name: 'dashboard' })
     }
 

@@ -8,29 +8,29 @@
             v-model="formState.email"
             label="Email"
             type="email"
+            variant="outlined"
+            density="compact"
             required
-            outlined
-            dense
             class="mb-4"
           ></v-text-field>
           <v-text-field
             v-model="formState.password"
             label="Password"
             type="password"
+            variant="outlined"
+            density="compact"
             required
-            outlined
-            dense
             class="mb-4"
           ></v-text-field>
-          <v-alert v-if="formState.error" type="error" dense dismissible class="mb-4">
+          <v-alert v-if="formState.error" type="error" density="compact" dismissible class="mb-4">
             {{ formState.error }}
           </v-alert>
           <v-card-actions>
             <v-spacer></v-spacer>
-            <v-btn color="blue darken-1" text @click="cancelLogin">
+            <v-btn color="blue-darken-1" variant="text" @click="cancelLogin">
               Cancel
             </v-btn>
-            <v-btn color="blue darken-1" type="submit" :loading="loading">
+            <v-btn color="blue-darken-1" type="submit" :loading="loading" variant="elevated">
               Login
             </v-btn>
           </v-card-actions>
@@ -56,15 +56,17 @@ const formState = reactive({
 const router = useRouter();
 const authStore = useAuthStore(); // <-- Get the store instance
 
-const emit = defineEmits(['user-submits-login', 'user-clicks-cancel']);
-
 const submitLogin = async () => {
   loading.value = true;
   formState.error = null;
   try {
     // Call the centralized store action
-    await authStore.login(formState.email, formState.password);
-    emit('user-submits-login');
+    const success = await authStore.login(formState.email, formState.password);
+    if (success) {
+      // On successful login, the router's beforeEach guard will handle
+      // redirecting to the dashboard.
+      router.push({ name: 'dashboard' });
+    }
   } catch (error: any) {
     console.error('Login error:', error.code, error.message);
     switch (error.code) {
@@ -84,7 +86,6 @@ const submitLogin = async () => {
 };
 
 const cancelLogin = () => {
-  emit('user-clicks-cancel');
   router.push('/');
 };
 </script>

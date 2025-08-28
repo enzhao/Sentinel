@@ -2,8 +2,8 @@
   <v-alert
     v-if="message"
     type="error"
-    dense
-    text
+    variant="text"
+    density="compact"
     class="my-4"
   >
     {{ message }}

@@ -67,8 +67,11 @@ async def get_current_user(authorization: str = Header(..., alias="Authorization
         
         # --- THIS IS THE KEY CHANGE ---
         # If we are in a test environment, we treat the token as a simple UID
-        # and create a mock "decoded_token" object.
-        if os.environ.get("ENV") in ["dev", "test"]:
+        # and create a mock "decoded_token" object. This allows tests to run
+        # without needing valid JWTs.
+        # The 'dev' environment now uses the real verification against the emulator
+        # to better mimic production behavior.
+        if os.environ.get("ENV") == "test":
             uid = token
             # Create a mock token that has the same structure as a real one
             decoded_token = {
@@ -76,7 +79,8 @@ async def get_current_user(authorization: str = Header(..., alias="Authorization
                 'email': f'{uid}@example.com' 
             }
         else:
-            # In production, verify the actual JWT from the client
+            # In 'dev' or 'production', verify the actual JWT.
+            # The Admin SDK is automatically configured to use the emulator in 'dev' mode.
             decoded_token = auth.verify_id_token(token)
         # --- END OF CHANGE ---
         

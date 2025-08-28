@@ -5,73 +5,54 @@
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { auth } from '@/plugins/firebase'; // Assuming firebase.ts exports auth
-import { API_BASE_URL } from '@/config'; // Assuming config.ts defines API_BASE_URL
-
-// Define interfaces for the data models
-interface UserSettings {
-  userId: string;
-  email: string;
-  defaultPortfolioId: string | null;
-  notificationPreferences: ('EMAIL' | 'PUSH')[];
-  createdAt: string;
-  modifiedAt: string;
-}
-
-interface PortfolioSummary {
-  portfolioId: string;
-  name: string;
-}
+import { auth } from '@/plugins/firebase';
+import { API_BASE_URL } from '@/config';
+import type { User, UpdateUserSettingsRequest, Portfolio } from '@/api/models';
 
 export const useUserSettingsStore = defineStore('userSettings', () => {
-  const userSettings = ref<UserSettings | null>(null);
-  const portfolios = ref<PortfolioSummary[]>([]);
+  const userSettings = ref<User | null>(null);
+  const portfolios = ref<Portfolio[]>([]);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
   /**
    * Fetches the user's settings and their portfolios from the backend.
-   * References: product_spec.md Section 9.1.1 (S_1000)
+   * References: product_spec.md Section 9.3.2 (US_2000)
    */
   const fetchUserSettings = async () => {
+    if (userSettings.value || isLoading.value) return;
+
     isLoading.value = true;
     error.value = null;
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
-        throw new Error('Authentication token not found.');
+        throw new Error('U_E_3101: Authentication token not found.');
       }
 
-      // Fetch user settings
-      const settingsResponse = await fetch(`${API_BASE_URL}/users/me/settings`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (!settingsResponse.ok) {
-        const errorData = await settingsResponse.json();
-        throw new Error(errorData.message || 'Failed to fetch user settings.');
-      }
-      userSettings.value = await settingsResponse.json();
+      console.log('Fetching user settings and portfolios...');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      // Use Promise.all to fetch in parallel
+      const [settingsResponse, portfoliosResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/users/me/settings`, { headers }),
+        fetch(`${API_BASE_URL}/users/me/portfolios`, { headers })
+      ]);
 
-      // Fetch portfolios for the dropdown
-      const portfoliosResponse = await fetch(`${API_BASE_URL}/users/me/portfolios`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (!portfoliosResponse.ok) {
-        const errorData = await portfoliosResponse.json();
-        throw new Error(errorData.message || 'Failed to fetch portfolios.');
-      }
-      portfolios.value = (await portfoliosResponse.json()).map((p: any) => ({
-        portfolioId: p.portfolioId,
-        name: p.name,
-      }));
+      if (!settingsResponse.ok) throw new Error((await settingsResponse.json()).detail || 'Failed to fetch user settings.');
+      if (!portfoliosResponse.ok) throw new Error((await portfoliosResponse.json()).detail || 'Failed to fetch portfolios.');
+      
+      userSettings.value = await settingsResponse.json() as User;
+      // The backend endpoint returns the full Portfolio object, so we cast to that type.
+      portfolios.value = await portfoliosResponse.json() as Portfolio[];
 
+      console.log('✅ User settings and portfolios fetched successfully.');
+      console.log('User Settings:', userSettings.value);
     } catch (err: any) {
-      console.error('Error fetching user settings:', err);
+      console.error('Error in fetchUserSettings action:', err);
       error.value = err.message || 'An unexpected error occurred.';
+      userSettings.value = null;
+      portfolios.value = [];
     } finally {
       isLoading.value = false;
     }
@@ -79,16 +60,16 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
   /**
    * Updates the user's settings on the backend.
-   * References: product_spec.md Section 9.1.2 (S_2000)
+   * References: product_spec.md Section 9.3.3 (US_3000)
    * @param updatedSettings The partial settings object to update.
    */
-  const updateUserSettings = async (updatedSettings: Partial<UserSettings>) => {
+  const updateUserSettings = async (updatedSettings: UpdateUserSettingsRequest) => {
     isLoading.value = true;
     error.value = null;
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
-        throw new Error('Authentication token not found.');
+        throw new Error('U_E_3101: Authentication token not found.');
       }
 
       const response = await fetch(`${API_BASE_URL}/users/me/settings`, {
@@ -103,11 +84,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user settings.');
+        throw new Error(errorData.detail || 'Failed to update user settings.');
       }
 
       // Update local state with the new settings
-      userSettings.value = { ...userSettings.value, ...updatedSettings } as UserSettings;
+      userSettings.value = await response.json() as User;
 
     } catch (err: any) {
       console.error('Error updating user settings:', err);
@@ -117,6 +98,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     }
   };
 
+  const clearUserSettings = () => {
+    userSettings.value = null;
+    portfolios.value = [];
+  }
+
   return {
     userSettings,
     portfolios,
@@ -124,5 +110,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     error,
     fetchUserSettings,
     updateUserSettings,
+    clearUserSettings,
   };
 });

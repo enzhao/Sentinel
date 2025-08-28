@@ -2,8 +2,6 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import type { User as FirebaseUser } from 'firebase/auth'
-import router from '@/router'
-import { useUserStore } from './user'
 
 // Reference: product_spec.md Chapter 8
 
@@ -12,7 +10,6 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => user.value !== null)
   const loading = ref(true)
   const auth = getAuth()
-  const userStore = useUserStore()
 
   function setAuthStatus(status: boolean) {
     // Reference: product_spec.md Chapter 8
@@ -29,11 +26,6 @@ export const useAuthStore = defineStore('auth', () => {
     // This action sets the Firebase user object in the store.
     // It is called by the onAuthStateChanged listener.
     user.value = firebaseUser;
-    if (firebaseUser) {
-      userStore.setUser(firebaseUser.displayName || firebaseUser.email || 'User', firebaseUser.email || '', null)
-    } else {
-      userStore.clearUser()
-    }
   }
 
   function setLoading(isLoading: boolean) {
@@ -67,8 +59,6 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await signInWithEmailAndPassword(auth, email, password)
       // The onAuthStateChanged listener will handle updating the state.
-      // After it's done, we navigate to the dashboard.
-      router.push({ name: 'dashboard' }) 
       return true
     } catch (error: any) {
       console.error('Login failed:', error.message)
@@ -83,7 +73,6 @@ export const useAuthStore = defineStore('auth', () => {
     // and the router's beforeEach guard will handle redirection to the home page.
     try {
       await signOut(auth)
-      router.push({ name: 'home' }) // Explicitly navigate to home after logout
       return true
     } catch (error: any) {
       console.error('Logout failed:', error.message)

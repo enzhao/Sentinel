@@ -3,7 +3,7 @@ pydantic
 pydantic-settings
 pydantic[email]
 google-cloud-firestore
-firebase-admin
+firebase-admin>=7.1.0
 httpx
 pandas
 finta

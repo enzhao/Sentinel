@@ -21,7 +21,6 @@
               label="Notification Channels"
               :options="['EMAIL', 'PUSH']"
               v-model="localUserSettings.notificationPreferences"
-              @update:modelValue="(value) => handleNotificationPreferencesUpdate(value as ('EMAIL' | 'PUSH')[])"
             />
           </FormSection>
         </SettingsForm>
@@ -32,8 +31,8 @@
       <FormActions
         v-if="localUserSettings"
         :actions="[
-          { label: 'Cancel', event: 'USER_CLICKS_CANCEL', variant: 'text' },
-          { label: 'Save Changes', event: 'USER_CLICKS_SAVE', variant: 'contained', color: 'primary' },
+          { id: 'cancelButton', label: 'Cancel', event: 'USER_CLICKS_CANCEL', variant: 'text' },
+          { id: 'saveButton', label: 'Save Changes', event: 'USER_CLICKS_SAVE', variant: 'elevated', color: 'primary' },
         ]"
         @USER_CLICKS_CANCEL="handleCancel"
         @USER_CLICKS_SAVE="handleSave"
@@ -50,6 +49,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserSettingsStore } from '@/stores/userSettings';
+import type { UpdateUserSettingsRequest, NotificationChannel } from '@/api/models';
 import { useAuthStore } from '@/stores/auth'; // Assuming an auth store exists for logout
 
 // Components
@@ -66,31 +66,25 @@ const authStore = useAuthStore();
 const router = useRouter();
 
 // Local state to hold form data, initialized from the store
-const localUserSettings = ref<any>(null);
+const localUserSettings = ref<{
+  defaultPortfolioId: string;
+  notificationPreferences: NotificationChannel[];
+} | null>(null);
 
 // Watch for changes in userSettingsStore.userSettings and update localUserSettings
 watch(() => userSettingsStore.userSettings, (newSettings) => {
   if (newSettings) {
-    localUserSettings.value = { ...newSettings };
+    localUserSettings.value = { 
+      defaultPortfolioId: newSettings.defaultPortfolioId,
+      notificationPreferences: [...newSettings.notificationPreferences]
+    };
   }
 }, { immediate: true });
 
-onMounted(() => {
-  userSettingsStore.fetchUserSettings();
-});
-
-const handleNotificationPreferencesUpdate = (value: ('EMAIL' | 'PUSH')[]) => {
-  if (localUserSettings.value) {
-    localUserSettings.value.notificationPreferences = value;
-  }
-};
-
 const handleSave = async () => {
   if (localUserSettings.value) {
-    await userSettingsStore.updateUserSettings({
-      defaultPortfolioId: localUserSettings.value.defaultPortfolioId,
-      notificationPreferences: localUserSettings.value.notificationPreferences,
-    });
+    // The localUserSettings ref already has the correct shape for the request
+    await userSettingsStore.updateUserSettings(localUserSettings.value);
     if (!userSettingsStore.error) {
       // On success, navigate back or show a success message
       router.back(); // FLOW_MANAGE_USER_SETTINGS -> Success -> NAVIGATE_BACK

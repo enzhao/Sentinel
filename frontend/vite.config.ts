@@ -11,8 +11,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
+        // Target the backend server's origin.
         target: 'http://localhost:8000',
         changeOrigin: true,
+        // Rewrite the path to include the API version prefix.
+        rewrite: (path) => path.replace(/^\/api/, '/api/v1'),
       },
     },
   },

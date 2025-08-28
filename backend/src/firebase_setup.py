@@ -57,3 +57,4 @@ def get_db_client():
     if not firebase_admin._apps:
         initialize_firebase_app()
     return firestore.client()
+

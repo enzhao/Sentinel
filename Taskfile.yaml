@@ -43,9 +43,10 @@ tasks:
     dir: backend
     cmds:
       - echo "🐍 Compiling production dependencies..."
-      - venv/bin/pip-compile requirements.in
+      - pip-compile requirements.in
       - echo "🐍 Compiling development dependencies..."
-      - venv/bin/pip-compile requirements-dev.in
+      # Use the generated requirements.txt as a constraint to ensure compatibility
+      - pip-compile --constraint requirements.txt requirements-dev.in
       - echo "✅ Dependency files generated."
     silent: false
 
@@ -54,7 +55,7 @@ tasks:
     dir: backend
     cmds:
       - echo "🐍 Installing/syncing Python dependencies..."
-      - venv/bin/pip-sync requirements.txt requirements-dev.txt
+      - pip-sync requirements.txt requirements-dev.txt
       - echo "✅ Dependencies are up to date."
     silent: false
 
@@ -101,3 +102,10 @@ tasks:
       - task: backend:run-docker
     silent: false
 
+  user:provision:
+    desc: "Provisions a new user (asdf@asdf.com) in the Firebase emulator for manual testing."
+    cmds:
+      - echo "👤 Provisioning user asdf@asdf.com..."
+      - venv/bin/python util/create_user.py --email asdf@asdf.com --password asdfasdf --username asdf --env dev
+      - echo "✅ User provisioned successfully."
+    silent: false

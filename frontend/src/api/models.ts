@@ -7,6 +7,9 @@
 // ENUMS
 // #############################################################################
 
+/** Reference: product_spec.md#9.2.1-primary-stored-models */
+export type NotificationChannel = "EMAIL" | "PUSH";
+
 /** Reference: product_spec.md#82-data-models */
 export enum SubscriptionStatus {
     FREE = "FREE",
@@ -105,19 +108,13 @@ export interface Error {
 // #############################################################################
 
 /** Reference: product_spec.md#82-data-models */
-export interface NotificationPreferences {
-    email: boolean;
-    push: boolean;
-}
-
-/** Reference: product_spec.md#82-data-models */
 export interface User {
     readonly uid: string;
     username: string;
     readonly email: string;
     defaultPortfolioId: UUID;
     subscriptionStatus: SubscriptionStatus;
-    notificationPreferences: NotificationPreferences;
+    notificationPreferences: NotificationChannel[];
     readonly createdAt: ISODateTime;
     readonly modifiedAt: ISODateTime;
 }
@@ -125,7 +122,7 @@ export interface User {
 /** Reference: product_spec.md#82-data-models */
 export interface UpdateUserSettingsRequest {
     defaultPortfolioId: UUID;
-    notificationPreferences?: NotificationPreferences;
+    notificationPreferences?: NotificationChannel[];
 }
 
 // #############################################################################

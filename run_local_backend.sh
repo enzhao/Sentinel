@@ -26,6 +26,4 @@ echo "🐳 Building Docker image..."
 docker build -t sentinel-backend ./backend
 
 echo "🚀 Running container..."
-exec docker run --rm -p 8000:8000 -e ENV=local -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json -v $(pwd)/backend/.env:/app/.env sentinel-backend
-
-
+exec docker run --rm -p 8000:8000 -e ENV=dev -v $(pwd)/backend/serviceAccountKey.json:/app/serviceAccountKey.json -v $(pwd)/backend/.env:/app/.env sentinel-backend

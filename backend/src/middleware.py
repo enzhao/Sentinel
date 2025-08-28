@@ -32,10 +32,12 @@ async def idempotency_middleware(request: Request, call_next):
         
         # --- THIS IS THE FIX ---
         # Add the same logic from get_current_user to handle test tokens
-        if os.environ.get("ENV") in ["dev", "test"]:
+        # The 'dev' environment now uses real verification against the emulator.
+        if os.environ.get("ENV") == "test":
             user_id = token
         else:
-            # In production, verify the actual JWT from the client
+            # In 'dev' or 'production', verify the actual JWT.
+            # The Admin SDK is automatically configured to use the emulator in 'dev' mode.
             decoded_token = auth.verify_id_token(token)
             user_id = decoded_token["uid"]
         # --- END OF FIX ---

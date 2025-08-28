@@ -99,7 +99,7 @@ To run the test suites:
 
 ```sh
 # From the backend directory
-ENV=dev pytest
+ENV=test venv/bin/pytest --cov=src backend/tests/
 
 # From the frontend directory
 npm run test:spec

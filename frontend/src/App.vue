@@ -1,10 +1,11 @@
 <template>
   <v-app>
-    <div v-if="authStore.loading" class="loading-container">
-      <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
-    </div>
-
-    <RouterView v-else />
+    <v-main>
+      <div v-if="authStore.loading" class="loading-container">
+        <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
+      </div>
+      <RouterView v-else />
+    </v-main>
   </v-app>
 </template>
 
@@ -26,4 +27,3 @@ const authStore = useAuthStore()
   height: 100vh;
 }
 </style>
-

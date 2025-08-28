@@ -20,26 +20,6 @@ from ..core.model_mappers import userdb_to_user, update_user_settings_request_to
 # Create the router directly instead of using a factory function
 router = APIRouter()
 
-@router.get("/users/me", response_model=User, summary="Retrieve current user's profile and settings")
-async def get_current_user_profile(
-    current_user: CurrentUser = Depends(get_current_user),
-    user_service: UserService = Depends(get_user_service) # Inject dependency here
-):
-    """
-    Retrieves the full profile and settings for the currently authenticated user.
-    Reference: product_spec.md#833-u_3000-api-request-authorization
-    Reference: product_spec.md#932-us_2000-user-settings-retrieval
-    """
-    user_db = user_service.get_user_by_uid(current_user.uid)
-
-    if not user_db:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User profile not found."
-        )
-    
-    return userdb_to_user(user_db)
-
 @router.get("/users/me/settings", response_model=User, summary="Retrieve current user's settings")
 async def get_user_settings(
     current_user: CurrentUser = Depends(get_current_user),

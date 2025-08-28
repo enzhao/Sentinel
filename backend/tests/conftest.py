@@ -5,7 +5,9 @@ from fastapi.testclient import TestClient
 import requests
 
 # Set environment variables for the emulator BEFORE any firebase imports
-os.environ["ENV"] = "dev"
+# We explicitly use a 'test' environment for running tests to distinguish
+# it from the 'dev' environment used for the local development server.
+os.environ["ENV"] = "test"
 os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8080"
 os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
 os.environ["GCLOUD_PROJECT"] = "sentinel-invest"
