@@ -8,6 +8,9 @@ import { vuetify } from '~/vitest.setup.ts';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 // --- CORRECTED MOCK FOR FIREBASE/AUTH (Partial Mock) ---
+vi.mock('firebase/app', () => ({
+  initializeApp: vi.fn(() => ({})),
+}));
 vi.mock('firebase/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('firebase/auth')>();
   return {
@@ -18,6 +21,10 @@ vi.mock('firebase/auth', async (importOriginal) => {
     onAuthStateChanged: vi.fn(), 
   };
 });
+vi.mock('firebase/firestore', () => ({
+  getFirestore: vi.fn(() => ({})),
+  // Add other Firestore functions if they are directly used in the store or component
+}));
 
 // We are partially mocking vue-router to control its push method
 const mockRouterPush = vi.fn();

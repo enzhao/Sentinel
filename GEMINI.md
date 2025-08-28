@@ -37,7 +37,7 @@ I expect you to adopt an iterative, vertical slice, feature-driven approach. I w
 3. **Implement Backend:** Implement the API endpoints, business logic, and data models.
 4. **Test Backend:** Ensure the Firebase Emulators are running. Write and run unit and integration tests for the backend components using the command `ENV=dev venv/bin/pytest --cov=src backend/tests/`. If any tests fail, fix the issues before proceeding.
 5. **Implement Frontend:** Implement the UI views and components, integrating with the newly built backend.
-6. **Test Frontend:** Ensure the Firebase Emulators are running. Write and run unit tests and integration tests for the frontend components using the command `npm --prefix frontend run test:unit`. If any tests fail, fix the issues before proceeding.
+6. **Test Frontend:** Ensure the Firebase Emulators are running. Write and run unit tests and integration tests for the frontend components using the command `npm --prefix frontend run test:spec`. If any tests fail, fix the issues before proceeding.
 7. **End to End Testing:** Write and perform end-to-end testing of the entire feature to ensure it works as expected. If any tests fail, fix the issues before proceeding.
 8. **Verify:** Run all project-specific build, linting, and type-checking commands.
 
@@ -75,9 +75,10 @@ The AI should prioritize features based on their foundational nature. A logical 
 
 - [x] Public Homepage (see product_spec.md Chapter 8, and the view with id VIEW_HOME_PAGE in the file docs/specs/views_spec.yaml). 
 - [x] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
-- [ ] User Settings Management API validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 9).
-- [ ] User Settings Management Frontend (see files docs/specs/views_spec.yaml and docs/specs/ui_flows_spec.yaml and product_spec.md Chapter 9).
-- [ ] Portfolio Management (see product_spec.md Chapter 3). 
+- [x] User Settings Management API validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 9).
+- [ ] User Settings Management Frontend (see files docs/specs/views_spec.yaml , docs/specs/ui_flows_spec.yaml , and api/sentinel_api.yaml and product_spec.md Chapter 9).
+- [ ] Portfolio Management API Validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 3).
+- [ ] Portfolio Management Frontend (see files docs/specs/views_spec.yaml, docs/specs/ui_flows_spec.yaml, api/sentinel_api.yaml and product_spec.md Chapter 3).
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)
 - [ ] Lot Management (CRUD, see product_spec.md Chapter 5)
 - [ ] Strategy Rule Management (CRUD, Effective Rule Retrieval, etc., see product_spec.md Chapter 6)

@@ -1,6 +1,7 @@
+/// <reference types="vitest" />
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, configDefaults } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
@@ -23,6 +24,20 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '~': fileURLToPath(new URL('.', import.meta.url)) // Alias for the frontend root
+    },
+  },
+  test: {
+    environment: 'jsdom',
+    exclude: [...configDefaults.exclude, 'e2e/**'],
+    root: fileURLToPath(new URL('./', import.meta.url)),
+    include: ['tests/**/*.spec.ts'],
+    globals: true,
+    setupFiles: ['./vitest.setup.ts'],
+    css: true,
+    server: {
+      deps: {
+        inline: ['vuetify'],
+      },
     },
   },
 })

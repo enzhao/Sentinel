@@ -38,13 +38,10 @@ frontend/playwright-report/
 
 # --- EXCEPTIONS ---
 # Allow example and test .env files as they contain no secrets.
+# This is the ONLY exception. All other .env files should be ignored.
 !.env.example
 !backend/.env.example
-!backend/.env.dev
-!backend/.env.test
-!frontend/.env.development
-!frontend/.env.test
-!frontend/.env.prod-template
+!frontend/.env.example
 
 # TypeScript
 # Ignore compiled TypeScript files if they are not in a build directory
@@ -94,5 +91,3 @@ firebase-debug.log*
 
 
 util/create_user.py
-
-

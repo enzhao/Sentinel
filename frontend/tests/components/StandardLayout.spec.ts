@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createWebHistory } from 'vue-router';
 import StandardLayout from '@/components/StandardLayout.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useUserSettingsStore } from '@/stores/userSettings';
 import { onAuthStateChanged } from 'firebase/auth';
 import { nextTick } from 'vue';
 
@@ -18,30 +19,36 @@ vi.mock('firebase/auth', () => ({
 const AppBarStub = {
   name: 'AppBar',
   template: '<div></div>',
-  props: ['title', 'actions'],
-  emits: ['USER_CLICKS_LOGIN', 'USER_CLICKS_LOGOUT'],
+  props: ['title', 'actions', 'userMenu', 'leadingAction'],
+  emits: ['USER_CLICKS_LOGIN', 'USER_CLICKS_LOGOUT', 'USER_CLICKS_SETTINGS', 'USER_CLICKS_BACK'],
 };
 
 describe('StandardLayout.vue', () => {
   const router = createRouter({
     history: createWebHistory(),
     routes: [
+      { path: '/', name: 'home', component: {}, meta: { title: 'Sentinel Home' } },
       { path: '/login', name: 'login', component: {} },
+      { path: '/settings', name: 'settings', component: {} },
     ],
   });
   const onAuthStateChangedMock = onAuthStateChanged as vi.Mock;
 
   beforeEach(() => {
+    // Reset router to home before each test
+    router.push('/');
     setActivePinia(createPinia());
     vi.clearAllMocks();
   });
 
-  const mountComponent = () => {
+  const mountComponent = (options = {}) => {
     return mount(StandardLayout, {
       global: {
         plugins: [router],
         stubs: { AppBar: AppBarStub },
       },
+      // Allow passing slots and other options
+      ...options,
     });
   };
 
@@ -55,6 +62,7 @@ describe('StandardLayout.vue', () => {
     await authStore.init();
 
     // ACT
+    await router.isReady();
     const wrapper = mountComponent();
     await nextTick();
     const appBar = wrapper.findComponent(AppBarStub);
@@ -63,22 +71,32 @@ describe('StandardLayout.vue', () => {
     expect(appBar.props('actions')).toEqual([{ label: 'Login', event: 'USER_CLICKS_LOGIN' }]);
   });
 
-  it('computes logout action when user is authenticated', async () => {
+  it('computes user menu when user is authenticated', async () => {
     // ARRANGE: Firebase reports the user is logged in
     const mockUser = { uid: '123', email: 'test@test.com' };
     onAuthStateChangedMock.mockImplementation((auth, callback) => {
       callback(mockUser);
     });
     const authStore = useAuthStore();
+    const userSettingsStore = useUserSettingsStore();
+    userSettingsStore.userSettings = { username: 'Test User' };
     await authStore.init();
 
     // ACT
+    await router.isReady();
     const wrapper = mountComponent();
     await nextTick();
     const appBar = wrapper.findComponent(AppBarStub);
 
     // ASSERT
-    expect(appBar.props('actions')).toEqual([{ label: 'Logout', event: 'USER_CLICKS_LOGOUT' }]);
+    expect(appBar.props('actions')).toBeUndefined();
+    expect(appBar.props('userMenu')).toEqual({
+      username: 'Test User',
+      items: [
+        { label: 'Settings', event: 'USER_CLICKS_SETTINGS' },
+        { label: 'Logout', event: 'USER_CLICKS_LOGOUT' },
+      ],
+    });
   });
 
   it('navigates to login page on USER_CLICKS_LOGIN event', async () => {
@@ -102,5 +120,48 @@ describe('StandardLayout.vue', () => {
 
     expect(logoutSpy).toHaveBeenCalled();
   });
-});
 
+  it('navigates to settings page on USER_CLICKS_SETTINGS event', async () => {
+    const pushSpy = vi.spyOn(router, 'push');
+    const wrapper = mountComponent();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    await appBar.vm.$emit('USER_CLICKS_SETTINGS');
+
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'settings' });
+    pushSpy.mockRestore();
+  });
+
+  it('navigates back on USER_CLICKS_BACK event', async () => {
+    const backSpy = vi.spyOn(router, 'back');
+    const wrapper = mountComponent();
+    const appBar = wrapper.findComponent(AppBarStub);
+
+    await appBar.vm.$emit('USER_CLICKS_BACK');
+
+    expect(backSpy).toHaveBeenCalledOnce();
+    backSpy.mockRestore();
+  });
+
+  it('renders content in the body, fab, and footer slots', () => {
+    const wrapper = mountComponent({
+      slots: {
+        body: '<div class="body-content">Body Content</div>',
+        fab: '<button class="fab-button">FAB</button>',
+        footer: '<div class="footer-content">Footer Content</div>',
+      },
+    });
+
+    const bodyContent = wrapper.find('.body-content');
+    expect(bodyContent.exists()).toBe(true);
+    expect(bodyContent.text()).toBe('Body Content');
+
+    const fabButton = wrapper.find('.fab-button');
+    expect(fabButton.exists()).toBe(true);
+    expect(fabButton.text()).toBe('FAB');
+
+    const footerContent = wrapper.find('.footer-content');
+    expect(footerContent.exists()).toBe(true);
+    expect(footerContent.text()).toBe('Footer Content');
+  });
+});

@@ -1,4 +1,4 @@
-import './firebase'
+import './plugins/firebase'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

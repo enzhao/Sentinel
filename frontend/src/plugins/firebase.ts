@@ -1,36 +1,38 @@
-import { initializeApp } from 'firebase/app'
-import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+// frontend/src/plugins/firebase.ts
+// This file contains the Firebase client-side configuration and initialization.
+// It dynamically connects to Firebase Emulators during development.
+// References: GEMINI.md (Firebase configuration)
 
-// FirebaseConfig
+import { initializeApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+
+// Sentinel web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAIDJJ38pux2NK5FMkBpIelRHUisdcRYSA",
-  authDomain: "sentinel-invest.firebaseapp.com",
-  projectId: "sentinel-invest",
-  storageBucket: "sentinel-invest.firebasestorage.app",
-  messagingSenderId: "63684098605",
-  appId: "1:63684098605:web:998e65ee205e09ddb2d6a4"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase with the configuration
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Get instances of the services you need
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Initialize Firebase services
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
-// --- Emulator Connection Logic ---
-// This Vite environment variable will be set to 'dev' by .env files
-// for local development and for running tests.
-if (import.meta.env.VITE_APP_ENV === 'dev') {
-  console.log('Connecting frontend to Firebase Emulators...');
-  
-  // Point the auth and firestore services to the local emulators
-  connectAuthEmulator(auth, "http://localhost:9099");
-  connectFirestoreEmulator(db, 'localhost', 8080);
+// Connect to Firebase Emulators if VITE_USE_EMULATORS is true
+if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+  if (import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST) {
+    connectAuthEmulator(auth, `http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST}`);
+    console.log(`Connected to Firebase Auth emulator at http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST}`);
+  }
+  if (import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) {
+    connectFirestoreEmulator(db, import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')[0], parseInt(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')[1]));
+    console.log(`Connected to Firebase Firestore emulator at http://${import.meta.env.VITE_FIRESTORE_EMULATOR_HOST}`);
+  }
 }
-// --- End Emulator Connection Logic ---
-
-// Export the initialized services for use throughout your app
-export { auth, db };
-

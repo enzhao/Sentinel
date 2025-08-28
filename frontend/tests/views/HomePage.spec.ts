@@ -1,12 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import HomePage from '@/views/HomePage.vue';
-
-// Mock the auth store, as StandardLayout (a child) depends on it
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: vi.fn(() => ({
-    isAuthenticated: false,
-  })),
+ 
+// Mock the entire Firebase SDK modules. This prevents the real SDK from
+// trying to initialize with missing environment variables, which would cause
+// an 'auth/invalid-api-key' error.
+vi.mock('firebase/app', () => ({
+  initializeApp: vi.fn(() => ({})),
+}));
+vi.mock('firebase/auth', () => ({
+  getAuth: vi.fn(() => ({})),
+  onAuthStateChanged: vi.fn(),
+}));
+vi.mock('firebase/firestore', () => ({
+  getFirestore: vi.fn(() => ({})),
+  // Add other Firestore functions if they are directly used in the store or component
 }));
 
 describe('HomePage.vue', () => {

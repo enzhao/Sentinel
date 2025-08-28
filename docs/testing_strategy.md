@@ -60,33 +60,54 @@ The backend testing strategy focuses on verifying the correctness of the API, bu
 
 The frontend testing strategy is designed to ensure a reliable and smooth user experience by verifying components, state management, and user workflows.
 
-### 4.1. Frontend Unit Tests
+### 4.1. Frontend Component Tests (High-Fidelity)
 
-- **Purpose**: To verify that a single, isolated piece of the UI (a "unit") works correctly on its own. A unit is typically a single Vue component, a Pinia store, or a router file.
-- **Method**: Dependencies are "mocked" or faked. For example, a test for `SignUpView.vue` would not use the *real* Pinia auth store or the *real* Vue router. Instead, it provides mock versions to confirm that the `SignUpView` component calls the correct `signup` function when a button is clicked.
-- **Goal**: To ensure each individual building block is reliable. They are fast, precise, and form the foundation of our frontend testing.
-- **Location**: `frontend/tests/unit/`
+- **Purpose**: To verify that individual Vue components render and behave correctly, and that they correctly interact with their immediate child components.
+- **Method**: We adopt a **high-fidelity testing approach** for UI components. Instead of extensively mocking child components (especially from complex UI libraries like Vuetify), we test against the *real* child components. This is made possible by a global test setup that properly initializes the Vuetify plugin for the test environment. This approach treats each component test as a small-scale integration test, ensuring that the component not only works in isolation but is also correctly integrated with its immediate UI dependencies. For non-UI dependencies (like stores or router), we still use mocks to maintain focus and speed.
+- **Goal**: To create robust, reliable tests that are less brittle and more representative of the real application behavior, avoiding the significant overhead and potential inaccuracies of mocking a complex component library.
+- **Location**: `frontend/tests/components/`
 
-### 4.2. Frontend Integration Tests
+### 4.2. Core Logic Unit Tests (Stores, Router, Plugins, Utilities)
 
-- **Purpose**: To verify that several different frontend units work together correctly as a group. They test the "integration" or communication between different parts of the frontend application, simulating a real user workflow.
-- **Method**: These tests use the **real** components, the **real** Pinia stores, and the **real** Vue router, all working together. The frontend application connects to the **Firebase Emulator Suite**, allowing for full-stack testing of the frontend against a realistic, but local and controllable, backend.
-- **Goal**: To catch bugs that occur at the seams between units, such as incorrect event handling, state management issues, or routing problems that unit tests would miss.
+- **Purpose**: To test the core logic within Pinia stores, the Vue router, application plugins, and utility files in strict isolation.
+- **Method**: For stores, router, and plugins, we use real instances but mock external dependencies (like API calls, Firebase SDK) to ensure focus on the logic being tested. For utility files, strict unit testing is applied.
+- **Goal**: To ensure the core application logic and state management are correct in a fast, focused manner.
+- **Location**:
+    - `frontend/tests/stores/`: For Pinia store logic.
+    - `frontend/tests/router/`: For Vue Router configuration and guards.
+    - `frontend/tests/plugins/`: For application-level plugins (e.g., Firebase initialization).
+    - `frontend/tests/config.spec.ts`: For utility/configuration file testing.
 
-#### Key Integration Test Scenarios for Sentinel:
+### 4.3. View & Workflow Tests (High-Fidelity Integration Tests)
 
-Based on the `product_spec.md`, the following user journeys are critical and must be covered by integration tests:
+#### Key User Workflow Scenarios for Sentinel:
+
+- **Purpose**: To verify that entire "View" components (which often orchestrate multiple smaller components, stores, and router interactions) work together correctly to fulfill a user workflow as defined in `docs/specs/ui_flows_spec.yaml`.
+- **Method**: These tests mount entire "View" components (e.g., `UserSettingsView.vue`). They use the **real** components, the **real** Pinia stores (with mocked API calls), and a **real** Vue router instance. This provides a high-fidelity test environment that closely mimics the actual application runtime. For tests requiring a backend, the frontend application connects to the **Firebase Emulator Suite**, allowing for full-stack testing of the frontend against a realistic, but local and controllable, backend.
+- **Goal**: To catch bugs that occur at the seams between major application features, such as incorrect event handling, state management issues, or routing problems that component-level tests would miss.
+- **Location**: `frontend/tests/views/`
+- **User Workflows Scenarios:** These tests (to be added in the future) will be placed under `frontend/tests/flows/`
+
+Based on the `product_spec.md`, the following user workflows are critical and must be covered by these high-fidelity integration tests:
 
 **1. The Full User Authentication and Onboarding Flow:**
--  **What it tests:** `SignUpView` -> `auth` store -> `router` -> `LoginView` -> `AppBar` -> `PortfolioView`.
+- **What it tests:** `LoginForm.vue` -> `auth` store -> `router` -> `StandardLayout.vue` -> `DashboardView.vue`.
 -  **Scenario:**
-    1.  A new user signs up successfully (mocking the backend response).
-    2.  Verify the `auth` store is updated and the router redirects to the `LoginView`.
-    3.  The user logs in (mocking the backend response).
-    4.  Verify the `auth` store's state becomes `AUTHENTICATED` and the router navigates to the default `PortfolioView`.
-    5.  Verify the `AppBar` updates to show user-specific controls (e.g., "Logout" button).
+-    1.  A user logs in using the `LoginForm.vue` (connecting to the Auth emulator).
+-    2.  Verify the `auth` store's state becomes `AUTHENTICATED` and the router navigates to the `DashboardView`.
+-    3.  Verify the `StandardLayout`'s `AppBar` updates to show user-specific controls (e.g., "Logout" button).
 
-**2. Core Portfolio Management Flow:**
+**2. User Settings Management Flow:**
+- **What it tests:** `StandardLayout.vue` -> `router` -> `UserSettingsView.vue` -> `userSettings` store -> child components.
+-  **Scenario:**
+-    1.  Start as a logged-in user.
+-    2.  The test sets the `userSettings` store state to simulate a successful API call.
+-    3.  Simulate a click on the "Settings" button in the `AppBar` to navigate to the settings view.
+-    4.  Verify that `UserSettingsView.vue` renders the form correctly with the initial data.
+-    5.  Simulate changing a value (e.g., the default portfolio) and clicking "Save".
+-    6.  Verify the store's `updateUserSettings` action was called with the correct payload and that the router navigated back.
+
+**3. Core Portfolio Management Flow:**
 - **What it tests:** `PortfolioView` -> `portfolio` store -> child components.
 - **Scenario:**
     1.  Start as a logged-in user on the `PortfolioView`.
@@ -94,7 +115,7 @@ Based on the `product_spec.md`, the following user journeys are critical and mus
     3.  Simulate adding a new holding via the UI.
     4.  Mock the "save" API call and verify the `PortfolioView` updates dynamically to show the new holding without a page refresh.
 
-**3. Strategy Rule Creation and Management Flow:**
+**4. Strategy Rule Creation and Management Flow:**
 - **What it tests:** `RulesView` -> `rules` store -> child components.
 - **Scenario:**
     1.  A logged-in user navigates to the "Strategy Rules" page.
@@ -102,7 +123,19 @@ Based on the `product_spec.md`, the following user journeys are critical and mus
     3.  Simulate creating a new rule via the UI form.
     4.  Mock the "save" API call and verify the new rule appears in the list.
 
-### 4.3. End-to-End (E2E) Tests
+**5. Automatic Market Monitoring and Alert Triggering Flow:**
+
+
+-**6. Alert Viewing Flow:**
+- **What it tests:** `StandardLayout.vue` -> `AlertsListView.vue` -> `AlertDetailView.vue` -> `alerts` store.
+-  **Scenario:**
+-    1.  Start as a logged-in user.
+-    2.  The test sets the `alerts` store state with mock read and unread alerts.
+-    3.  Verify the `AppBar` in `StandardLayout` shows a badge for unread alerts.
+-    4.  Simulate navigation to the `AlertsListView` and verify all alerts are displayed.
+-    5.  Simulate a click on an unread alert and verify navigation to `AlertDetailView` with the correct data.
+
+### 4.4. End-to-End (E2E) Tests
 
 - **Purpose**: To validate a complete user flow through the entire live system, from the browser interacting with the Vue.js frontend, through the FastAPI backend, to the emulated database.
 - **Scope**: A small, critical set of "happy path" scenarios, such as:

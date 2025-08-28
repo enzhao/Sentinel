@@ -102,7 +102,7 @@ To run the test suites:
 ENV=dev pytest
 
 # From the frontend directory
-npm run test:unit
+npm run test:spec
 ```
 
 ---
@@ -112,6 +112,3 @@ npm run test:unit
 The application is deployed automatically via GitHub Actions on every push to the `main` branch.
 -   The **backend** is deployed to **Google Cloud Run**.
 -   The **frontend** is deployed to **Firebase Hosting**.
-
-
-
