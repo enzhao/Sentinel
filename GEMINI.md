@@ -76,7 +76,7 @@ The AI should prioritize features based on their foundational nature. A logical 
     - update frontend code 
 - [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 
 - [ ] check commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml
-
+- [ ] migrate to Workload Identity Federation (WIF) for the ci build. 
 
 
 ### Functional Features
