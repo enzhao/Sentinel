@@ -95,6 +95,30 @@ Each object in the `components` array represents a single UI element.
             - `payload` (Object, Required):
                 - `value` (String, Required): The new array of selected options (e.g., `"$event.value"`).
 
+- `singleSelect` (Object, Optional): A component for selecting a single option from a predefined list.
+    - `type` (String, Required): Must be `"SingleSelect"`.
+    - `props` (Object, Required):
+        - `label` (String, Required): The label for the select input.
+        - `items` (Array<Object>, Required): The list of available options to choose from. Each object should have `title` (display text) and `value` (the actual value).
+    - `bindings` (Object, Required):
+        - `modelValue` (String, Required): Binds to a data property that holds the currently selected value (e.g., `"user.defaultPortfolioId"`).
+    - `events` (Object, Required):
+        - `onUpdate` (Object, Required):
+            - `name` (String, Required): The event name dispatched when the selection changes (e.g., `USER_UPDATES_DEFAULT_PORTFOLIO`).
+            - `payload` (Object, Required):
+                - `value` (String, Required): The new selected value (e.g., `"$event.value"`).
+
+- `switch` (Object, Optional): A component for toggling a boolean (on/off) state.
+    - `type` (String, Required): Must be `"Switch"`.
+    - `props` (Object, Required):
+        - `label` (String, Required): The label for the switch control.
+    - `bindings` (Object, Required):
+        - `modelValue` (Boolean, Required): Binds to a boolean data property that holds the current state (e.g., `"rule.enabled"`).
+    - `events` (Object, Required):
+        - `onUpdate` (Object, Required):
+            - `name` (String, Required): The event name dispatched when the switch is toggled (e.g., `USER_TOGGLES_RULE_STATUS`).
+            - `payload` (Object, Required):
+                - `value` (Boolean, Required): The new boolean value (e.g., `"$event.value"`).
 ## 4. Core Patterns: Composition and Layout
 
 To promote a modular, consistent, and DRY (Don't Repeat Yourself) design, the View DSL relies on two core patterns: View Composition and the Layout Component.
