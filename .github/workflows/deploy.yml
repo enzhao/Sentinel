@@ -41,9 +41,11 @@ jobs:
       - name: 🛠️ Install backend dependencies
         working-directory: backend
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install -r requirements-dev.txt
+          python -m venv venv && . venv/bin/activate
+          pip install pip-tools
+          pip-compile requirements.in -o requirements.txt
+          pip-compile --constraint requirements.txt requirements-dev.in -o requirements-dev.txt
+          pip-sync requirements.txt requirements-dev.txt
 
       - name: 🛠️ Install frontend dependencies
         working-directory: frontend
