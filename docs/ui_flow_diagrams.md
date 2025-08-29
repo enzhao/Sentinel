@@ -67,9 +67,12 @@ stateDiagram-v2
     %% Flow ID: FLOW_APP_SHELL
     [*] --> Active
     state "Active" as Active
+    Active --> NavigatingToHome : USER_CLICKS_HOME
+    Active --> NavigatingToDocs : USER_CLICKS_DOCS
+    Active --> NavigatingToDashboard : USER_CLICKS_DASHBOARD
+    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     Active --> NavigatingToSettings : USER_CLICKS_SETTINGS
     Active --> LoggingOut : USER_CLICKS_LOGOUT
-    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     state "ShowingAlertsDropdown" as ShowingAlertsDropdown
     state "➡️ subflow: FLOW_SHOW_ALERTS_DROPDOWN" as ShowingAlertsDropdown_subflow_node
     ShowingAlertsDropdown --> ShowingAlertsDropdown_subflow_node
@@ -85,6 +88,12 @@ stateDiagram-v2
     LoggingOut --> LoggingOut_subflow_node
     LoggingOut_subflow_node --> [*] : ✅ onCompletion
     LoggingOut_subflow_node --> Active : 🛑 onCancel
+    state "🏠 NavigatingToHome" as NavigatingToHome
+    NavigatingToHome --> Active : success
+    state "📊 NavigatingToDashboard" as NavigatingToDashboard
+    NavigatingToDashboard --> Active : success
+    state "NavigatingToDocs" as NavigatingToDocs
+    NavigatingToDocs --> Active : success
 ```
 
 ## Flow: `FLOW_MANAGE_USER_SETTINGS`

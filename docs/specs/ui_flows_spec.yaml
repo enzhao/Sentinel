@@ -108,9 +108,12 @@ states:
   - name: Active
     description: "The main application shell is active, managing global state and events."
     events:
+      USER_CLICKS_HOME: NavigatingToHome
+      USER_CLICKS_DOCS: NavigatingToDocs
+      USER_CLICKS_DASHBOARD: NavigatingToDashboard
+      USER_CLICKS_ALERTS_ICON: ShowingAlertsDropdown
       USER_CLICKS_SETTINGS: NavigatingToSettings
       USER_CLICKS_LOGOUT: LoggingOut
-      USER_CLICKS_ALERTS_ICON: ShowingAlertsDropdown
 
   - name: ShowingAlertsDropdown
     description: "Invoking the alert summary dropdown subflow."
@@ -132,6 +135,29 @@ states:
       flowId: FLOW_LOGOUT
       onCompletion: (exit flow)
       onCancel: Active
+
+  - name: NavigatingToHome
+    description: "User is navigating to the home page."
+    entryAction:
+      action: NAVIGATE_TO
+      target: VIEW_HOME_PAGE
+      transitions:
+        success: Active
+
+  - name: NavigatingToDashboard
+    description: "User is navigating to the dashboard."
+    entryAction:
+      action: NAVIGATE_TO
+      target: VIEW_DASHBOARD
+      transitions:
+        success: Active
+
+  - name: NavigatingToDocs
+    description: "Opening user documentation in a new tab."
+    entryAction:
+      service: "Window.open('/docs/index.html')"
+      transitions:
+        success: Active
 ---
 # Flow for managing user settings (default portfolio, notifications).  
 # It is intended to be invoked as a subflow by the FLOW_APP_SHELL, ensuring it can be accessed globally.

@@ -8,6 +8,10 @@ data:
     type: "String"
   - name: "leadingAction"
     type: "Object"
+    description: "The primary action on the leading side, e.g., a back button."
+  - name: "actions"
+    type: "Array<Object>"
+    description: "A list of navigation or action items, e.g., [{ label: 'Home', event: 'USER_CLICKS_HOME' }]"
   - name: "alertInfo"
     type: "Object"
     description: "{ hasUnread: true }"
@@ -20,6 +24,7 @@ components:
     bindings:
       title: "title"
       leadingAction: "leadingAction"
+      actions: "actions" # Bind the actions array
     alertAction:
       icon: "notifications"
       event: "USER_CLICKS_ALERTS_ICON"
@@ -88,9 +93,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_CANCEL" # The back button can act as a cancel
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "SettingsForm" # A semantic container for the form
           slots:
@@ -147,9 +149,6 @@ components:
         - type: "VIEW_APP_BAR"
           bindings:
             title: "Sentinel"
-            actions:
-              - label: "Login"
-                event: "USER_CLICKS_LOGIN"
       body:
         # 1. Real-time market data ticker for engagement
         - type: "MarketDataTicker"
@@ -301,9 +300,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_BACK"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "AlertList"
           item:
@@ -341,9 +337,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_BACK_TO_LIST"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "AlertDetailCard"
           bindings:
@@ -378,9 +371,6 @@ components:
         - type: "VIEW_APP_BAR"
           bindings:
             title: "My Portfolios"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "VIEW_PORTFOLIOS_LIST"
           bindings:
@@ -568,9 +558,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_BACK"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         # NEW: Add the interactive performance chart
         - type: "PerformanceChart"
@@ -864,9 +851,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_BACK"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "HoldingSummaryCard"
           bindings:
@@ -1095,9 +1079,6 @@ components:
             leadingAction:
               icon: "arrow_back"
               event: "USER_CLICKS_BACK"
-            actions:
-              - icon: "logout"
-                event: "USER_CLICKS_LOGOUT"
       body:
         - type: "InfoField"
           props:
@@ -1212,4 +1193,3 @@ components:
             - label: "Confirm"
               event: "USER_CLICKS_CONFIRM_DELETE"
 ---
-

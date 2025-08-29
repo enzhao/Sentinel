@@ -124,12 +124,12 @@ flowchart LR
 
 ### 1.5. General User Interface/User Experience (UI/UX) Notes
 
-- **Mobile-First Responsive Design**: The application's interface will be designed primarily for mobile phones. This means the layout will be clean, easy to navigate with a thumb, and optimized for smaller screens. When viewed on a larger screen, like a tablet or desktop computer, the application will automatically adapt its layout to make good use of the extra space, ensuring a comfortable and effective user experience on any device.
-- **Application Bar**: A persistent application bar is displayed at the top of the screen.
-    - On mobile devices or narrow screens, the bar displays the application title and a menu icon that, when tapped, reveals navigation links.
-    - On wider screens (tablets, desktops), the navigation links are displayed directly in the application bar for quick access.
-    - For authenticated users, the bar also provides access to user-specific actions, such as logging out, and includes an alert icon. A red dot will appear on this icon to indicate when new, unread alerts have been generated since the user's last session.
-
+- **Mobile-First Responsive Design**: The application's interface is designed primarily for mobile phones, ensuring a clean, easy-to-navigate experience on any device size.
+- **Application Bar**: A persistent application bar (`VIEW_APP_BAR`) is displayed at the top of the screen. It provides global navigation and user-specific actions, managed centrally by the application shell.
+    - **For all users**: The bar includes links to the "Home" page and "User Docs".
+    - **For unauthenticated users**: The bar displays a "Login" action.
+    - **For authenticated users**: The bar provides a link to the "Dashboard" and a user menu containing "Settings" and "Logout" actions. It also includes an alert icon, which will show a badge if there are unread alerts.
+    - **On mobile devices or narrow screens**, these links and actions may be collapsed into a navigation menu.
 
 ### 1.6. Key Process Overviews
 
@@ -157,6 +157,8 @@ To ensure a clean separation of concerns and avoid repetitive logic, the applica
 This shell is responsible for managing persistent UI elements, primarily the main application bar (`VIEW_APP_BAR`), and acts as the single, centralized handler for global user events dispatched from it. This includes actions that are not specific to any one feature, such as:
 
 - Opening the alert summary (`USER_CLICKS_ALERTS_ICON`)
+- Navigating to the home page (`USER_CLICKS_HOME`)
+- Navigating to the user documentation (`USER_CLICKS_DOCS`)
 - Navigating to the user settings page (`USER_CLICKS_SETTINGS`)
 - Initiating the logout process (`USER_CLICKS_LOGOUT`)
 
@@ -165,9 +167,12 @@ stateDiagram-v2
     %% Flow ID: FLOW_APP_SHELL
     [*] --> Active
     state "Active" as Active
+    Active --> NavigatingToHome : USER_CLICKS_HOME
+    Active --> NavigatingToDocs : USER_CLICKS_DOCS
+    Active --> NavigatingToDashboard : USER_CLICKS_DASHBOARD
+    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     Active --> NavigatingToSettings : USER_CLICKS_SETTINGS
     Active --> LoggingOut : USER_CLICKS_LOGOUT
-    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     state "ShowingAlertsDropdown" as ShowingAlertsDropdown
     state "➡️ subflow: FLOW_SHOW_ALERTS_DROPDOWN" as ShowingAlertsDropdown_subflow_node
     ShowingAlertsDropdown --> ShowingAlertsDropdown_subflow_node
@@ -183,6 +188,12 @@ stateDiagram-v2
     LoggingOut --> LoggingOut_subflow_node
     LoggingOut_subflow_node --> [*] : ✅ onCompletion
     LoggingOut_subflow_node --> Active : 🛑 onCancel
+    state "🏠 NavigatingToHome" as NavigatingToHome
+    NavigatingToHome --> Active : success
+    state "📊 NavigatingToDashboard" as NavigatingToDashboard
+    NavigatingToDashboard --> Active : success
+    state "NavigatingToDocs" as NavigatingToDocs
+    NavigatingToDocs --> Active : success
 ```
 
 By centralizing this logic, individual feature flows (e.g., `FLOW_VIEW_PORTFOLIO_DETAIL`) remain focused on their specific tasks and do not need to handle global navigation concerns.
@@ -3558,4 +3569,3 @@ To meet the **Performance** and **Scalability** non-functional requirements, a s
 -  **Problem**: Storing daily snapshots for every portfolio and holding means the dataset can grow very large over time. Including this entire history in the main `GET` requests for portfolios or holdings would lead to large payload sizes, slow API response times, and a poor user experience, especially on mobile networks.
 -  **Solution**: The system uses **dedicated endpoints** (`.../chart-data`) that provide **downsampled** data. Instead of returning thousands of daily data points for a multi-year view, the backend intelligently aggregates them into weekly or monthly points.
 -  **Benefits**: This approach ensures that the data payload remains small and manageable, API responses are consistently fast, and the frontend charts render quickly, directly supporting the NFR of API response times under 500ms.
-

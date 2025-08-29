@@ -70,10 +70,14 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [x] project scaffolding and setup, including initial CI/CD pipelines (if not already done)
 - [x] Generate the OpenAPI spec from the product_spec.md, the generated file should be api/sentinel_openapi.yaml, the generated openapi spec should contain section refrences back to the relevant sections in product_spec.md for traceability.
 - [x] Shared Models: Generate or define shared data models (e.g., Pydantic models for FastAPI, TypeScript interfaces for Vue) based on the product_spec.md and the api/sentinel_api.yaml spec. All generated models should contain section refrences back to the relevant sections in product_spec.md for traceability. 
-- [ ] fix the GitHub CI
-- [ ] add links to for homepage, user docs, and dashboard in the AppBar.
-    - update the docs/specs/view_spec.yaml
-    - update frontend code 
+- [x] fix the GitHub CI
+- add links to for homepage, user docs, and dashboard in the AppBar. (I'm currently at the step "add links to for homepage, user docs, and dashboard in the AppBar." I'd like the appbar to contain the following links: for both authenticated and unauthenticated users): homepage, user docs. For unauthenticated user only: login. For authenticated users only: dashboard, logout, user settings (logout and user settings are under user menu). The links for dashboard, login, and user menu are already implemented, source code can be found under frontend/src, need to add the missing links and make them work. )  
+    - [ ] update the product_spec.md, docs/specs/view_spec.yaml and other relevant docs to reflect this requirement. 
+    - [ ] integrate user docs to the frontend (I have )
+    - [ ] update frontend code 
+    - [ ] manual test
+    - [ ] update frontend tests
+    - [ ] make ci work
 - [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 
 - [ ] check commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml
 - [ ] migrate to Workload Identity Federation (WIF) for the ci build. 

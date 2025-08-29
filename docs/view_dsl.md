@@ -82,7 +82,7 @@ Each object in the `components` array represents a single UI element.
 - `slots` (Object, Optional): Used by "Layout Components" to define named regions where other components are placed.
     - **Key:** The name of the slot (e.g., `header`, `body`, `fab`).
     - **Value:** An array of component objects to be rendered inside that slot.
-- `MultiSelect` (Object, Optional): A component for selecting multiple options from a predefined list.
+- `multiSelect` (Object, Optional): A component for selecting multiple options from a predefined list.
     - `type` (String, Required): Must be `"MultiSelect"`.
     - `props` (Object, Required):
         - `label` (String, Required): The label for the multi-select input.
@@ -109,6 +109,7 @@ The most powerful feature of the DSL is the ability to include one view within a
 ### 4.2. The Layout Component Pattern
 
 To ensure a consistent structure across different screens, a view's `components` array will typically contain a single, top-level Layout Component (e.g., `StandardLayout`). This component defines named `slots` (like `header`, `body`, and `fab`), and the view places all its content components inside these slots. This approach makes the overall structure of the application explicit and easy to understand.
+To ensure a consistent structure across different screens, a view's `components` array will typically contain a single, top-level Layout Component (e.g., `StandardLayout`). This component defines named `slots` (like `header`, `body`, `footer`, and `fab`), and the view places all its content components inside these slots. This approach makes the overall structure of the application explicit and easy to understand.
 
 ## 5. Example: Holding Detail View
 
