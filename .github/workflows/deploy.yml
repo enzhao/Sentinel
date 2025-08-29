@@ -126,7 +126,9 @@ jobs:
           python-version: '3.13'
 
       - name: 🛠️ Install MkDocs and dependencies
-        run: pip install mkdocs mkdocs-material pymdown-extensions
+        # Install dependencies from the locked requirements file for utilities
+        # to ensure the build environment matches the intended setup.
+        run: pip install -r util/requirements.txt
 
       - name: 📚 Build User Documentation into public folder
         run: mkdocs build --config-file mkdocs.yml --site-dir frontend/public/user_docs
