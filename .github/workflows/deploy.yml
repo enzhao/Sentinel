@@ -52,6 +52,19 @@ jobs:
         run: npm ci
 
       - name: 🔬 Run backend and frontend tests with Firebase Emulator
+        env:
+          # Provide dummy Firebase config for SDK initialization in tests.
+          # The SDK needs these to exist, even if they are not real keys,
+          # because the app will connect to the emulators anyway.
+          VITE_FIREBASE_API_KEY: "test-api-key"
+          VITE_FIREBASE_AUTH_DOMAIN: "localhost"
+          VITE_FIREBASE_PROJECT_ID: "sentinel-invest"
+          VITE_FIREBASE_STORAGE_BUCKET: "test.appspot.com"
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "1234567890"
+          VITE_FIREBASE_APP_ID: "1:1234567890:web:1234567890abcdef"
+          VITE_USE_EMULATORS: 'true'
+          VITE_FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099"
+          VITE_FIRESTORE_EMULATOR_HOST: "localhost:8080"
         run: |
           npm install -g firebase-tools
           firebase emulators:exec --project=sentinel-invest " \
