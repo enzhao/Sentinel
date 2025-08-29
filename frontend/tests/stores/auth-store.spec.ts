@@ -2,14 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useAuthStore } from '@/stores/auth';
 import { signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import router from '@/router';
-
-// Mock the router's push method, which is a dependency of the logout action
-vi.mock('@/router', () => ({
-  default: {
-    push: vi.fn(),
-  },
-}));
 
 // Mock the Firebase Auth functions that the store actions depend on
 vi.mock('firebase/auth', () => ({
@@ -23,7 +15,6 @@ describe('Auth Store Actions', () => {
   // Helpers to easily access the typed mocks
   const mockSignOut = signOut as vi.Mock;
   const mockSignIn = signInWithEmailAndPassword as vi.Mock;
-  const mockRouterPush = router.push as vi.Mock;
 
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -31,17 +22,31 @@ describe('Auth Store Actions', () => {
   });
 
   describe('logout', () => {
-    it('redirects to the homepage after a successful logout', async () => {
+    it('calls signOut and returns true on success', async () => {
       // ARRANGE: Simulate a successful sign-out
       const authStore = useAuthStore();
       mockSignOut.mockResolvedValue(undefined);
 
       // ACT: Call the logout action
-      await authStore.logout();
+      const result = await authStore.logout();
 
-      // ASSERT: Check that signOut was called and the router pushed to 'home'
+      // ASSERT: Check that signOut was called and the action returned true.
+      // Navigation is handled by the component that calls this action.
       expect(mockSignOut).toHaveBeenCalled();
-      expect(mockRouterPush).toHaveBeenCalledWith({ name: 'home' });
+      expect(result).toBe(true);
+    });
+
+    it('returns false on failed logout', async () => {
+      // ARRANGE: Simulate a failed sign-out
+      const authStore = useAuthStore();
+      mockSignOut.mockRejectedValue(new Error('Logout failed'));
+
+      // ACT: Call the logout action
+      const result = await authStore.logout();
+
+      // ASSERT: Check that signOut was called and the action returned false
+      expect(mockSignOut).toHaveBeenCalled();
+      expect(result).toBe(false);
     });
   });
 
@@ -75,4 +80,3 @@ describe('Auth Store Actions', () => {
     });
   });
 });
-

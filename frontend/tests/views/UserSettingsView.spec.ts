@@ -5,20 +5,6 @@ import { createTestingPinia, type TestingPinia } from '@pinia/testing';
 import { createSentinelRouter } from '@/router';
 import type { Router } from 'vue-router';
 
-// Mock the entire Firebase SDK modules. This prevents the real SDK from
-// trying to initialize with missing environment variables, which would cause
-// an 'auth/invalid-api-key' error. This is necessary because this view test
-// indirectly imports the firebase plugin.
-vi.mock('firebase/app', () => ({
-  initializeApp: vi.fn(() => ({})),
-}));
-vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(() => ({})),
-}));
-vi.mock('firebase/firestore', () => ({
-  getFirestore: vi.fn(() => ({})),
-}));
-
 import UserSettingsView from '@/views/UserSettingsView.vue';
 
 import { useUserSettingsStore } from '@/stores/userSettings';
@@ -71,9 +57,10 @@ describe('UserSettingsView.vue', () => {
     userSettingsStore = useUserSettingsStore(pinia);
     authStore = useAuthStore(pinia);
 
+    // With `@pinia/testing`, actions are stubbed by default and don't modify state.
+    // We must set state and getters directly to simulate the desired test conditions.
     // Set isAuthenticated to true for all tests in this suite, as this is a protected view.
-    // Use setUser to correctly set the state as isAuthenticated is a computed property.
-    authStore.setUser({ uid: 'test-user', email: 'test@example.com' } as any);
+    authStore.isAuthenticated = true;
 
     userSettingsStore.fetchUserSettings.mockResolvedValue();
     userSettingsStore.updateUserSettings.mockResolvedValue();

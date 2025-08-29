@@ -40,7 +40,4 @@ export const createSentinelRouter = (): Router => {
   return router
 }
 
-// Create a singleton instance for the app
-const router = createSentinelRouter()
-
-export default router
+export default createSentinelRouter

@@ -5,66 +5,38 @@ from dotenv import load_dotenv, dotenv_values
 # --- Environment Loading ---
 # This logic MUST run before any other application modules are imported.
 # It reads the ENV variable and loads the corresponding .env file.
-print("DIAGNOSTIC: Checking for environment configuration...")
-env = os.environ.get("ENV", "dev")  # Default to 'dev' if not set
-env_path = Path(__file__).parent.parent / f".env.{env}"
+ENV = os.environ.get("ENV", "dev")
+env_path = Path(__file__).parent.parent / f".env.{ENV}"
 
 if env_path.exists():
     print(f"DIAGNOSTIC: Loading environment from: {env_path}")
-
-    # Get variables from .env file to print them for diagnostics
-    loaded_vars = dotenv_values(dotenv_path=env_path)
-    if loaded_vars:
-        print("DIAGNOSTIC: The following variables were found in the .env file:")
-        for key, value in loaded_vars.items():
-            print(f"  - {key} = '{value}'")
-
-    # Now, actually load them into the environment
     load_dotenv(dotenv_path=env_path)
 else:
-    print(f"DIAGNOSTIC: No .env file found for ENV='{env}'. Using system environment variables.")
+    print(f"DIAGNOSTIC: No .env file found for ENV='{ENV}'. Using system environment variables.")
 # --- End Environment Loading ---
 
-# --- Diagnostic Check for Emulator ---
-# This check runs after loading to confirm the final state of the environment.
-print("DIAGNOSTIC: Verifying key environment variables...")
-if os.environ.get("FIRESTORE_EMULATOR_HOST"):
-    print(f"  ✅ FIRESTORE_EMULATOR_HOST is set to: {os.environ['FIRESTORE_EMULATOR_HOST']}")
-else:
-    print("  ❌ FIRESTORE_EMULATOR_HOST is NOT set. Backend will target LIVE Firestore.")
-
-if os.environ.get("FIREBASE_AUTH_EMULATOR_HOST"):
-    print(f"  ✅ FIREBASE_AUTH_EMULATOR_HOST is set to: {os.environ['FIREBASE_AUTH_EMULATOR_HOST']}")
-else:
-    print("  ❌ FIREBASE_AUTH_EMULATOR_HOST is NOT set. Backend will target LIVE Auth.")
-# --- End Diagnostic Check ---
-
-# --- Firebase Initialization ---
-# This MUST be done after loading the environment and before importing any
-# modules (like routers or middleware) that depend on a configured Firebase app.
-from .firebase_setup import initialize_firebase_app
-initialize_firebase_app()
-# --- End Firebase Initialization ---
-
+# --- Module Imports (after environment is loaded) ---
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .firebase_setup import initialize_firebase_app
 from .middleware import idempotency_middleware
-# from .messages import message_manager
-
-# Import the router directly, not the factory function
 from .routers.user_router import router as user_router
+# --- End Module Imports ---
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Handles application startup and shutdown events.
+    This is the recommended place for initialization logic.
     """
-    print("DIAGNOSTIC: Application startup event triggered.")
-    # Note: Firebase and MessageManager are initialized at module load time.
-    # Any future startup logic can be added here.
+    print("DIAGNOSTIC: Application startup...")
+    # Initialize Firebase Admin SDK on startup.
+    # This ensures all configurations and connections are ready.
+    initialize_firebase_app()
     yield
-    # Shutdown logic can be placed here.
+    # Shutdown logic can be placed here if needed.
+    print("DIAGNOSTIC: Application shutdown.")
 
 app = FastAPI(
     title="Sentinel API",
@@ -72,44 +44,32 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The idempotency middleware should be one of the first to run.
-app.middleware("http")(idempotency_middleware)
-
-# Include the router directly. FastAPI will handle the dependencies at the endpoint level.
-app.include_router(user_router, prefix="/api/v1")
-
 # --- CORS Middleware Configuration ---
-origins = [
+# The order of middleware is important. They are processed in the order they are added.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
     "http://localhost:5173",
     "https://sentinel-invest.web.app",
     "https://sentinel-invest.firebaseapp.com",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# The idempotency middleware should run after CORS but before the request hits the router.
+app.middleware("http")(idempotency_middleware)
 # --- End of CORS Configuration ---
+
+# --- API Routers ---
+# Include the main user router. As more features are added,
+# their routers will be included here as well.
+app.include_router(user_router, prefix="/api/v1")
+# --- End of API Routers ---
 
 @app.get("/")
 def read_root():
+    """A simple health-check endpoint."""
     return {"message": "Welcome to the Sentinel Backend API!"}
 
-# This endpoint is just for demonstration and can be removed if not needed.
-from src.dependencies import get_db
 
-@app.get("/api/message")
-def get_dummy_message(db=Depends(get_db)):
-    try:
-        doc_ref = db.collection('settings').document('dummyMessage')
-        doc = doc_ref.get()
-
-        if doc.exists:
-            return doc.to_dict()
-        else:
-            raise HTTPException(status_code=404, detail="Dummy message document not found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An error occurred: {e}")

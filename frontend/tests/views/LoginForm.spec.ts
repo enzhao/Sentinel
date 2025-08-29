@@ -64,18 +64,17 @@ describe('LoginForm.vue', () => {
     expect(document.querySelector('input[type="password"]')).not.toBeNull();
   });
 
-  it('emits user-clicks-cancel and navigates to home when cancelLogin is called', async () => {
+  it('navigates to home when cancel is clicked', async () => {
     const wrapper = mountComponent();
     await nextTick();
     const loginFormWrapper = wrapper.findComponent(LoginForm);
 
     await loginFormWrapper.vm.cancelLogin();
 
-    expect(loginFormWrapper.emitted()['user-clicks-cancel']).toBeTruthy();
     expect(mockRouterPush).toHaveBeenCalledWith('/');
   });
 
-  it('calls signInWithEmailAndPassword and emits user-submits-login on successful login', async () => {
+  it('calls signInWithEmailAndPassword and navigates to dashboard on successful login', async () => {
     mockSignIn.mockResolvedValueOnce({});
     const wrapper = mountComponent();
     await nextTick();
@@ -83,10 +82,10 @@ describe('LoginForm.vue', () => {
 
     loginFormWrapper.vm.formState.email = 'test@example.com';
     loginFormWrapper.vm.formState.password = 'password123';
-    
+
     await loginFormWrapper.vm.submitLogin();
 
     expect(mockSignIn).toHaveBeenCalledWith(expect.any(Object), 'test@example.com', 'password123');
-    expect(loginFormWrapper.emitted()['user-submits-login']).toBeTruthy();
+    expect(mockRouterPush).toHaveBeenCalledWith({ name: 'dashboard' });
   });
 });

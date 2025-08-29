@@ -25,14 +25,26 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Connect to Firebase Emulators if VITE_USE_EMULATORS is true
-if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+// Connect to Firebase Emulators if VITE_USE_EMULATORS is explicitly set to 'true'.
+// Using String() and toLowerCase() makes the check more robust against minor
+// variations like `true` (boolean) or `"TRUE"`.
+if (String(import.meta.env.VITE_USE_EMULATORS).toLowerCase() === 'true') {
   if (import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST) {
     connectAuthEmulator(auth, `http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST}`);
     console.log(`Connected to Firebase Auth emulator at http://${import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST}`);
   }
   if (import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) {
-    connectFirestoreEmulator(db, import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')[0], parseInt(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST.split(':')[1]));
-    console.log(`Connected to Firebase Firestore emulator at http://${import.meta.env.VITE_FIRESTORE_EMULATOR_HOST}`);
+    const firestoreHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST;
+    const [host, portStr] = firestoreHost.split(':');
+    const port = parseInt(portStr, 10);
+
+    // Add a check to ensure the host and port are valid before connecting.
+    // This prevents cryptic errors if the env var is malformed.
+    if (!host || isNaN(port)) {
+      console.error(`Invalid VITE_FIRESTORE_EMULATOR_HOST format: "${firestoreHost}". Expected "host:port".`);
+    } else {
+      connectFirestoreEmulator(db, host, port);
+      console.log(`Connected to Firebase Firestore emulator at http://${firestoreHost}`);
+    }
   }
 }

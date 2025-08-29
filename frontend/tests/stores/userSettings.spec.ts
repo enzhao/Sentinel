@@ -75,10 +75,15 @@ describe('userSettings Store', () => {
   it('should handle error when fetching user settings', async () => {
     const store = useUserSettingsStore();
 
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ message: 'Network error' }),
-    });
+    // Since fetchUserSettings uses Promise.all, we must mock both API calls.
+    // Here, we simulate the first call (settings) failing and the second (portfolios) succeeding.
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ detail: 'Network error' }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
 
     await store.fetchUserSettings();
 
@@ -92,7 +97,7 @@ describe('userSettings Store', () => {
     const store = useUserSettingsStore();
 
     // Initialize user settings first
-    store.userSettings = {
+    const initialSettings = {
       userId: 'user123',
       email: 'test@example.com',
       defaultPortfolioId: 'portfolio1',
@@ -100,15 +105,22 @@ describe('userSettings Store', () => {
       createdAt: '2023-01-01T00:00:00Z',
       modifiedAt: '2023-01-01T00:00:00Z',
     };
+    store.userSettings = initialSettings;
 
     const updatedData = {
       defaultPortfolioId: 'portfolio2',
       notificationPreferences: ['EMAIL', 'PUSH'],
     };
 
+    const mockUpdatedUserSettings = {
+      ...initialSettings,
+      ...updatedData,
+      modifiedAt: new Date().toISOString(),
+    };
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: () => Promise.resolve({ message: 'Settings updated' }),
+      json: () => Promise.resolve(mockUpdatedUserSettings),
     });
 
     await store.updateUserSettings(updatedData);
@@ -152,7 +164,7 @@ describe('userSettings Store', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: false,
-      json: () => Promise.resolve({ message: 'Validation error' }),
+      json: () => Promise.resolve({ detail: 'Validation error' }),
     });
 
     await store.updateUserSettings(updatedData);

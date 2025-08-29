@@ -39,12 +39,14 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
         fetch(`${API_BASE_URL}/users/me/portfolios`, { headers })
       ]);
 
-      if (!settingsResponse.ok) throw new Error((await settingsResponse.json()).detail || 'Failed to fetch user settings.');
-      if (!portfoliosResponse.ok) throw new Error((await portfoliosResponse.json()).detail || 'Failed to fetch portfolios.');
+      const settingsData = await settingsResponse.json();
+      const portfoliosData = await portfoliosResponse.json();
+
+      if (!settingsResponse.ok) throw new Error(settingsData.detail || 'Failed to fetch user settings.');
+      if (!portfoliosResponse.ok) throw new Error(portfoliosData.detail || 'Failed to fetch portfolios.');
       
-      userSettings.value = await settingsResponse.json() as User;
-      // The backend endpoint returns the full Portfolio object, so we cast to that type.
-      portfolios.value = await portfoliosResponse.json() as Portfolio[];
+      userSettings.value = settingsData as User;
+      portfolios.value = portfoliosData as Portfolio[];
 
       console.log('✅ User settings and portfolios fetched successfully.');
       console.log('User Settings:', userSettings.value);
@@ -82,13 +84,13 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
         body: JSON.stringify(updatedSettings),
       });
 
+      const responseData = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to update user settings.');
+        throw new Error(responseData.detail || 'Failed to update user settings.');
       }
 
       // Update local state with the new settings
-      userSettings.value = await response.json() as User;
+      userSettings.value = responseData as User;
 
     } catch (err: any) {
       console.error('Error updating user settings:', err);

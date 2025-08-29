@@ -73,9 +73,9 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [x] fix the GitHub CI
 - add links to for homepage, user docs, and dashboard in the AppBar. (I'm currently at the step "add links to for homepage, user docs, and dashboard in the AppBar." I'd like the appbar to contain the following links: for both authenticated and unauthenticated users): homepage, user docs. For unauthenticated user only: login. For authenticated users only: dashboard, logout, user settings (logout and user settings are under user menu). The links for dashboard, login, and user menu are already implemented, source code can be found under frontend/src, need to add the missing links and make them work. )  
     - [x] update the product_spec.md, docs/specs/view_spec.yaml and other relevant docs to reflect this requirement. 
-    - [ ] integrate user docs to the frontend (The source text for user docs are under docs/user_docs , I use mkdocs and its material template to generate static user docs, currently the generated docs are under docs_generated, these generated HTMLs contain internal links, mermaid diagrams, etc, you can have a look. I'd like to add the generated content to the Sentinel app. There is already a link on the appbar (user docs), how to integrate the generated docs to the app and make the "user docs" link on the appbar work? Please suggest a best integration strategy.)
-    - [ ] update frontend code 
-    - [ ] manual test
+    - [x] integrate user docs to the frontend (The source text for user docs are under docs/user_docs , I use mkdocs and its material template to generate static user docs, currently the generated docs are under docs_generated, these generated HTMLs contain internal links, mermaid diagrams, etc, you can have a look. I'd like to add the generated content to the Sentinel app. There is already a link on the appbar (user docs), how to integrate the generated docs to the app and make the "user docs" link on the appbar work? Please suggest a best integration strategy.)
+    - [x] update frontend code 
+    - [x] manual test
     - [ ] update frontend tests
     - [ ] make ci work
 - [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 

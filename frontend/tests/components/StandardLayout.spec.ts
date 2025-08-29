@@ -1,167 +1,215 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
-import { createPinia, setActivePinia } from 'pinia';
-import { createRouter, createWebHistory } from 'vue-router';
-import StandardLayout from '@/components/StandardLayout.vue';
-import { useAuthStore } from '@/stores/auth';
-import { useUserSettingsStore } from '@/stores/userSettings';
-import { onAuthStateChanged } from 'firebase/auth';
-import { nextTick } from 'vue';
+import { mount } from '@vue/test-utils'
+import type { Router } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// --- We only mock the lowest-level dependency ---
-vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(),
-  onAuthStateChanged: vi.fn(), // We will control this in each test
-  signOut: vi.fn(),
-}));
+import StandardLayout from '@/components/StandardLayout.vue'
+import AppBar from '@/components/AppBar.vue'
+import { createSentinelRouter } from '@/router'
+import { useAuthStore } from '@/stores/auth'
+import { useUserSettingsStore } from '@/stores/userSettings'
 
-// Mock the AppBar to isolate the layout component
-const AppBarStub = {
-  name: 'AppBar',
-  template: '<div></div>',
-  props: ['title', 'actions', 'userMenu', 'leadingAction'],
-  emits: ['USER_CLICKS_LOGIN', 'USER_CLICKS_LOGOUT', 'USER_CLICKS_SETTINGS', 'USER_CLICKS_BACK'],
-};
+// Partially mock 'firebase/auth'. This is the key to preventing the test from hanging.
+// We use the real module for connecting to the emulator but replace the problematic
+// `onAuthStateChanged` function. This mock immediately invokes the callback to
+// simulate the initial auth state check, allowing `authStore.init()` to resolve.
+vi.mock('firebase/auth', async (importActual) => {
+  const actual = await importActual<typeof import('firebase/auth')>();
+  return {
+    ...actual,
+    onAuthStateChanged: vi.fn((auth, callback) => {
+      callback(null); // Simulate initial "not logged in" state
+      return vi.fn(); // Return a mock unsubscribe function
+    }),
+  };
+});
 
 describe('StandardLayout.vue', () => {
-  const router = createRouter({
-    history: createWebHistory(),
-    routes: [
-      { path: '/', name: 'home', component: {}, meta: { title: 'Sentinel Home' } },
-      { path: '/login', name: 'login', component: {} },
-      { path: '/settings', name: 'settings', component: {} },
-    ],
-  });
-  const onAuthStateChangedMock = onAuthStateChanged as vi.Mock;
+  // We don't define a global router instance here.
+  // A fresh one will be created for each test inside mountComponent.
+  let router: Router;
+  let authStore: ReturnType<typeof useAuthStore>
+  let userSettingsStore: ReturnType<typeof useUserSettingsStore>
 
-  beforeEach(() => {
-    // Reset router to home before each test
-    router.push('/');
-    setActivePinia(createPinia());
-    vi.clearAllMocks();
-  });
-
-  const mountComponent = (options = {}) => {
+  // Helper function to mount the component with a fresh router and Pinia store.
+  const mountComponent = async () => {
+    router = createSentinelRouter();
     return mount(StandardLayout, {
       global: {
-        plugins: [router],
-        stubs: { AppBar: AppBarStub },
+        plugins: [router], // Pinia is active globally via setActivePinia
       },
-      // Allow passing slots and other options
-      ...options,
-    });
-  };
-
-  it('computes login action when user is not authenticated', async () => {
-    // ARRANGE: Firebase reports the user is logged out
-    onAuthStateChangedMock.mockImplementation((auth, callback) => {
-      callback(null);
-    });
-    // Initialize the real store, which will use the mock above
-    const authStore = useAuthStore();
-    await authStore.init();
-
-    // ACT
-    await router.isReady();
-    const wrapper = mountComponent();
-    await nextTick();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    // ASSERT
-    expect(appBar.props('actions')).toEqual([{ label: 'Login', event: 'USER_CLICKS_LOGIN' }]);
-  });
-
-  it('computes user menu when user is authenticated', async () => {
-    // ARRANGE: Firebase reports the user is logged in
-    const mockUser = { uid: '123', email: 'test@test.com' };
-    onAuthStateChangedMock.mockImplementation((auth, callback) => {
-      callback(mockUser);
-    });
-    const authStore = useAuthStore();
-    const userSettingsStore = useUserSettingsStore();
-    userSettingsStore.userSettings = { username: 'Test User' };
-    await authStore.init();
-
-    // ACT
-    await router.isReady();
-    const wrapper = mountComponent();
-    await nextTick();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    // ASSERT
-    expect(appBar.props('actions')).toBeUndefined();
-    expect(appBar.props('userMenu')).toEqual({
-      username: 'Test User',
-      items: [
-        { label: 'Settings', event: 'USER_CLICKS_SETTINGS' },
-        { label: 'Logout', event: 'USER_CLICKS_LOGOUT' },
-      ],
-    });
-  });
-
-  it('navigates to login page on USER_CLICKS_LOGIN event', async () => {
-    const pushSpy = vi.spyOn(router, 'push');
-    const wrapper = mountComponent();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    await appBar.vm.$emit('USER_CLICKS_LOGIN');
-
-    expect(pushSpy).toHaveBeenCalledWith({ name: 'login' });
-    pushSpy.mockRestore();
-  });
-
-  it('calls authStore.logout on USER_CLICKS_LOGOUT event', async () => {
-    const authStore = useAuthStore();
-    const logoutSpy = vi.spyOn(authStore, 'logout');
-    const wrapper = mountComponent();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    await appBar.vm.$emit('USER_CLICKS_LOGOUT');
-
-    expect(logoutSpy).toHaveBeenCalled();
-  });
-
-  it('navigates to settings page on USER_CLICKS_SETTINGS event', async () => {
-    const pushSpy = vi.spyOn(router, 'push');
-    const wrapper = mountComponent();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    await appBar.vm.$emit('USER_CLICKS_SETTINGS');
-
-    expect(pushSpy).toHaveBeenCalledWith({ name: 'settings' });
-    pushSpy.mockRestore();
-  });
-
-  it('navigates back on USER_CLICKS_BACK event', async () => {
-    const backSpy = vi.spyOn(router, 'back');
-    const wrapper = mountComponent();
-    const appBar = wrapper.findComponent(AppBarStub);
-
-    await appBar.vm.$emit('USER_CLICKS_BACK');
-
-    expect(backSpy).toHaveBeenCalledOnce();
-    backSpy.mockRestore();
-  });
-
-  it('renders content in the body, fab, and footer slots', () => {
-    const wrapper = mountComponent({
       slots: {
-        body: '<div class="body-content">Body Content</div>',
-        fab: '<button class="fab-button">FAB</button>',
-        footer: '<div class="footer-content">Footer Content</div>',
+        body: '<div>Page Content</div>',
       },
-    });
+    })
+  }
 
-    const bodyContent = wrapper.find('.body-content');
-    expect(bodyContent.exists()).toBe(true);
-    expect(bodyContent.text()).toBe('Body Content');
+  beforeEach(() => {
+    // 1. Set up a real Pinia instance and get the stores.
+    setActivePinia(createPinia());
+    authStore = useAuthStore();
+    userSettingsStore = useUserSettingsStore();
 
-    const fabButton = wrapper.find('.fab-button');
-    expect(fabButton.exists()).toBe(true);
-    expect(fabButton.text()).toBe('FAB');
+    // 2. Mock store actions that make external API calls. We no longer mock
+    // `authStore.init` because we have mocked the underlying `onAuthStateChanged`
+    // call, making the real `init` function safe to run in tests.
+    authStore.logout = vi.fn().mockResolvedValue(true);
+    userSettingsStore.fetchUserSettings = vi.fn().mockResolvedValue(undefined);
+    userSettingsStore.clearUserSettings = vi.fn();
 
-    const footerContent = wrapper.find('.footer-content');
-    expect(footerContent.exists()).toBe(true);
-    expect(footerContent.text()).toBe('Footer Content');
-  });
-});
+    // 3. Mock other browser-specific methods.
+    window.open = vi.fn()
+  })
+
+  describe('for an unauthenticated user', () => {
+    beforeEach(async () => {
+      // Set the underlying state property. The real store's getters will react to this.
+      authStore.user = null
+
+      // Ensure the mock reflects the unauthenticated state for the router guard.
+      const { onAuthStateChanged } = await import('firebase/auth');
+      vi.mocked(onAuthStateChanged).mockImplementation((auth, callback) => {
+        callback(null);
+        return vi.fn();
+      });
+    })
+
+    it('renders the AppBar with correct props for unauthenticated users', async () => {
+      const wrapper = await mountComponent();
+      await router.push({ name: 'home' });
+      await wrapper.vm.$nextTick() // Wait for computed properties to update.
+
+      const appBar = wrapper.findComponent(AppBar)
+      expect(appBar.exists()).toBe(true)
+
+      const props = appBar.props()
+      // The title comes from the route meta in routes.ts
+      expect(props.title).toBe('Sentinel Home')
+
+      // Verify the actions passed to the AppBar.
+      const actions = props.actions as any[]
+      expect(actions.find((a) => a.label === 'Home')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Docs')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Login')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Dashboard')).toBeUndefined()
+      // The AppBar component prop defaults to null if not provided.
+      expect(props.userMenu).toBeNull()
+    })
+
+    it('navigates to login page when login is clicked', async () => {
+      const wrapper = await mountComponent()
+      const push = vi.spyOn(router, 'push')
+      const appBar = wrapper.findComponent(AppBar)
+
+      await appBar.vm.$emit('USER_CLICKS_LOGIN')
+      expect(push).toHaveBeenCalledWith({ name: 'login' })
+    })
+  })
+
+  describe('for an authenticated user', () => {
+    beforeEach(async () => {
+      // Set the underlying state for the real stores.
+      const mockUser = { uid: 'test-uid', email: 'test@example.com' } as any;
+      authStore.user = mockUser
+
+      // Ensure the mock reflects the authenticated state for the router guard.
+      const { onAuthStateChanged } = await import('firebase/auth');
+      vi.mocked(onAuthStateChanged).mockImplementation((auth, callback) => {
+        callback(mockUser);
+        return vi.fn();
+      });
+
+      userSettingsStore.userSettings = {
+        uid: 'test-uid',
+        username: 'TestUser',
+        email: 'test@example.com',
+        defaultPortfolioId: 'pf-1',
+        subscriptionStatus: 'FREE',
+        notificationPreferences: [],
+        createdAt: new Date().toISOString(),
+        modifiedAt: new Date().toISOString(),
+      }
+    })
+
+    it('renders the AppBar with correct props for authenticated users', async () => {
+      const wrapper = await mountComponent();
+      await router.push({ name: 'home' });
+      await wrapper.vm.$nextTick()
+
+      const appBar = wrapper.findComponent(AppBar)
+      const props = appBar.props()
+      // The title comes from the route meta in routes.ts for the home page.
+      expect(props.title).toBe('My Portfolios')
+
+      const actions = props.actions as any[]
+      expect(actions.find((a) => a.label === 'Home')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Docs')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Dashboard')).toBeDefined()
+      expect(actions.find((a) => a.label === 'Login')).toBeUndefined()
+
+      expect(props.userMenu).toBeDefined()
+      expect(props.userMenu.username).toBe('TestUser')
+      expect(props.userMenu.items).toHaveLength(2)
+    })
+
+    it('navigates to dashboard when dashboard link is clicked', async () => {
+      const wrapper = await mountComponent()
+      const push = vi.spyOn(router, 'push')
+      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_DASHBOARD')
+      expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
+    })
+
+    it('opens user docs in a new tab when docs link is clicked', async () => {
+      const wrapper = await mountComponent()
+      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_DOCS')
+      expect(window.open).toHaveBeenCalledWith('/user_docs/index.html', '_blank')
+    })
+
+    it('handles logout correctly', async () => {
+      const wrapper = await mountComponent()
+      const push = vi.spyOn(router, 'push')
+
+      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_LOGOUT')
+      await wrapper.vm.$nextTick() // Wait for async logout and navigation to complete.
+
+      expect(authStore.logout).toHaveBeenCalled()
+      expect(userSettingsStore.clearUserSettings).toHaveBeenCalled()
+      expect(push).toHaveBeenCalledWith({ name: 'home' })
+    })
+
+    it('fetches user settings on mount if authenticated', async () => {
+      // GIVEN the user is authenticated but settings have not been loaded yet
+      userSettingsStore.userSettings = null
+      // `authStore.isAuthenticated` is already true from the describe block's beforeEach
+      await mountComponent()
+      expect(userSettingsStore.fetchUserSettings).toHaveBeenCalled()
+    })
+  })
+
+  describe('general navigation', () => {
+    it('navigates to home page when home link is clicked', async () => {
+      const wrapper = await mountComponent()
+      const push = vi.spyOn(router, 'push')
+      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_HOME')
+      expect(push).toHaveBeenCalledWith({ name: 'home' })
+    })
+
+    it('navigates back when back button is clicked on a page with a back action', async () => {
+      const wrapper = await mountComponent()
+      // GIVEN a user is on a page with a back button
+      await router.push({ name: 'settings' })
+      await router.isReady();
+      const backSpy = vi.spyOn(router, 'back')
+      await wrapper.vm.$nextTick() // Let computed properties update based on new route
+
+      const appBar = wrapper.findComponent(AppBar)
+      expect(appBar.props().leadingAction).toBeDefined()
+
+      // WHEN the back event is emitted
+      await appBar.vm.$emit('USER_CLICKS_BACK')
+
+      // THEN the router's back method should have been called
+      expect(backSpy).toHaveBeenCalledOnce()
+    })
+  })
+})

@@ -5,6 +5,7 @@
       <HeroSection
         title="Automate Your Investment Strategy."
         subtitle="Sentinel helps you follow your investment plan with discipline by monitoring the market for you. Define your rules, get notified, and stay in control."
+        @USER_CLICKS_GET_STARTED="navigateToLogin"
       />
       <KeyFeaturesSection
         :features="[
@@ -47,11 +48,7 @@
 </template>
 
 <script setup lang="ts">
-// --- All this logic is no longer needed here! ---
-// import AppBar from '@/components/AppBar.vue';
-// import { useRouter } from 'vue-router';
-// import { useAuthStore } from '@/stores/auth';
-
+import { useRouter } from 'vue-router';
 import StandardLayout from '@/components/StandardLayout.vue';
 import MarketDataTicker from '@/components/MarketDataTicker.vue';
 import HeroSection from '@/components/HeroSection.vue';
@@ -59,7 +56,11 @@ import KeyFeaturesSection from '@/components/KeyFeaturesSection.vue';
 import ProblemSolutionSection from '@/components/ProblemSolutionSection.vue';
 import TargetAudienceSection from '@/components/TargetAudienceSection.vue';
 
-// The script is now clean and focused only on the components this page uses.
+const router = useRouter();
+
+const navigateToLogin = () => {
+  router.push({ name: 'login' });
+};
 </script>
 
 <style scoped>

@@ -76,7 +76,8 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     } catch (error: any) {
       console.error('Logout failed:', error.message)
-      throw error
+      // Return false on failure instead of throwing, so UI can handle it gracefully.
+      return false
     }
   }
 

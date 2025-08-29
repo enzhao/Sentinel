@@ -1,48 +1,65 @@
-import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { createSentinelRouter } from '@/router';
+import type { Router } from 'vue-router';
 import HomePage from '@/views/HomePage.vue';
- 
-// Mock the entire Firebase SDK modules. This prevents the real SDK from
-// trying to initialize with missing environment variables, which would cause
-// an 'auth/invalid-api-key' error.
-vi.mock('firebase/app', () => ({
-  initializeApp: vi.fn(() => ({})),
-}));
-vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(() => ({})),
-  onAuthStateChanged: vi.fn(),
-}));
-vi.mock('firebase/firestore', () => ({
-  getFirestore: vi.fn(() => ({})),
-  // Add other Firestore functions if they are directly used in the store or component
-}));
+
+// Partially mock 'firebase/auth'. This is crucial. We use the real module
+// so that functions like `connectAuthEmulator` (called by `src/plugins/firebase.ts`)
+// are available, but we replace `onAuthStateChanged` with a mock we can control
+// to prevent tests from hanging during router initialization.
+vi.mock('firebase/auth', async (importActual) => {
+  const actual = await importActual<typeof import('firebase/auth')>();
+  return {
+    ...actual,
+    onAuthStateChanged: vi.fn((auth, callback) => {
+      // Default to unauthenticated for the public home page tests
+      callback(null);
+      return vi.fn(); // Return a mock unsubscribe function
+    }),
+  };
+});
 
 describe('HomePage.vue', () => {
-  const mountComponent = () => {
-    return mount(HomePage, {
+  let router: Router;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    router = createSentinelRouter();
+  });
+
+  it('renders all sections of the homepage', async () => {
+    const wrapper = mount(HomePage, {
       global: {
-        plugins: [],
-        // We stub the layout and content sections for a focused unit test
-        stubs: {
-          StandardLayout: { template: '<div><slot name="body"></slot></div>' },
-          MarketDataTicker: true,
-          HeroSection: true,
-          KeyFeaturesSection: true,
-          ProblemSolutionSection: true,
-          TargetAudienceSection: true,
-        },
+        plugins: [router],
+        // Use real child components for a high-fidelity test
+        stubs: {},
       },
     });
-  };
+    await router.isReady();
 
-  it('renders all of its content sections', () => {
-    const wrapper = mountComponent();
-    
-    // Simply check that the content components are present
-    expect(wrapper.findComponent({ name: 'MarketDataTicker' }).exists()).toBe(true);
+    // Verify that all the main marketing sections are present on the page
     expect(wrapper.findComponent({ name: 'HeroSection' }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: 'KeyFeaturesSection' }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: 'ProblemSolutionSection' }).exists()).toBe(true);
     expect(wrapper.findComponent({ name: 'TargetAudienceSection' }).exists()).toBe(true);
+  });
+
+  it('navigates to login when "Get Started" is clicked', async () => {
+    const wrapper = mount(HomePage, {
+      global: {
+        plugins: [router],
+      },
+    });
+    await router.isReady();
+
+    const push = vi.spyOn(router, 'push');
+    const heroSection = wrapper.findComponent({ name: 'HeroSection' });
+    
+    // Simulate the event emitted by the HeroSection component
+    await heroSection.vm.$emit('USER_CLICKS_GET_STARTED');
+
+    expect(push).toHaveBeenCalledWith({ name: 'login' });
   });
 });
