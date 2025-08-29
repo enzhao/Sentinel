@@ -166,7 +166,7 @@ describe('StandardLayout.vue', () => {
       const appBar = wrapper.findComponent(AppBar);
       expect(appBar.exists()).toBe(true);
       await appBar.vm.$emit('USER_CLICKS_DOCS');
-      expect(window.open).toHaveBeenCalledWith('/user_docs/index.html', '_blank')
+      expect(window.open).toHaveBeenCalledWith('/user_docs/', '_blank')
     })
 
     it('handles logout correctly', async () => {
