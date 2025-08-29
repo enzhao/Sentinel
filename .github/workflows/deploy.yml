@@ -78,10 +78,10 @@ jobs:
       - name: 🔄 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🟢 Set up Node.js 22
+      - name: 🟢 Set up Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: 🧾 Create .env.production
         run: |
