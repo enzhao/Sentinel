@@ -76,7 +76,7 @@ The AI should prioritize features based on their foundational nature. A logical 
     - [x] integrate user docs to the frontend (The source text for user docs are under docs/user_docs , I use mkdocs and its material template to generate static user docs, currently the generated docs are under docs_generated, these generated HTMLs contain internal links, mermaid diagrams, etc, you can have a look. I'd like to add the generated content to the Sentinel app. There is already a link on the appbar (user docs), how to integrate the generated docs to the app and make the "user docs" link on the appbar work? Please suggest a best integration strategy.)
     - [x] update frontend code 
     - [x] manual test
-    - [ ] update frontend tests
+    - [x] update frontend tests
     - [ ] make ci work
 - [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 
 - [ ] check commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml

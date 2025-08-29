@@ -71,7 +71,8 @@ The frontend testing strategy is designed to ensure a reliable and smooth user e
 
 - **Purpose**: To test the core logic within Pinia stores, the Vue router, application plugins, and utility files in strict isolation.
 - **Method**: For stores, router, and plugins, we use real instances but mock external dependencies (like API calls, Firebase SDK) to ensure focus on the logic being tested. For utility files, strict unit testing is applied.
-- **Goal**: To ensure the core application logic and state management are correct in a fast, focused manner.
+- **Method**: We use a **high-fidelity approach**. Real instances of stores and the router are used, connected to the **Firebase Emulator Suite**. We avoid mocking entire modules like `firebase/auth`. Instead, we use `vi.mock` with `importActual` to perform **partial mocks**, replacing only the specific functions that are problematic in a test environment (e.g., the `onAuthStateChanged` listener, which can cause tests to hang). For external API calls (e.g., to the backend), `fetch` is mocked.
+- **Goal**: To ensure the core application logic and state management are tested in an environment that is as close to production as possible, increasing confidence and reducing bugs that only appear during integration.
 - **Location**:
     - `frontend/tests/stores/`: For Pinia store logic.
     - `frontend/tests/router/`: For Vue Router configuration and guards.

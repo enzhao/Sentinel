@@ -3,12 +3,15 @@ import './plugins/firebase'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
-import router from './router'
+import createSentinelRouter from './router' // Import the factory function
 import vuetify from './plugins/vuetify' // path to vuetify export
 import i18n from './plugins/i18n' // import i18n
 import { useAuthStore } from './stores/auth'
 
 const app = createApp(App)
+
+const router = createSentinelRouter() // Create the router instance
+
 const pinia = createPinia()
 
 app.use(pinia)
