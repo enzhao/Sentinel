@@ -46,7 +46,7 @@ from .firebase_setup import initialize_firebase_app
 initialize_firebase_app()
 # --- End Firebase Initialization ---
 
-
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .middleware import idempotency_middleware
@@ -55,17 +55,22 @@ from .middleware import idempotency_middleware
 # Import the router directly, not the factory function
 from .routers.user_router import router as user_router
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Actions to perform on application startup.
-    - Initializes the Firebase app.
-    - Loads user-facing messages.
+    Handles application startup and shutdown events.
     """
     print("DIAGNOSTIC: Application startup event triggered.")
-    # message_manager.load_messages() # This can remain here if needed
+    # Note: Firebase and MessageManager are initialized at module load time.
+    # Any future startup logic can be added here.
+    yield
+    # Shutdown logic can be placed here.
+
+app = FastAPI(
+    title="Sentinel API",
+    description="Backend API for the Sentinel investment monitoring tool.",
+    lifespan=lifespan,
+)
 
 # The idempotency middleware should be one of the first to run.
 app.middleware("http")(idempotency_middleware)

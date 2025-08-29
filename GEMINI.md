@@ -70,13 +70,21 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [x] project scaffolding and setup, including initial CI/CD pipelines (if not already done)
 - [x] Generate the OpenAPI spec from the product_spec.md, the generated file should be api/sentinel_openapi.yaml, the generated openapi spec should contain section refrences back to the relevant sections in product_spec.md for traceability.
 - [x] Shared Models: Generate or define shared data models (e.g., Pydantic models for FastAPI, TypeScript interfaces for Vue) based on the product_spec.md and the api/sentinel_api.yaml spec. All generated models should contain section refrences back to the relevant sections in product_spec.md for traceability. 
+- [ ] fix the GitHub CI
+- [ ] add links to for homepage, user docs, and dashboard in the AppBar.
+    - update the docs/specs/view_spec.yaml
+    - update frontend code 
+- [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 
+- [ ] check commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml
+
+
 
 ### Functional Features
 
 - [x] Public Homepage (see product_spec.md Chapter 8, and the view with id VIEW_HOME_PAGE in the file docs/specs/views_spec.yaml). 
 - [x] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
 - [x] User Settings Management API validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 9).
-- [ ] User Settings Management Frontend (see files docs/specs/views_spec.yaml , docs/specs/ui_flows_spec.yaml , and api/sentinel_api.yaml and product_spec.md Chapter 9).
+- [x] User Settings Management Frontend (see files docs/specs/views_spec.yaml , docs/specs/ui_flows_spec.yaml , and api/sentinel_api.yaml and product_spec.md Chapter 9).
 - [ ] Portfolio Management API Validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 3).
 - [ ] Portfolio Management Frontend (see files docs/specs/views_spec.yaml, docs/specs/ui_flows_spec.yaml, api/sentinel_api.yaml and product_spec.md Chapter 3).
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)
