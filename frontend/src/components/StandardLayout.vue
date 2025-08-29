@@ -12,6 +12,8 @@
       @USER_CLICKS_LOGOUT="handleLogout"
       @USER_CLICKS_SETTINGS="handleSettingsClick"
       @USER_CLICKS_DASHBOARD="handleDashboardClick"
+      @USER_CLICKS_HOME="handleHomeClick"
+      @USER_CLICKS_DOCS="handleDocsClick"
       @USER_CLICKS_BACK="handleBackClick"
     />
 
@@ -86,6 +88,17 @@ const handleDashboardClick = () => {
   router.push({ name: 'dashboard' });
 };
 
+const handleHomeClick = () => {
+  router.push({ name: 'home' });
+};
+
+const handleDocsClick = () => {
+  // As per product_spec.md, this should link to the user documentation.
+  // Opening in a new tab is the standard for external/supplementary docs.
+  // The final URL is /user_docs/ based on the CI build step.
+  window.open('/user_docs/index.html', '_blank');
+};
+
 const handleBackClick = () => {
   router.back();
 };
@@ -96,21 +109,23 @@ const handleBackClick = () => {
 const appBarProps = computed(() => {
   const props: any = {
     title: route.meta.title || 'Sentinel',
+    actions: [], // Initialize with an empty array
   };
-  // Diagnostic logging to help debug reactivity issues.
-  console.log('DIAGNOSTIC: Re-computing appBarProps...');
-  console.log(`  - authStore.isAuthenticated: ${authStore.isAuthenticated}`);
-  console.log(`  - userSettingsStore.userSettings is present: ${!!userSettingsStore.userSettings}`);
-  
-
 
   if (route.meta.leadingAction) {
     props.leadingAction = route.meta.leadingAction;
   }
 
+  // Common actions for all users, visible on wider screens.
+  // Ref: product_spec.md Section 1.5
+  props.actions.push({ id: 'home-link', label: 'Home', event: 'USER_CLICKS_HOME' });
+  props.actions.push({ id: 'docs-link', label: 'Docs', event: 'USER_CLICKS_DOCS' });
+
   if (authStore.isAuthenticated) {
-    console.log('DIAGNOSTIC: User is authenticated, building userMenu.');
-    // Use a local variable for the username to handle the case where settings are still loading.
+    // Add actions specific to authenticated users.
+    props.actions.push({ id: 'dashboard-link', label: 'Dashboard', event: 'USER_CLICKS_DASHBOARD' });
+
+    // Build the user menu with username and dropdown items.
     const username = userSettingsStore.userSettings?.username || 'User';
     props.userMenu = {
       username: username,
@@ -119,17 +134,11 @@ const appBarProps = computed(() => {
         { id: 'logout-menu-item', label: 'Logout', event: 'USER_CLICKS_LOGOUT' },
       ],
     };
-    // Add a dashboard link if the user is authenticated and not already on the dashboard
-    if (route.name !== 'dashboard') {
-      props.actions = [{ id: 'dashboard-link', label: 'Dashboard', event: 'USER_CLICKS_DASHBOARD' }];
-    }
   } else {
-    console.log('DIAGNOSTIC: User is NOT authenticated, building login action.');
-    props.actions = [{ label: 'Login', event: 'USER_CLICKS_LOGIN' }];
+    // Add the login action for unauthenticated users.
+    props.actions.push({ id: 'login-link', label: 'Login', event: 'USER_CLICKS_LOGIN' });
   }
 
-  // Log the final object to see exactly what props are being generated.
-  console.log('DIAGNOSTIC: Final appBarProps:', JSON.parse(JSON.stringify(props)));
   return props;
 });
 </script>

@@ -10,22 +10,28 @@
       
       
       
+        <link rel="canonical" href="https://example.com/docs/creating-your-first-rule/">
       
       
+        <link rel="prev" href="../understanding-the-dashboard/">
       
-      <link rel="icon" href="/docs/assets/images/favicon.png">
+      
+        <link rel="next" href="../supported-trading-rules/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
     
     
       
-        <title>Sentinel User Manual</title>
+        <title>Action - Sentinel User Manual</title>
       
     
     
-      <link rel="stylesheet" href="/docs/assets/stylesheets/main.7e37652d.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.7e37652d.min.css">
       
         
-        <link rel="stylesheet" href="/docs/assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -44,7 +50,7 @@
       
     
     
-    <script>__md_scope=new URL("/docs/",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -61,13 +67,18 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-blue">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#creating-your-first-trading-rule" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -79,7 +90,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/docs/." title="Sentinel User Manual" class="md-header__button md-logo" aria-label="Sentinel User Manual" data-md-component="logo">
+    <a href=".." title="Sentinel User Manual" class="md-header__button md-logo" aria-label="Sentinel User Manual" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -99,7 +110,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              Action
             
           </span>
         </div>
@@ -112,13 +123,13 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
     
   
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
     
   
 </form>
@@ -190,7 +201,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/docs/." class="md-tabs__link">
+      <a href=".." class="md-tabs__link">
         
   
   
@@ -207,11 +218,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="/docs/getting-started/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../getting-started/" class="md-tabs__link">
           
   
   
@@ -229,7 +242,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/docs/supported-trading-rules/" class="md-tabs__link">
+      <a href="../supported-trading-rules/" class="md-tabs__link">
         
   
   
@@ -264,7 +277,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/docs/." title="Sentinel User Manual" class="md-nav__button md-logo" aria-label="Sentinel User Manual" data-md-component="logo">
+    <a href=".." title="Sentinel User Manual" class="md-nav__button md-logo" aria-label="Sentinel User Manual" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -282,7 +295,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/docs/." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -301,26 +314,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
             
   
   
@@ -333,7 +351,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Quick Start Guide
@@ -347,7 +365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/docs/getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -370,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/docs/understanding-the-dashboard/" class="md-nav__link">
+      <a href="../understanding-the-dashboard/" class="md-nav__link">
         
   
   
@@ -390,10 +408,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="/docs/creating-your-first-rule/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Action
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -404,6 +444,44 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#example-a-buy-the-dip-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: A "Buy the Dip" Rule
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-by-step-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step-by-Step Guide
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -423,7 +501,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/docs/supported-trading-rules/" class="md-nav__link">
+      <a href="../supported-trading-rules/" class="md-nav__link">
         
   
   
@@ -455,6 +533,34 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#example-a-buy-the-dip-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example: A "Buy the Dip" Rule
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-by-step-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step-by-Step Guide
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -466,8 +572,57 @@
             <div class="md-content" data-md-component="content">
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+
+<h1 id="creating-your-first-trading-rule">Creating Your First Trading Rule<a class="headerlink" href="#creating-your-first-trading-rule" title="Permanent link">&para;</a></h1>
+<p>The core power of Sentinel is its ability to monitor the market based on a <strong>Rule Set</strong> that you define. A rule set is a collection of conditions that, when met, will trigger a BUY or SELL alert.</p>
+<p>You can set rules at the Portfolio level (which apply to all holdings within it) or at the individual Holding level (which will override the portfolio rules).</p>
+<h2 id="example-a-buy-the-dip-rule">Example: A "Buy the Dip" Rule<a class="headerlink" href="#example-a-buy-the-dip-rule" title="Permanent link">&para;</a></h2>
+<p>Let's create a simple but powerful rule to notify us when a stock we own has dropped significantly from its recent high, presenting a potential buying opportunity.</p>
+<p><strong>Our Goal</strong>: Receive a <code>BUY</code> alert for our holding if its price drops 20% from its 52-week high.</p>
+<h2 id="step-by-step-guide">Step-by-Step Guide<a class="headerlink" href="#step-by-step-guide" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Navigate to a Holding</strong>: From the dashboard, tap on a portfolio, then tap on the specific holding you want to create a rule for.</li>
+<li><strong>Open Rule Management</strong>: Tap the Floating Action Button (FAB) at the bottom right and select the "Manage Rules" action.</li>
+<li><strong>Add a BUY Rule</strong>: In the Rule Set form, click "Add Buy Rule".</li>
+<li><strong>Add a Condition</strong>: In the new rule block, click "Add Condition".</li>
+<li><strong>Select the Condition Type</strong>: From the dropdown, select the <code>DRAWDOWN_FROM_HIGH</code> condition.</li>
+<li><strong>Set the Parameter</strong>: An input will appear. Enter <code>20</code> into the <code>percentage</code> field.</li>
+<li><strong>Save the Rule Set</strong>: Click "Save Rules".</li>
+</ol>
+<p>That's it! Sentinel's daily monitoring engine will now automatically track this holding's price relative to its 52-week high and will send you an alert if it ever drops by 20% or more.</p>
+<pre class="mermaid"><code>flowchart LR
+    classDef process fill:#eef,stroke:#333,stroke-width:2px;
+    class decision fill:#f9f,stroke:#333,stroke-width:2px;
+    class outcome fill:#cfc,stroke:#333,stroke-width:2px;
+    class no_action fill:#fdd,stroke:#333,stroke-width:2px;
+
+    A["📈 Market Closes for the Day"]:::process
+    B{"Condition 1: Is RSI &lt; 30?&lt;br/&gt;&lt;i&gt;(Is it oversold?)&lt;/i&gt;"}:::decision
+    C{"Condition 2: Has Price&lt;br/&gt;Crossed Above SMA20?&lt;br/&gt;&lt;i&gt;(Is momentum turning?)&lt;/i&gt;"}:::decision
+    D["✅ YES: Trigger 'BUY' Alert!"]:::outcome
+    E["❌ NO: No Action Today"]:::no_action
+
+    A --&gt; B;
+    B -- YES --&gt; C;
+    B -- NO --&gt; E;
+    C -- YES --&gt; D;
+    C -- NO --&gt; E;</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -509,10 +664,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "/docs/", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "toc.follow", "content.code.copy", "content.tabs"], "search": "/docs/assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "toc.follow", "content.code.copy", "content.tabs"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="/docs/assets/javascripts/bundle.92b07e13.min.js"></script>
+      <script src="../assets/javascripts/bundle.92b07e13.min.js"></script>
       
     
   </body>

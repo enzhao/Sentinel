@@ -107,11 +107,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
+      - name: 🐍 Set up Python for MkDocs
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: 🛠️ Install MkDocs and dependencies
+        run: pip install mkdocs mkdocs-material pymdown-extensions
+
+      - name: 📚 Build User Documentation into public folder
+        run: mkdocs build --config-file mkdocs.yml --site-dir frontend/public/user_docs
+
       - name: 🛠️ Install and Build Frontend
         working-directory: frontend
         run: |
           npm ci
-          npm run build
+          npm run build 
 
       - name: 📦 Upload build artifact
         uses: actions/upload-artifact@v4

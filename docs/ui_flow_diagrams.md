@@ -69,15 +69,22 @@ stateDiagram-v2
     state "Active" as Active
     Active --> NavigatingToHome : USER_CLICKS_HOME
     Active --> NavigatingToDocs : USER_CLICKS_DOCS
-    Active --> NavigatingToDashboard : USER_CLICKS_DASHBOARD
-    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     Active --> NavigatingToSettings : USER_CLICKS_SETTINGS
     Active --> LoggingOut : USER_CLICKS_LOGOUT
+    Active --> ShowingAlertsDropdown : USER_CLICKS_ALERTS_ICON
     state "ShowingAlertsDropdown" as ShowingAlertsDropdown
     state "➡️ subflow: FLOW_SHOW_ALERTS_DROPDOWN" as ShowingAlertsDropdown_subflow_node
     ShowingAlertsDropdown --> ShowingAlertsDropdown_subflow_node
     ShowingAlertsDropdown_subflow_node --> Active : ✅ onCompletion
     ShowingAlertsDropdown_subflow_node --> Active : 🛑 onCancel
+    state "NavigatingToSettings" as NavigatingToSettings
+    state "➡️ VIEW_HOME_PAGE" as NavigatingToHome_exit_action
+    NavigatingToHome --> NavigatingToHome_exit_action
+    NavigatingToHome_exit_action --> Active
+    state "NavigatingToDocs" as NavigatingToDocs
+    state "➡️ (External Link)" as NavigatingToDocs_exit_action
+    NavigatingToDocs --> NavigatingToDocs_exit_action
+    NavigatingToDocs_exit_action --> Active
     state "NavigatingToSettings" as NavigatingToSettings
     state "➡️ subflow: FLOW_MANAGE_USER_SETTINGS" as NavigatingToSettings_subflow_node
     NavigatingToSettings --> NavigatingToSettings_subflow_node
@@ -88,12 +95,6 @@ stateDiagram-v2
     LoggingOut --> LoggingOut_subflow_node
     LoggingOut_subflow_node --> [*] : ✅ onCompletion
     LoggingOut_subflow_node --> Active : 🛑 onCancel
-    state "🏠 NavigatingToHome" as NavigatingToHome
-    NavigatingToHome --> Active : success
-    state "📊 NavigatingToDashboard" as NavigatingToDashboard
-    NavigatingToDashboard --> Active : success
-    state "NavigatingToDocs" as NavigatingToDocs
-    NavigatingToDocs --> Active : success
 ```
 
 ## Flow: `FLOW_MANAGE_USER_SETTINGS`

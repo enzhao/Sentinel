@@ -101,6 +101,24 @@ tasks:
       - task: backend:build-docker
       - task: backend:run-docker
     silent: false
+  
+  user-docs:build:
+    desc: "Builds the user docs."
+    cmds:
+      - echo "📚 Building user documentation..."
+      - source venv_util/bin/activate
+      - mkdocs build --config-file mkdocs.yml --site-dir frontend/public/user_docs
+      - echo "✅ User documentation built."
+    silent: false 
+  
+  frontend:build:
+    desc: "Builds the user docs and the production-ready frontend application."
+    cmds:
+      - task: user-docs:build
+      - echo "🟢 Building frontend application..."
+      - npm --prefix frontend run build
+      - echo "✅ Frontend build complete. Output is in frontend/dist/"
+    silent: false
 
   user:provision:
     desc: "Provisions a new user (asdf@asdf.com) in the Firebase emulator for manual testing."
