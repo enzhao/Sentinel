@@ -1,6 +1,4 @@
-// tests/vitest.setup.ts
-console.log('--- VITEST SETUP FILE IS RUNNING ---');
-
+// frontend/vitest.setup.ts
 import { config } from '@vue/test-utils';
 import { createVuetify } from 'vuetify';
 import * as components from 'vuetify/components';

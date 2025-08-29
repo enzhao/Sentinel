@@ -31,7 +31,7 @@ const props = defineProps({
 });
 
 const displayedTickers = ref<TickerData[]>([]);
-let intervalId: number | undefined;
+let intervalId: ReturnType<typeof setInterval> | undefined;
 
 const fetchMarketData = async () => {
   // In a real application, this would call a backend API.
