@@ -162,9 +162,7 @@ jobs:
         with:
           service: 'sentinel-backend'
           region: 'europe-west3'
-          # Use the output from the build job. This is the key fix.
-          # This decouples the deploy step from knowing the exact image name.
-          image: ${{ needs.build-and-push-backend.outputs.image_tag }}
+          image: 'europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/sentinel/backend:latest'
           flags: '--allow-unauthenticated --port=8000'
           env_vars: |
             APP_ENV=production

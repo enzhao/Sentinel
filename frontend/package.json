@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:spec": "vitest",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
+    "type-check:tests": "vue-tsc --noEmit -p tsconfig.vitest.json",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
     "test:e2e": "playwright test"
