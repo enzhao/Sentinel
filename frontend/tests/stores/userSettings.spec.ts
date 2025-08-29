@@ -2,6 +2,7 @@
 // Unit tests for the userSettings Pinia store.
 // References: product_spec.md Chapter 9, docs/testing_strategy.md, GEMINI.md
 
+/// <reference types="vitest/globals" />
 import { setActivePinia, createPinia } from 'pinia';
 import { useUserSettingsStore } from '@/stores/userSettings';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

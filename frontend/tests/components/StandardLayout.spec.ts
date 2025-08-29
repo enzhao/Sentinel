@@ -155,21 +155,27 @@ describe('StandardLayout.vue', () => {
     it('navigates to dashboard when dashboard link is clicked', async () => {
       const wrapper = await mountComponent()
       const push = vi.spyOn(router, 'push')
-      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_DASHBOARD')
+      const appBar = wrapper.findComponent(AppBar);
+      expect(appBar.exists()).toBe(true);
+      await appBar.vm.$emit('USER_CLICKS_DASHBOARD');
       expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
     })
 
     it('opens user docs in a new tab when docs link is clicked', async () => {
       const wrapper = await mountComponent()
-      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_DOCS')
+      const appBar = wrapper.findComponent(AppBar);
+      expect(appBar.exists()).toBe(true);
+      await appBar.vm.$emit('USER_CLICKS_DOCS');
       expect(window.open).toHaveBeenCalledWith('/user_docs/index.html', '_blank')
     })
 
     it('handles logout correctly', async () => {
       const wrapper = await mountComponent()
       const push = vi.spyOn(router, 'push')
+      const appBar = wrapper.findComponent(AppBar);
+      expect(appBar.exists()).toBe(true);
 
-      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_LOGOUT')
+      await appBar.vm.$emit('USER_CLICKS_LOGOUT');
       await wrapper.vm.$nextTick() // Wait for async logout and navigation to complete.
 
       expect(authStore.logout).toHaveBeenCalled()
@@ -190,7 +196,9 @@ describe('StandardLayout.vue', () => {
     it('navigates to home page when home link is clicked', async () => {
       const wrapper = await mountComponent()
       const push = vi.spyOn(router, 'push')
-      await wrapper.findComponent(AppBar).vm.$emit('USER_CLICKS_HOME')
+      const appBar = wrapper.findComponent(AppBar);
+      expect(appBar.exists()).toBe(true);
+      await appBar.vm.$emit('USER_CLICKS_HOME');
       expect(push).toHaveBeenCalledWith({ name: 'home' })
     })
 

@@ -1,4 +1,5 @@
 // frontend/tests/unit/views/UserSettingsView.spec.ts
+/// <reference types="vitest/globals" />
 import { mount, VueWrapper } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTestingPinia, type TestingPinia } from '@pinia/testing';

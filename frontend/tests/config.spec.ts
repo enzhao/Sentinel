@@ -1,4 +1,5 @@
 // frontend/tests/config.spec.ts
+/// <reference types="vitest/globals" />
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('config', () => {

@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
@@ -91,4 +92,3 @@ describe('ConfirmLogoutModal.vue', () => {
     expect(modalWrapper.emitted()['user-confirms-logout']).toBeFalsy();
   });
 });
-
