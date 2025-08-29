@@ -105,7 +105,7 @@ jobs:
 
   build-frontend:
     name: 🏗️ Build Frontend
-    needs: test
+    needs: [test, deploy-backend]
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Checkout code
@@ -130,6 +130,20 @@ jobs:
 
       - name: 📚 Build User Documentation into public folder
         run: mkdocs build --config-file mkdocs.yml --site-dir frontend/public/user_docs
+
+      - name: 🧾 Create .env.production for build
+        run: |
+          {
+            echo "VITE_API_URL=\"${{ needs.deploy-backend.outputs.backend_url }}\""
+            echo "VITE_USE_EMULATORS=false"
+            echo "VITE_FIREBASE_API_KEY=\"${{ secrets.VITE_FIREBASE_API_KEY }}\""
+            echo "VITE_FIREBASE_AUTH_DOMAIN=\"${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}\""
+            echo "VITE_FIREBASE_PROJECT_ID=\"${{ secrets.GCP_PROJECT_ID }}\""
+            echo "VITE_FIREBASE_STORAGE_BUCKET=\"${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}\""
+            echo "VITE_FIREBASE_MESSAGING_SENDER_ID=\"${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}\""
+            echo "VITE_FIREBASE_APP_ID=\"${{ secrets.VITE_FIREBASE_APP_ID }}\""
+            echo "VITE_FIREBASE_MEASUREMENT_ID=\"${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}\""
+          } > frontend/.env.production
 
       - name: 🛠️ Install and Build Frontend
         working-directory: frontend
@@ -171,7 +185,7 @@ jobs:
 
   deploy-frontend:
     name: 🌐 Deploy Frontend to Firebase
-    needs: [build-frontend, deploy-backend]
+    needs: build-frontend
     runs-on: ubuntu-latest
     steps:
       - name: 🔄 Checkout code
@@ -182,20 +196,6 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-
-      - name: 🧾 Create .env.production
-        run: |
-          {
-            echo "VITE_API_URL=\"${{ needs.deploy-backend.outputs.backend_url }}\""
-            echo "VITE_USE_EMULATORS=false"
-            echo "VITE_FIREBASE_API_KEY=\"${{ secrets.VITE_FIREBASE_API_KEY }}\""
-            echo "VITE_FIREBASE_AUTH_DOMAIN=\"${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}\""
-            echo "VITE_FIREBASE_PROJECT_ID=\"${{ secrets.GCP_PROJECT_ID }}\""
-            echo "VITE_FIREBASE_STORAGE_BUCKET=\"${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}\""
-            echo "VITE_FIREBASE_MESSAGING_SENDER_ID=\"${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}\""
-            echo "VITE_FIREBASE_APP_ID=\"${{ secrets.VITE_FIREBASE_APP_ID }}\""
-            echo "VITE_FIREBASE_MEASUREMENT_ID=\"${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}\""
-          } > frontend/.env.production
 
       - name: 📦 Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
