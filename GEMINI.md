@@ -70,11 +70,7 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [x] project scaffolding and setup, including initial CI/CD pipelines (if not already done)
 - [x] Generate the OpenAPI spec from the product_spec.md, the generated file should be api/sentinel_openapi.yaml, the generated openapi spec should contain section refrences back to the relevant sections in product_spec.md for traceability.
 - [x] Shared Models: Generate or define shared data models (e.g., Pydantic models for FastAPI, TypeScript interfaces for Vue) based on the product_spec.md and the api/sentinel_api.yaml spec. All generated models should contain section refrences back to the relevant sections in product_spec.md for traceability. 
-- [x] fix the GitHub CI
-- [ ] update view_dsl.md , add the components: singleSelect, switch (on or off) 
-- [ ] check commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml
-- [ ] migrate to Workload Identity Federation (WIF) for the ci build. 
-
+- [x] build and run the GitHub CI
 
 ### Functional Features
 
@@ -90,4 +86,11 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [ ] Market Monitoring (see product_spec.md Chapter 7)
 - [ ] Alerts (Generation, Persistence, Frontend Consumption, see product_spec.md Chapter 7)
 - [ ] Unified Transaction Import (as it builds on holdings/lots, see product_spec.md section 3.1.5)
+
+
+### Continuous and Future Improvements
+
+- [ ] check correctness of the commands in README.md, docs/developer_guide.md, run_local_backend.sh, and Taskfile.yaml
+- [ ] migrate to Workload Identity Federation (WIF) for the ci build. 
+
 
