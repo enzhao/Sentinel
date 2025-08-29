@@ -5,6 +5,11 @@ site_url: https://example.com/docs  # Replace with your actual deployment URL, i
 docs_dir: docs/user_docs
 site_dir: frontend/public/user_docs
 
+# Use explicit .html file links instead of "pretty" directory URLs.
+# This is crucial for ensuring asset paths (CSS, JS) work correctly when the docs
+# are served from a subdirectory of the main application.
+use_directory_urls: false
+
 # Theme configuration
 theme:
   name: material
