@@ -96,7 +96,7 @@ const handleDocsClick = () => {
   // As per product_spec.md, this should link to the user documentation.
   // Opening in a new tab is the standard for external/supplementary docs.
   // The final URL is /user_docs/ based on the CI build step.
-  window.open('/user_docs/index.html', '_blank');
+  window.open('/user_docs/', '_blank');
 };
 
 const handleBackClick = () => {

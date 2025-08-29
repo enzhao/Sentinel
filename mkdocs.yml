@@ -1,7 +1,6 @@
 # Site metadata
 site_name: Sentinel User Manual
 site_description: User guide for Sentinel, a tool for rule-based investment strategy automation
-site_url: https://example.com/docs  # Replace with your actual deployment URL, if applicable
 docs_dir: docs/user_docs
 site_dir: frontend/public/user_docs
 
