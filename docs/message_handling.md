@@ -37,7 +37,7 @@ graph LR
 
 1.  **Single Source of Truth**: `product_spec.md` is the definitive source for all message keys (e.g., `P_E_1103`) and their corresponding message strings (e.g., "A portfolio with the name '{name}' already exists.").
 
-2.  **Generation Script**: A Python script, located at `util/generate_messages.py`, is responsible for parsing `product_spec.md`. It finds all message tables, extracts the key-value pairs, and generates a centralized JSON file.
+2.  **Generation Script**: A Python script, located at `util/generate_messages.py`, is responsible for parsing `product_spec.md`. It finds all message lists, extracts the key-value pairs, and generates a centralized JSON file.
 
 3.  **Centralized Message File**: The script outputs `config/messages.json`. This file acts as a language-agnostic repository of all messages used in the application.
 
@@ -66,7 +66,7 @@ graph LR
 
 ### Backend (Python/FastAPI)
 
--   **Consumption**: The backend reads the `config/messages.json` file directly at startup.
+-   **Consumption**: The `messages.json` file is copied to `backend/config/messages.json` during the generation step. The backend reads the `backend/config/messages.json` file at startup.
 -   **Usage**: A helper function (`get_message(key, **kwargs)`) is available for API endpoints to format and return standardized messages in API responses.
 
 ## How to Update Messages
@@ -76,6 +76,6 @@ graph LR
     ```bash
     python util/generate_messages.py
     ```
-3.  **Commit Changes**: Commit the updated `product_spec.md` and the newly generated `config/messages.json` (and its frontend copy) to version control.
+3.  **Commit Changes**: Commit the updated `product_spec.md` and the newly generated `config/messages.json` (and its frontend and backend copies) to version control.
 
 This process guarantees that all user-facing text remains consistent and is tightly coupled to the project's core specification.
