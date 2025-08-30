@@ -78,8 +78,8 @@ The AI should prioritize features based on their foundational nature. A logical 
 - [x] User Authentication (Login, Logout, Provisioning script, see product_spec.md Chapter 8). 
 - [x] User Settings Management API validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 9).
 - [x] User Settings Management Frontend (see files docs/specs/views_spec.yaml , docs/specs/ui_flows_spec.yaml , and api/sentinel_api.yaml and product_spec.md Chapter 9).
-- [ ] Portfolio Management API Validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 3).
-- [ ] Portfolio Management Frontend (see files docs/specs/views_spec.yaml, docs/specs/ui_flows_spec.yaml, api/sentinel_api.yaml and product_spec.md Chapter 3).
+- [ ] Portfolio Management API Validation and Backend (see files api/sentinel_api.yaml and product_spec.md Chapter 3). Note that the section "P_5000: Unified Transaction Import" is for a future iteration, we do not implement this for now.   
+- [ ] Portfolio Management Frontend (see files docs/specs/views_spec.yaml, docs/specs/ui_flows_spec.yaml, api/sentinel_api.yaml and product_spec.md Chapter 3). Note that the section "P_5000: Unified Transaction Import" is for a future iteration, we do not implement this for now.   
 - [ ] Holding Management (CRUD, Move, Backfill trigger, see product_spec.md Chapter 4)
 - [ ] Lot Management (CRUD, see product_spec.md Chapter 5)
 - [ ] Strategy Rule Management (CRUD, Effective Rule Retrieval, etc., see product_spec.md Chapter 6)
