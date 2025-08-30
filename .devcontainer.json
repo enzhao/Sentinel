@@ -19,7 +19,7 @@
 		"ghcr.io/devcontainers/features/go:1": {},
 		// Installs gcloud, gsutil, and bq CLIs. Essential for GCP/Firebase interaction.
 		// Using the official feature which is compatible with the Debian-based image.
-		"ghcr.io/devcontainers/features/google-cloud-cli:1": {},
+		"ghcr.io/bartventer/arch-devcontainer-features/gcloud-cli:1": {},
 		// Installs the Firebase CLI for running the emulator suite.
 		"ghcr.io/devcontainers-extra/features/firebase-cli:2": {},
 		// Installs the Taskfile CLI (task command).
