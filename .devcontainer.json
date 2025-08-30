@@ -1,13 +1,21 @@
 {
 	"name": "Sentinel Dev Container",
-	// Use a Microsoft pre-built image that has Python, Node.js, and other common dev tools installed.
-	// This provides a robust and well-maintained foundation.
-	"image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+	// Use a more focused, smaller base image for Python to save disk space.
+	// We will add Node.js and other tools as features. This image aligns with your CI's Python version.
+	"image": "mcr.microsoft.com/devcontainers/python:1-3.13-bullseye",
 
 	// Add specific features to the base image.
 	"features": {
+		
+		// Explicitly add Node.js, which is needed for the frontend and Firebase CLI.
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "24"
+		},
+        // Installs the Go programming language, a dependency for some CLI tools.
+		"ghcr.io/devcontainers/features/go:1": {},
 		// Installs gcloud, gsutil, and bq CLIs. Essential for GCP/Firebase interaction.
-		"ghcr.io/bartventer/arch-devcontainer-features/gcloud-cli:1": {},
+		// Using the official feature which is compatible with the Debian-based image.
+		"ghcr.io/devcontainers/features/google-cloud-cli:1": {},
 		// Installs the Firebase CLI for running the emulator suite.
 		"ghcr.io/devcontainers-extra/features/firebase-cli:2": {},
 		// Installs the Taskfile CLI (task command).
@@ -30,7 +38,8 @@
 	// 1. Create and provision the main application venv.
 	// 2. Create and provision the utility scripts venv.
 	// 3. Install frontend dependencies.
-	"postCreateCommand": "python3 -m venv venv && venv/bin/pip install --upgrade pip pip-tools && venv/bin/pip-compile backend/requirements.in -o backend/requirements.txt && venv/bin/pip-compile --constraint backend/requirements.txt backend/requirements-dev.in -o backend/requirements-dev.txt && venv/bin/pip-sync backend/requirements.txt backend/requirements-dev.txt && python3 -m venv venv_util && venv_util/bin/pip install --upgrade pip pip-tools && venv_util/bin/pip-compile util/requirements.in -o util/requirements.txt && venv_util/bin/pip-sync util/requirements.txt && npm --prefix frontend ci",
+	// 4. Clean up caches to save space.
+	"postCreateCommand": "python3 -m venv venv && venv/bin/pip install --upgrade pip pip-tools && venv/bin/pip-compile backend/requirements.in -o backend/requirements.txt && venv/bin/pip-compile --constraint backend/requirements.txt backend/requirements-dev.in -o backend/requirements-dev.txt && venv/bin/pip-sync backend/requirements.txt backend/requirements-dev.txt && python3 -m venv venv_util && venv_util/bin/pip install --upgrade pip pip-tools && venv_util/bin/pip-compile util/requirements.in -o util/requirements.txt && venv_util/bin/pip-sync util/requirements.txt && npm --prefix frontend ci && npm cache clean --force && rm -rf ~/.cache/pip",
 
 	// This command runs every time the codespace starts.
 	// It's generally better to start services manually or with VS Code tasks for more control.
