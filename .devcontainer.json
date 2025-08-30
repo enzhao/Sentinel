@@ -11,6 +11,10 @@
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "24"
 		},
+		// Installs the Java Development Kit (JDK), a dependency for the Firebase Emulator Suite.
+		"ghcr.io/devcontainers/features/java:1": {
+			"version": "21"
+		},
         // Installs the Go programming language, a dependency for some CLI tools.
 		"ghcr.io/devcontainers/features/go:1": {},
 		// Installs gcloud, gsutil, and bq CLIs. Essential for GCP/Firebase interaction.
