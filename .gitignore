@@ -41,7 +41,11 @@ frontend/playwright-report/
 # This is the ONLY exception. All other .env files should be ignored.
 !.env.example
 !backend/.env.example
+!backend/.env.dev
+!backend/.env.test
 !frontend/.env.example
+!frontend/.env.development  
+!frontend/.env.test
 
 # TypeScript
 # Ignore compiled TypeScript files if they are not in a build directory
@@ -56,7 +60,6 @@ venv/
 .venv/
 env/
 .env/
-backend/venv/
 venv_*/
 
 # Compiled Python files

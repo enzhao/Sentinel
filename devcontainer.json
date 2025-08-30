@@ -1,0 +1,74 @@
+{
+	"name": "Sentinel Dev Container",
+	// Use a Microsoft pre-built image that has Python, Node.js, and other common dev tools installed.
+	// This provides a robust and well-maintained foundation.
+	"image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+
+	// Add specific features to the base image.
+	"features": {
+		// Installs gcloud, gsutil, and bq CLIs. Essential for GCP/Firebase interaction.
+		"ghcr.io/bartventer/arch-devcontainer-features/gcloud-cli:1": {},
+		// Installs the Firebase CLI for running the emulator suite.
+		"ghcr.io/devcontainers-extra/features/firebase-cli:2": {},
+		// Installs the Taskfile CLI (task command).
+		"ghcr.io/devcontainers-extra/features/go-task:1": {}
+	},
+
+	// Forward ports for the backend, frontend, and Firebase Emulator Suite.
+	// This makes them accessible from your local machine.
+	"forwardPorts": [
+		8000, // Backend:   FastAPI
+		5173, // Frontend:  Vite dev server
+		4000, // Emulator:  Firebase Emulator Suite UI
+		9099, // Emulator:  Firebase Auth
+		8080, // Emulator:  Firebase Firestore
+		9000  // Emulator:  Firebase Functions (for future use)
+	],
+
+	// This command runs ONCE after the container is created to set up the environment.
+	// It mirrors the setup steps from your CI workflow and developer guide.
+	// 1. Create and provision the main application venv.
+	// 2. Create and provision the utility scripts venv.
+	// 3. Install frontend dependencies.
+	"postCreateCommand": "python3 -m venv venv && venv/bin/pip install --upgrade pip pip-tools && venv/bin/pip-compile backend/requirements.in -o backend/requirements.txt && venv/bin/pip-compile --constraint backend/requirements.txt backend/requirements-dev.in -o backend/requirements-dev.txt && venv/bin/pip-sync backend/requirements.txt backend/requirements-dev.txt && python3 -m venv venv_util && venv_util/bin/pip install --upgrade pip pip-tools && venv_util/bin/pip-compile util/requirements.in -o util/requirements.txt && venv_util/bin/pip-sync util/requirements.txt && npm --prefix frontend ci",
+
+	// This command runs every time the codespace starts.
+	// It's generally better to start services manually or with VS Code tasks for more control.
+	// "postStartCommand": "...",
+	
+	// Configure VS Code settings and extensions.
+	"customizations": {
+		"vscode": {
+			"settings": {
+				// --- Python Settings ---
+				// Point VS Code to the virtual environment's Python interpreter.
+				// This is crucial for debugging, linting, and testing.
+				"python.defaultInterpreterPath": "venv/bin/python",
+				// Enable Pytest and tell it where to find the tests.
+				"python.testing.pytestEnabled": true,
+				"python.testing.pytestArgs": [
+					"backend/tests"
+				],
+
+				// --- General Editor Settings ---
+				"editor.formatOnSave": false,
+				"terminal.integrated.defaultProfile.linux": "bash"
+			},
+			"extensions": [
+				// --- Python Stack ---
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+
+				// --- Vue.js Stack ---
+				"vue.volar",
+
+				// --- AI & Collaboration ---
+				"google.geminicodeassist",
+				"github.copilot",
+                "github.copilot-chat",
+                "github.vscode-github-actions",
+                "github.vscode-pull-request-github"
+			]
+		}
+	}
+}
