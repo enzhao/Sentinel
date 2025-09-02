@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .firebase_setup import initialize_firebase_app
 from .middleware import idempotency_middleware
 from .routers.user_router import router as user_router
+from .routers.portfolio_router import router as portfolio_router
 # --- End Module Imports ---
 
 @asynccontextmanager
@@ -65,11 +66,10 @@ app.middleware("http")(idempotency_middleware)
 # Include the main user router. As more features are added,
 # their routers will be included here as well.
 app.include_router(user_router, prefix="/api/v1")
+app.include_router(portfolio_router, prefix="/api/v1")
 # --- End of API Routers ---
 
 @app.get("/")
 def read_root():
     """A simple health-check endpoint."""
     return {"message": "Welcome to the Sentinel Backend API!"}
-
-

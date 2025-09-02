@@ -1,9 +1,9 @@
 from src.api.models import (
     User, NotificationPreferences, Portfolio, CashReserve,
     UpdateUserSettingsRequest, PortfolioCreationRequest,
-    PortfolioUpdateRequest
+    PortfolioUpdateRequest, PortfolioSummary, DailyPortfolioSnapshot
 )
-from src.core.internal_models import UserDB, PortfolioDB, CashReserveDB
+from src.core.internal_models import UserDB, PortfolioDB, CashReserveDB, DailyPortfolioSnapshotDB
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import datetime, timezone
@@ -87,5 +87,33 @@ def portfolio_db_from_creation_request(request: PortfolioCreationRequest, user_i
         createdAt=now,
         modifiedAt=now
     )
-    
-    
+
+def portfolio_db_to_portfolio_summary(portfolio_db: PortfolioDB) -> PortfolioSummary:
+    """
+    Convert a PortfolioDB (internal) to a PortfolioSummary (API) model.
+    Reference: product_spec.md#3322-p_2200-portfolio-list-retrieval
+    """
+    # Note: currentValue is a computed field. For the summary list, it's an aggregation
+    # of all holding values. Since holding management is not yet implemented,
+    # we will stub this with the cash reserve amount for now.
+    return PortfolioSummary.model_validate({
+        "portfolioId": portfolio_db.portfolioId,
+        "name": portfolio_db.name,
+        "currentValue": portfolio_db.cashReserve.totalAmount
+    })
+
+def portfolio_db_list_to_portfolio_summary_list(portfolio_db_list: List[PortfolioDB]) -> List[PortfolioSummary]:
+    """Convert a list of PortfolioDB (internal) to a list of PortfolioSummary (API) models."""
+    return [portfolio_db_to_portfolio_summary(p) for p in portfolio_db_list]
+
+def daily_portfolio_snapshot_db_to_api(snapshot_db: DailyPortfolioSnapshotDB) -> DailyPortfolioSnapshot:
+    """
+    Convert a DailyPortfolioSnapshotDB (internal) to a DailyPortfolioSnapshot (API) model.
+    Reference: product_spec.md#3323-p_2400-portfolio-chart-data-retrieval
+    """
+    # The models are identical, so a simple validation/conversion is sufficient.
+    return DailyPortfolioSnapshot.model_validate(snapshot_db.model_dump())
+
+def daily_portfolio_snapshot_db_list_to_api_list(snapshot_db_list: List[DailyPortfolioSnapshotDB]) -> List[DailyPortfolioSnapshot]:
+    """Convert a list of DailyPortfolioSnapshotDB to a list of DailyPortfolioSnapshot (API) models."""
+    return [daily_portfolio_snapshot_db_to_api(s) for s in snapshot_db_list]
