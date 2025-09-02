@@ -53,7 +53,7 @@ const routes: readonly RouteRecordRaw[] = [
   {
     path: '/portfolios/:id',
     name: 'portfolio-detail',
-    component: () => import('@/views/PortfolioDetailView.vue'),
+    component: () => import('@/views/PortfolioDetailsView.vue'),
     meta: { requiresAuth: true, viewId: 'VIEW_PORTFOLIO_DETAIL', title: 'Portfolio Details' }
   },
   {
