@@ -67,24 +67,26 @@ The frontend testing strategy is designed to ensure a reliable and smooth user e
 - **Goal**: To create robust, reliable tests that are less brittle and more representative of the real application behavior, avoiding the significant overhead and potential inaccuracies of mocking a complex component library.
 - **Location**: `frontend/tests/components/`
 
-### 4.2. Core Logic Unit Tests (Stores, Router, Plugins, Utilities)
+### 4.2. Core Logic Unit Tests (Stores, Services, Router, Utilities, etc.)
 
-- **Purpose**: To test the core logic within Pinia stores, the Vue router, application plugins, and utility files in strict isolation.
-- **Method**: For stores, router, and plugins, we use real instances but mock external dependencies (like API calls, Firebase SDK) to ensure focus on the logic being tested. For utility files, strict unit testing is applied.
-- **Method**: We use a **high-fidelity approach**. Real instances of stores and the router are used, connected to the **Firebase Emulator Suite**. We avoid mocking entire modules like `firebase/auth`. Instead, we use `vi.mock` with `importActual` to perform **partial mocks**, replacing only the specific functions that are problematic in a test environment (e.g., the `onAuthStateChanged` listener, which can cause tests to hang). For external API calls (e.g., to the backend), `fetch` is mocked.
+- **Purpose**: To test the core logic within Pinia stores, API services, the Vue router, application plugins, and other utilities.
+- **Method**: We use a **high-fidelity approach**. Real instances of stores and services are used to test their interaction and logic as closely as possible to the real application. Mocking is pushed to the boundaries of the system.
+  - For external API calls, the global `fetch` function is mocked. This allows us to test the entire service and state management stack (`Store -> Service -> apiService`) without making real network requests.
+  - For Firebase interactions, we connect to the **Firebase Emulator Suite**. We avoid mocking entire modules like `firebase/auth`. Instead, we use `vi.mock` with `importActual` to perform **partial mocks**, replacing only the specific functions that are problematic in a test environment (e.g., the `onAuthStateChanged` listener, which can cause tests to hang).
 - **Goal**: To ensure the core application logic and state management are tested in an environment that is as close to production as possible, increasing confidence and reducing bugs that only appear during integration.
 - **Location**:
-    - `frontend/tests/stores/`: For Pinia store logic.
-    - `frontend/tests/router/`: For Vue Router configuration and guards.
-    - `frontend/tests/plugins/`: For application-level plugins (e.g., Firebase initialization).
-    - `frontend/tests/config.spec.ts`: For utility/configuration file testing.
+  - `frontend/tests/stores/`: For Pinia store logic.
+  - `frontend/tests/services/`: For API service logic.
+  - `frontend/tests/router/`: For Vue Router configuration and guards.
+  - `frontend/tests/plugins/`: For application-level plugins (e.g., Firebase initialization).
+  - `frontend/tests/config.spec.ts`: For utility/configuration file testing.
 
 ### 4.3. View & Workflow Tests (High-Fidelity Integration Tests)
 
 #### Key User Workflow Scenarios for Sentinel:
 
 - **Purpose**: To verify that entire "View" components (which often orchestrate multiple smaller components, stores, and router interactions) work together correctly to fulfill a user workflow as defined in `docs/specs/ui_flows_spec.yaml`.
-- **Method**: These tests mount entire "View" components (e.g., `UserSettingsView.vue`). They use the **real** components, the **real** Pinia stores (with mocked API calls), and a **real** Vue router instance. This provides a high-fidelity test environment that closely mimics the actual application runtime. For tests requiring a backend, the frontend application connects to the **Firebase Emulator Suite**, allowing for full-stack testing of the frontend against a realistic, but local and controllable, backend.
+- **Method**: These tests mount entire "View" components (e.g., `UserSettingsView.vue`). They use the **real** components, the **real** Pinia stores, and a **real** Vue router instance. API calls are mocked at the `fetch` level, allowing the entire Vue application stack to be tested. This provides a high-fidelity test environment that closely mimics the actual application runtime. For tests requiring authentication, the frontend application connects to the **Firebase Emulator Suite**.
 - **Goal**: To catch bugs that occur at the seams between major application features, such as incorrect event handling, state management issues, or routing problems that component-level tests would miss.
 - **Location**: `frontend/tests/views/`
 - **User Workflows Scenarios:** These tests (to be added in the future) will be placed under `frontend/tests/flows/`

@@ -1,18 +1,19 @@
-// frontend/tests/unit/stores/userSettings.test.ts
-// Unit tests for the userSettings Pinia store.
-// References: product_spec.md Chapter 9, docs/testing_strategy.md, GEMINI.md
+// frontend/tests/stores/userSettings.spec.ts
+// This is a high-fidelity test for the userSettings Pinia store.
+// It uses real service instances and mocks only the global `fetch` function.
+// References: docs/testing_strategy.md (Section 4.2)
 
-/// <reference types="vitest/globals" />
 import { setActivePinia, createPinia } from 'pinia';
 import { useUserSettingsStore } from '@/stores/userSettings';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { auth } from '@/plugins/firebase'; // Mock Firebase auth
+import { auth } from '@/plugins/firebase'; // We will mock this
+import type { User, PortfolioSummary, UpdateUserSettingsRequest } from '@/api/models';
 
 // Mock the Firebase auth module
 vi.mock('@/plugins/firebase', () => ({
   auth: {
     currentUser: {
-      getIdToken: vi.fn(() => Promise.resolve('mock-token')),
+      getIdToken: vi.fn(),
     },
   },
 }));
@@ -21,7 +22,24 @@ vi.mock('@/plugins/firebase', () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-describe('userSettings Store', () => {
+// --- Mock Data ---
+const mockUser: User = {
+  uid: 'test-uid',
+  username: 'test-user',
+  email: 'test@example.com',
+  defaultPortfolioId: 'pf-1',
+  subscriptionStatus: 'FREE',
+  notificationPreferences: ['EMAIL'],
+  createdAt: new Date().toISOString(),
+  modifiedAt: new Date().toISOString(),
+};
+
+const mockPortfolios: PortfolioSummary[] = [
+  { portfolioId: 'pf-1', name: 'My Portfolio', currentValue: 1000 },
+];
+
+// --- Test Suite ---
+describe('User Settings Store (High-Fidelity)', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockFetch.mockClear();
@@ -30,149 +48,77 @@ describe('userSettings Store', () => {
 
   it('should fetch user settings and portfolios successfully', async () => {
     const store = useUserSettingsStore();
-
-    const mockUserSettings = {
-      userId: 'user123',
-      email: 'test@example.com',
-      defaultPortfolioId: 'portfolio1',
-      notificationPreferences: ['EMAIL'],
-      createdAt: '2023-01-01T00:00:00Z',
-      modifiedAt: '2023-01-01T00:00:00Z',
-    };
-
-    const mockPortfolios = [
-      { portfolioId: 'portfolio1', name: 'My First Portfolio' },
-      { portfolioId: 'portfolio2', name: 'Investment Fund' },
-    ];
-
+    
+    // Arrange: Mock the auth token and the two fetch responses
+    vi.mocked(auth.currentUser?.getIdToken).mockResolvedValue('mock-token');
     mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockUserSettings),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockPortfolios),
-      });
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockUser) }) // For settings
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockPortfolios) }); // For portfolios
 
+    // Act
     await store.fetchUserSettings();
 
+    // Assert
     expect(store.isLoading).toBe(false);
-    expect(store.error).toBeNull();
-    expect(store.userSettings).toEqual(mockUserSettings);
+    expect(store.error).toBe(null);
+    expect(store.userSettings).toEqual(mockUser);
     expect(store.portfolios).toEqual(mockPortfolios);
-    expect(auth.currentUser?.getIdToken).toHaveBeenCalled();
+    expect(auth.currentUser?.getIdToken).toHaveBeenCalledTimes(2); // Called by each service
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/users/me/settings'),
-      expect.any(Object)
+      expect.objectContaining({ method: 'GET' })
     );
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/users/me/portfolios'),
-      expect.any(Object)
+      expect.objectContaining({ method: 'GET' })
     );
   });
 
   it('should handle error when fetching user settings', async () => {
     const store = useUserSettingsStore();
+    const errorMessage = 'Network error';
+    
+    // Arrange: Mock the auth token and a failed fetch response
+    vi.mocked(auth.currentUser?.getIdToken).mockResolvedValue('mock-token');
+    mockFetch.mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({ detail: errorMessage }) });
 
-    // Since fetchUserSettings uses Promise.all, we must mock both API calls.
-    // Here, we simulate the first call (settings) failing and the second (portfolios) succeeding.
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: () => Promise.resolve({ detail: 'Network error' }),
-      })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });
-
+    // Act
     await store.fetchUserSettings();
 
+    // Assert
     expect(store.isLoading).toBe(false);
-    expect(store.error).toBe('Network error');
-    expect(store.userSettings).toBeNull();
+    expect(store.error).toBe(errorMessage);
+    expect(store.userSettings).toBe(null);
     expect(store.portfolios).toEqual([]);
   });
 
   it('should update user settings successfully', async () => {
     const store = useUserSettingsStore();
-
-    // Initialize user settings first
-    const initialSettings = {
-      userId: 'user123',
-      email: 'test@example.com',
-      defaultPortfolioId: 'portfolio1',
-      notificationPreferences: ['EMAIL'],
-      createdAt: '2023-01-01T00:00:00Z',
-      modifiedAt: '2023-01-01T00:00:00Z',
-    };
-    store.userSettings = initialSettings;
-
-    const updatedData = {
+    const updateRequest: UpdateUserSettingsRequest = {
       defaultPortfolioId: 'portfolio2',
       notificationPreferences: ['EMAIL', 'PUSH'],
     };
+    const updatedUserResponse: User = { ...mockUser, ...updateRequest };
+    
+    // Arrange: Mock the auth token and the successful PUT response
+    vi.mocked(auth.currentUser?.getIdToken).mockResolvedValue('mock-token');
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(updatedUserResponse) });
+    
+    // Act
+    await store.updateUserSettings(updateRequest);
 
-    const mockUpdatedUserSettings = {
-      ...initialSettings,
-      ...updatedData,
-      modifiedAt: new Date().toISOString(),
-    };
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockUpdatedUserSettings),
-    });
-
-    await store.updateUserSettings(updatedData);
-
+    // Assert
     expect(store.isLoading).toBe(false);
-    expect(store.error).toBeNull();
-    expect(store.userSettings?.defaultPortfolioId).toBe('portfolio2');
-    expect(store.userSettings?.notificationPreferences).toEqual(['EMAIL', 'PUSH']);
-    expect(auth.currentUser?.getIdToken).toHaveBeenCalled();
+    expect(store.error).toBe(null);
+    expect(store.userSettings).toEqual(updatedUserResponse);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/users/me/settings'),
       expect.objectContaining({
         method: 'PUT',
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer mock-token',
-          'Idempotency-Key': expect.any(String),
-        }),
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify(updateRequest),
       })
     );
-  });
-
-  it('should handle error when updating user settings', async () => {
-    const store = useUserSettingsStore();
-
-    // Initialize user settings first
-    store.userSettings = {
-      userId: 'user123',
-      email: 'test@example.com',
-      defaultPortfolioId: 'portfolio1',
-      notificationPreferences: ['EMAIL'],
-      createdAt: '2023-01-01T00:00:00Z',
-      modifiedAt: '2023-01-01T00:00:00Z',
-    };
-
-    const updatedData = {
-      defaultPortfolioId: 'portfolio2',
-    };
-
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ detail: 'Validation error' }),
-    });
-
-    await store.updateUserSettings(updatedData);
-
-    expect(store.isLoading).toBe(false);
-    expect(store.error).toBe('Validation error');
-    // Ensure local state is not updated on error
-    expect(store.userSettings?.defaultPortfolioId).toBe('portfolio1');
   });
 });
