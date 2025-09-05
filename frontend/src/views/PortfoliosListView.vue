@@ -38,6 +38,12 @@
         <template v-slot:append>
           <v-btn
             v-if="manageMode"
+            icon="mdi-pencil-outline"
+            variant="text"
+            @click.stop="editPortfolio(portfolio.portfolioId)"
+          ></v-btn>
+          <v-btn
+            v-if="manageMode"
             icon="mdi-delete-outline"
             variant="text"
             @click.stop="openDeleteDialog(portfolio)"
@@ -85,6 +91,7 @@ onMounted(() => {
 
 const viewPortfolio = (id: string) => router.push({ name: 'portfolio-detail', params: { id } });
 const goToCreatePortfolio = () => router.push({ name: 'portfolio-create' });
+const editPortfolio = (id: string) => router.push({ name: 'portfolio-edit', params: { id } });
 
 const openDeleteDialog = (portfolio: PortfolioSummary) => {
   portfolioToDelete.value = portfolio;
