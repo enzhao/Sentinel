@@ -32,9 +32,10 @@ const ResizeObserverMock = vi.fn(() => ({
 }));
 vi.stubGlobal('ResizeObserver', ResizeObserverMock);
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query) => ({
+// Enhanced matchMedia mock with logging to verify it's applied
+const matchMediaMock = vi.fn().mockImplementation((query) => {
+  console.log('matchMedia called with query:', query); // Debug log
+  return {
     matches: false,
     media: query,
     onchange: null,
@@ -43,9 +44,19 @@ Object.defineProperty(window, 'matchMedia', {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
-  })),
+  };
+});
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: matchMediaMock,
 });
 
+// Verify matchMedia is defined
+if (!window.matchMedia) {
+  console.error('matchMedia mock failed to apply');
+}
+
+// Mock visualViewport
 Object.defineProperty(window, 'visualViewport', {
   writable: true,
   configurable: true,
@@ -56,3 +67,4 @@ Object.defineProperty(window, 'visualViewport', {
     removeEventListener: vi.fn(),
   },
 });
+
