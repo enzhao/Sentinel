@@ -1,0 +1,10 @@
+[
+  {
+    "uid": "playwright-test-user",
+    "username": "Playwright User",
+    "email": "playwright-user@example.com",
+    "defaultPortfolioId": "d8a8c8a0-4b3a-4b3a-8b3a-4b3a8b3a8b3a",
+    "subscriptionStatus": "FREE",
+    "notificationPreferences": ["EMAIL"]
+  }
+]

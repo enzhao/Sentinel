@@ -149,3 +149,12 @@ tasks:
       - venv/bin/python util/create_user.py --email asdf@asdf.com --password asdfasdf --username asdf --env dev
       - echo "✅ User provisioned successfully."
     silent: false
+
+  # ... other tasks
+  seed-emulator:
+    desc: "Seeds the Firebase emulator with data for E2E tests."
+    cmds:
+      - export FIRESTORE_EMULATOR_HOST="localhost:8080" && python util/seed_emulator.py
+    silent: false
+
+

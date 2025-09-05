@@ -1,0 +1,16 @@
+[
+  {
+    "portfolioId": "d8a8c8a0-4b3a-4b3a-8b3a-4b3a8b3a8b3a",
+    "userId": "playwright-test-user",
+    "name": "Playwright Paper Trading",
+    "description": "A default portfolio for E2E tests.",
+    "defaultCurrency": "USD",
+    "cashReserve": {
+      "totalAmount": 100000,
+      "warChestAmount": 25000
+    },
+    "ruleSetId": null,
+    "createdAt": "2023-10-27T10:00:00Z",
+    "modifiedAt": "2023-10-27T10:00:00Z"
+  }
+]
