@@ -58,7 +58,7 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { usePortfolioStore } from '@/stores/portfolios';
-import type { PortfolioCreationRequest, PortfolioUpdateRequest } from '@/api/models';
+import { Currency, type PortfolioCreationRequest, type PortfolioUpdateRequest } from '@/api/models';
 
 // References:
 // - product_spec.md#3.1.1 (Creation), #3.1.3 (Update)
@@ -78,7 +78,7 @@ const portfolioId = computed(() => route.params.id as string | undefined);
 const formData = ref<PortfolioCreationRequest | PortfolioUpdateRequest>({
   name: '',
   description: '',
-  defaultCurrency: 'EUR',
+  defaultCurrency: Currency.EUR,
   cashReserve: {
     totalAmount: 0,
     warChestAmount: 0,
