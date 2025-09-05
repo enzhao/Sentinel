@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createPinia, setActivePinia } from 'pinia';
+import { createTestingPinia, type TestingPinia } from '@pinia/testing';
 import { createSentinelRouter } from '@/router';
+import { setActivePinia } from 'pinia';
 import DashboardView from '@/views/DashboardView.vue';
 import PortfoliosListView from '@/views/PortfoliosListView.vue';
 import { usePortfolioStore } from '@/stores/portfolios';
@@ -15,12 +16,14 @@ global.fetch = mockFetch;
 
 describe('DashboardView.vue', () => {
   let router;
-  let pinia;
+  let pinia: TestingPinia;
 
   beforeEach(async () => {
     // Pinia must be created and activated before the router is created
     // so that the router's navigation guards can use the stores.
-    pinia = createPinia();
+    pinia = createTestingPinia({
+      createSpy: vi.fn,
+    });
     setActivePinia(pinia);
 
     router = createSentinelRouter();
@@ -47,7 +50,7 @@ describe('DashboardView.vue', () => {
     expect(wrapper.findComponent(PortfoliosListView).exists()).toBe(true);
 
     // Verify that the store action was called by the child component
-    const portfolioStore = usePortfolioStore(pinia);
+    const portfolioStore = usePortfolioStore();
     expect(portfolioStore.fetchPortfolios).toHaveBeenCalledOnce();
   });
 });
